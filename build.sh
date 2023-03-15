@@ -20,9 +20,29 @@ EOF
 
 HTML_COMPONENTS=$(cat src/*.html)
 
+LIBS=$(cat lib.txt)
+
+mkdir -p lib/
+cd lib/
+for lib in ${LIBS} ; do 
+  name=$(basename "${lib}")
+  if [ -f "${name}" ]; then
+    >&2 echo "lib ${name} cached"
+  else
+    wget "${lib}"
+    >&2 echo "lib ${name} downloaded"
+  fi
+done
+cd ..
+
+mkdir -p build/
+rm build/*
+cp src/{*.ts,*.js} build/
+cp lib/{*.ts,*.js} build/
+
 mkdir -p www/
 cp src/*.js www/
-tsc --strict --lib esnext,dom -t es6 --outDir www src/*.ts
+tsc --strict --lib esnext,dom -t es6 --outDir www build/*.ts
 
 cd www
 echo "${HTML_HEAD}" > index.html
