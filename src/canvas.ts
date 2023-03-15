@@ -102,7 +102,7 @@ class Canvas2d {
     const g = this.g;
     const c = this.transform.point(src);
     g.beginPath();
-    g.arc(src.x, src.y, radius, 0, 2 * Math.PI);
+    g.arc(c.x, c.y, radius, 0, 2 * Math.PI);
     g.stroke();
   }
 
@@ -133,6 +133,10 @@ class Canvas2d {
   }
 }
 
+interface Constraint {
+  apply: () => void;
+}
+
 setTimeout(() => {
   const c = new Canvas2d(document.getElementById('main-canvas') as HTMLCanvasElement);
   c.handleResize();
@@ -141,19 +145,55 @@ setTimeout(() => {
   mouse.listenTo(document.body);
 
   const state = {
-    edge: new Edge(new Point(10, 100), new Point(0, 0)),
+    edge: new Edge(new Point(10, 90), new Point(0, 0)),
+    wall: new Edge(new Point(0, 0), new Point(80, 40)),
   };
+
+  const constraints: Constraint[] = [
+    {
+      apply: () => {
+        state.wall = new Edge(state.edge.dst, state.wall.dst);
+      },
+    },
+    {
+      apply: () => {
+        const dst = state.wall.dst.onLine(state.edge.dst, state.edge.vector().r90());
+        const e = Vec.between(state.wall.src, dst);
+        if (e.mag2() > 0.0001) { 
+          state.wall = new Edge(
+            state.wall.src,
+            state.wall.src.splus(state.wall.vector().mag() / e.mag(), e),
+          );
+        }
+      },
+    },
+    {
+      apply: () => {
+        const hit = new Ray(state.edge.src, state.edge.vector())
+          .intersection(new Ray(state.wall.src, state.wall.vector()));
+        if (hit !== null) {
+//          state.edge = new Edge(state.edge.src, hit.point);
+        }
+      },
+    },
+  ];
 
   const draggables: Draggable[] = [
     {
       getPos: () => c.viewport.project.point(state.edge.src),
-      setPos: p => { state.edge = new Edge(c.viewport.unproject.point(p), state.edge.dst); },
+      setPos: p => {
+        state.edge = new Edge(c.viewport.unproject.point(p), state.edge.dst);
+        constraints.forEach(c => c.apply());
+      },
       distance: p => Vec.between(p, c.viewport.project.point(state.edge.src)).mag(),
       priority: 1,
     },
     {
       getPos: () => c.viewport.project.point(state.edge.dst),
-      setPos: p => { state.edge = new Edge(state.edge.src, c.viewport.unproject.point(p)); },
+      setPos: p => {
+        state.edge = new Edge(state.edge.src, c.viewport.unproject.point(p));
+        constraints.forEach(c => c.apply());
+      },
       distance: p => Vec.between(p, c.viewport.project.point(state.edge.dst)).mag(),
       priority: 1,
     },
@@ -164,6 +204,7 @@ setTimeout(() => {
           c.viewport.unproject.point(p),
           c.viewport.unproject.point(p).plus(state.edge.vector())
         );
+        constraints.forEach(c => c.apply());
       },
       distance: p => c.viewport.project.distance(state.edge.distance(c.viewport.unproject.point(p))),
       priority: 0,
@@ -276,17 +317,29 @@ setTimeout(() => {
 
     drawGridLines();
 
-    const { edge } = state;
+    const { edge, wall } = state;
 
     const mouseW = c.viewport.unproject.point(mouse.pos);
 
     const dist = c.viewport.project.distance(edge.distance(mouseW));
 
     c.lineWidth = dist < 10 ? 2 : 1;
+    c.strokeStyle = 'blue';
     c.strokeLine(edge.src, edge.dst);
+
     c.lineWidth = 1;
-    
-    c.strokeCircle(mouse.pos, 3);
+    c.strokeStyle = 'green';
+    c.strokeLine(wall.src, wall.dst);
+    c.strokeStyle = 'black';
+    c.lineWidth = 1;
+   
+    const hit = new Ray(edge.src, edge.vector())
+      .intersection(new Ray(wall.src, wall.vector()));
+    if (hit !== null) {
+      c.strokeCircle(hit.point, 3);
+    }
+ 
+    c.strokeCircle(mouseW, 3);
 
     c.fillText(`${dist}`, c.viewport.unproject.point(new Point(200, 200))); 
     c.fillText(`${c.viewport.unproject.distance(dist)}`, c.viewport.unproject.point(new Point(200, 220))); 

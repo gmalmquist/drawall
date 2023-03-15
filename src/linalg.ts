@@ -141,6 +141,30 @@ class Vec {
   }
 }
 
+interface RayHit {
+  time: number;
+  point: Point;
+}
+
+class Ray {
+  constructor(
+    public readonly origin: Point,
+    public readonly direction: Vec) {}
+
+  intersection(other: Ray): RayHit | null {
+    // (o+d*t - Pq)*Nq =0
+    // (O - Pq)*Nq + (Nq*d)*t = 0
+    const normal = other.direction.r90();
+    const denominator = this.direction.dot(normal);
+    if (Math.abs(denominator) < 0.0001) return null;
+    const time = Vec.between(this.origin, other.origin).dot(normal) / denominator;
+    return {
+      time,
+      point: this.origin.splus(time, this.direction),
+    };
+  } 
+}
+
 class Edge {
   constructor(
     public readonly src: Point,
