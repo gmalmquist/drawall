@@ -218,9 +218,15 @@ setTimeout(() => {
     },
   });
 
+  window.addEventListener('wheel', event => {
+    const wheel = event as WheelEvent;
+    c.viewport.radius = Math.max(10, c.viewport.radius + Math.sign(wheel.deltaY) * 10);
+    c.updateTransforms();
+  });
+
   const drawGridLines = () => {
     // render grid
-    const gridSpacing = 20;
+    const gridSpacing = 10;
     const left = c.viewport.unproject.vec(new Vec(-1, 0)).unit();
     const right = c.viewport.unproject.vec(new Vec(1, 0)).unit();
     const up = c.viewport.unproject.vec(new Vec(0, -1)).unit();

@@ -50,7 +50,6 @@ class Mouse {
   public pos: Point = Point.ZERO;
   public drag: Drag | null = null;
   private dragListeners: DragListener[] = [];
-  
 
   constructor() {}
 
