@@ -37,17 +37,25 @@ cd ..
 
 mkdir -p build/
 rm build/*
+
+for item in $(ls lib/{*.js,*.ts}); do 
+  cat "${item}" | sed -e 's/\bexport //g' > "build/$(basename ${item})"
+done
+
+function compile() {
+  tsc --strict --lib esnext,dom -t es6 --outDir build/ build/*.ts
+}
+
 cp src/{*.ts,*.js} build/
-cp lib/{*.ts,*.js} build/
+compile
 
 mkdir -p www/
-cp src/*.js www/
-tsc --strict --lib esnext,dom -t es6 --outDir www build/*.ts
+cat build/*.js > www/all.js
 
-cd www
-echo "${HTML_HEAD}" > index.html
-echo "${HTML_COMPONENTS}" >> index.html
-for script in $(ls *.js) ; do
-  echo "<script type=\"text/javascript\" src=\"${script}\"></script>" >> index.html
-done
-echo "${HTML_TAIL}" >> index.html
+echo "${HTML_HEAD}" > www/index.html
+echo "${HTML_COMPONENTS}" >> www/index.html
+echo "<script type=\"text/javascript\" src=\"all.js\"></script>" >> www/index.html
+#for script in $(ls build/*.js | sort) ; do
+#  echo "<script type=\"text/javascript\" src=\"$(basename ${script})\"></script>" >> www/index.html
+#done
+echo "${HTML_TAIL}" >> www/index.html
