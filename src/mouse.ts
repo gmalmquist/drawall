@@ -68,21 +68,26 @@ class Mouse {
     });
     element.addEventListener('mousedown', event => {
       this.pos = new Point(event.clientX, event.clientY);
-      this.drag = new Drag(this.pos);
-      this.dragListeners.forEach(l => l.dragStart(this.drag));
+      const drag = new Drag(this.pos);
+      this.drag = drag;
+      this.dragListeners.forEach(l => l.dragStart(drag));
     });
     element.addEventListener('mouseup', event => {
       this.pos = new Point(event.clientX, event.clientY);
-      this.updateDrag();
-      this.dragListeners.forEach(l => l.dragEnd(this.drag));
-      this.drag = null;
+      const drag = this.drag;
+      if (drag !== null) {
+        this.updateDrag();
+        this.dragListeners.forEach(l => l.dragEnd(drag));
+        this.drag = null;
+      }
     });
   }
 
   private updateDrag() {
-    if (this.drag === null) return;
-    this.drag.update(this.pos);
-    this.dragListeners.forEach(l => l.dragUpdate(this.drag));
+    const drag = this.drag;
+    if (drag === null) return;
+    drag.update(this.pos);
+    this.dragListeners.forEach(l => l.dragUpdate(drag));
   }
 }
 

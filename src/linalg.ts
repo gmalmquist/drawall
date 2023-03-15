@@ -18,6 +18,18 @@ class Point {
     return this.splus(-1.0, vec);
   }
 
+  trunc(f: number = 1.0): Point {
+    return new Point(
+      f * Math.floor(this.x / f),
+      f * Math.floor(this.y / f),
+    );
+  }
+
+  onLine(a: Point, tan: Vec): Point {
+    const s = Vec.between(a, this).dot(tan) / tan.mag2();
+    return a.splus(s, tan);
+  }
+
   to(dst: Point): Vec {
     return Vec.between(this, dst);
   }
@@ -26,7 +38,7 @@ class Point {
     return new Point(lerp(s, this.x, pt.x), lerp(s, this.y, pt.y));
   }
 
-  as_vec(): Vec {
+  toVec(): Vec {
     return new Vec(this.x, this.y);
   }
 
@@ -63,12 +75,6 @@ class Vec {
     );
   }
 
-  unit(): Vec {
-    const m = this.mag();
-    if (m < 0.0001) return this;
-    return this.scale(1.0 / m);
-  }
-
   dot(vec: Vec): number {
     return this.x * vec.x + this.y * vec.y;
   }
@@ -89,6 +95,12 @@ class Vec {
     return new Vec(-this.x, -this.y);
   }
 
+  unit(): Vec {
+    const mag2 = this.mag2();
+    if (mag2 < 0.0001 || mag2 === 1.0) return this;
+    return this.scale(1.0 / Math.sqrt(mag2));
+  }
+
   splus(scale: number, vec: Vec): Vec {
     return new Vec(
       this.x + scale * vec.x,
@@ -104,15 +116,15 @@ class Vec {
     return this.splus(-1.0, vec);
   }
 
-  on_axis(vec: Vec): Vec {
+  onAxis(vec: Vec): Vec {
     return vec.scale(this.dot(vec) / vec.mag2());
   }
 
-  off_axis(vec: Vec): Vec {
-    return this.minus(this.on_axis(vec));
+  offAxis(vec: Vec): Vec {
+    return this.minus(this.onAxis(vec));
   }
 
-  as_point(): Point {
+  toPoint(): Point {
     return new Point(this.x, this.y);
   }
 
@@ -178,7 +190,7 @@ class Frame {
     public readonly axisI: Vec,
     public readonly axisJ: Vec) {}
 
-  to_local_point(p: Point) {
+  toLocalPoint(p: Point) {
     const delta = Vec.between(this.origin, p);
     return new Point(
       delta.dot(this.axisI) / this.axisI.mag2(),
@@ -186,36 +198,36 @@ class Frame {
     );
   }
 
-  to_local_vec(v: Vec) {
+  toLocalVec(v: Vec) {
     return new Vec(
       v.dot(this.axisI) / this.axisI.mag2(),
       v.dot(this.axisJ) / this.axisJ.mag2(),
     );
   }
 
-  to_global_vec(v: Vec) {
+  toGlobalVec(v: Vec) {
     return new Vec(
       v.x * this.axisI.x + v.y * this.axisJ.x,
       v.x * this.axisI.y + v.y * this.axisJ.y,
     );
   }
 
-  to_global_point(p: Point) {
-    return this.origin.plus(this.to_global_vec(p.as_vec()));
+  toGlobalPoint(p: Point) {
+    return this.origin.plus(this.toGlobalVec(p.toVec()));
   }
 
   get project(): Transform2 {
     return {
-      vec: v => this.to_global_vec(v),
-      point: p => this.to_global_point(p),
+      vec: v => this.toGlobalVec(v),
+      point: p => this.toGlobalPoint(p),
       distance: d => d * Math.sqrt(this.axisI.mag() * this.axisJ.mag()),
     };
   }
 
   get unproject(): Transform2 {
     return {
-      vec: v => this.to_local_vec(v),
-      point: p => this.to_local_point(p),
+      vec: v => this.toLocalVec(v),
+      point: p => this.toLocalPoint(p),
       distance: d => d / Math.sqrt(this.axisI.mag() * this.axisJ.mag()),
     };
   }

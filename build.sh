@@ -22,7 +22,7 @@ HTML_COMPONENTS=$(cat src/*.html)
 
 mkdir -p www/
 cp src/*.js www/
-tsc --lib esnext,dom -t es6 --outDir www src/*.ts
+tsc --strict --lib esnext,dom -t es6 --outDir www src/*.ts
 
 cd www
 echo "${HTML_HEAD}" > index.html

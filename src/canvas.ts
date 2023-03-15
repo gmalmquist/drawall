@@ -53,7 +53,7 @@ class Canvas2d {
   viewport: CanvasViewport = new CanvasViewport();
 
   constructor(private readonly el: HTMLCanvasElement) {
-    this.g = el.getContext('2d');
+    this.g = el.getContext('2d')!!;
   }
 
   get width() {
@@ -78,6 +78,14 @@ class Canvas2d {
 
   set lineWidth(w: number) {
     this.g.lineWidth = w;
+  }
+
+  set textAlign(a: CanvasTextAlign) {
+    this.g.textAlign = a;
+  }
+
+  set textBaseline(a: CanvasTextBaseline) {
+    this.g.textBaseline = a;
   }
 
   strokeLine(src: Point, dst: Point) {
@@ -163,7 +171,6 @@ setTimeout(() => {
     {
       getPos: () => c.viewport.project.point(c.viewport.origin),
       setPos: (p, delta, o) => {
-        console.log(`${c.viewport.getWorldFrame()}`);
         const { origin, project, unproject } = o as {
           origin: Point,
           project: Transform2,
@@ -211,8 +218,57 @@ setTimeout(() => {
     },
   });
 
+  const drawGridLines = () => {
+    // render grid
+    const gridSpacing = 20;
+    const left = c.viewport.unproject.vec(new Vec(-1, 0)).unit();
+    const right = c.viewport.unproject.vec(new Vec(1, 0)).unit();
+    const up = c.viewport.unproject.vec(new Vec(0, -1)).unit();
+    const down = c.viewport.unproject.vec(new Vec(0, 1)).unit();
+
+    const dirMinus = left.plus(up);
+    const dirPlus = right.plus(down);
+    const topLeft = c.viewport.unproject.point(Point.ZERO)
+      .trunc(gridSpacing)
+      .splus(gridSpacing, dirMinus);
+    const bottomRight = c.viewport.unproject.point(new Point(c.width, c.height))
+      .trunc(gridSpacing)
+      .splus(gridSpacing, dirPlus);
+    const gridX = Vec.between(topLeft, bottomRight).onAxis(c.viewport.unproject.vec(Axis.X));
+    const gridY = Vec.between(topLeft, bottomRight).onAxis(c.viewport.unproject.vec(Axis.Y));
+    const steps = Math.floor(Math.max(gridX.mag(), gridY.mag()) / gridSpacing);
+    c.strokeStyle = '#ccc'; 
+    c.textAlign = 'center';
+    c.textBaseline = 'top';
+    for (let i = 0; i <= steps; i++) {
+      const s = gridSpacing * i;
+      const x = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.X)).unit());
+      c.strokeLine(x, x.plus(gridY));
+      c.fillText(`${x.trunc().x}`, x.onLine(
+        c.viewport.unproject.point(new Point(0, 10)),
+        c.viewport.unproject.vec(Axis.X), 
+      ));
+    }
+    c.textAlign = 'left';
+    c.textBaseline = 'middle';
+    for (let i = 0; i <= steps; i++) {
+      const s = gridSpacing * i;
+      const y = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.Y)).unit());
+      c.strokeLine(y, y.plus(gridX));
+      if (i > 0) {
+        c.fillText(`${y.trunc().y}`, y.onLine(
+          c.viewport.unproject.point(new Point(10, 0)),
+          c.viewport.unproject.vec(Axis.Y), 
+        ));
+      }
+    }
+    c.strokeStyle = 'black';
+  };
+
   setInterval(() => {
     c.clear();
+
+    drawGridLines();
 
     const { edge } = state;
 
@@ -226,7 +282,8 @@ setTimeout(() => {
     
     c.strokeCircle(mouse.pos, 3);
 
-    c.fillText(`${dist}`, new Point(-25, 25)); 
+    c.fillText(`${dist}`, c.viewport.unproject.point(new Point(200, 200))); 
+    c.fillText(`${c.viewport.unproject.distance(dist)}`, c.viewport.unproject.point(new Point(200, 220))); 
   }, 15);
 }, 100);
 
