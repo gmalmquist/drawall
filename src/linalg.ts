@@ -1,4 +1,22 @@
+const TAU = Math.PI * 2;
+
 const lerp = (s: number, a: number, b: number) => (1.0 - s) * a + s * b;
+
+const normalizeRadians = (a: number) => {
+  let r = a;
+  while (r < 0) r += TAU;
+  return r % TAU;
+};
+
+const radianDelta = (a: number, b: number) => {
+  const src = normalizeRadians(a);
+  const dst = normalizeRadians(b);
+
+  const forward = b - a;
+  const backward = (b - TAU) - a;
+
+  return Math.abs(forward) < Math.abs(backward) ? forward : backward;
+};
 
 class Point {
   constructor(public readonly x: number, public readonly y: number) {}
@@ -70,8 +88,8 @@ class Vec {
 
   rotate(angle: number): Vec {
     return new Vec(
-      Math.cos(angle * this.x) - Math.sin(angle * this.y),
-      Math.sin(angle * this.x) + Math.cos(angle * this.y)
+      Math.cos(angle) * this.x - Math.sin(angle) * this.y,
+      Math.sin(angle) * this.x + Math.cos(angle) * this.y,
     );
   }
 
@@ -151,6 +169,10 @@ class Ray {
     public readonly origin: Point,
     public readonly direction: Vec) {}
 
+  at(t: number): Point {
+    return this.origin.splus(t, this.direction);
+  }
+
   intersection(other: Ray): RayHit | null {
     // (o+d*t - Pq)*Nq =0
     // (O - Pq)*Nq + (Nq*d)*t = 0
@@ -169,6 +191,10 @@ class Edge {
   constructor(
     public readonly src: Point,
     public readonly dst: Point) {}
+
+  ray(): Ray {
+    return new Ray(this.src, this.vector());
+  }
 
   vector(): Vec {
     return Vec.between(this.src, this.dst);

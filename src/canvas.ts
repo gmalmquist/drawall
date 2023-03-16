@@ -133,15 +133,11 @@ class Canvas2d {
   }
 }
 
-interface Constraint {
-  apply: () => void;
-}
-
 setTimeout(() => {
-  const c = new Canvas2d(document.getElementById('main-canvas') as HTMLCanvasElement);
+  const c = App.canvas;
   c.handleResize();
 
-  const mouse = new Mouse();
+  const mouse = App.mouse;
   mouse.listenTo(document.body);
 
   const state = {
@@ -149,41 +145,11 @@ setTimeout(() => {
     wall: new Edge(new Point(0, 0), new Point(80, 40)),
   };
 
-  const constraints: Constraint[] = [
-    {
-      apply: () => {
-        state.wall = new Edge(state.edge.dst, state.wall.dst);
-      },
-    },
-    {
-      apply: () => {
-        const dst = state.wall.dst.onLine(state.edge.dst, state.edge.vector().r90());
-        const e = Vec.between(state.wall.src, dst);
-        if (e.mag2() > 0.0001) { 
-          state.wall = new Edge(
-            state.wall.src,
-            state.wall.src.splus(state.wall.vector().mag() / e.mag(), e),
-          );
-        }
-      },
-    },
-    {
-      apply: () => {
-        const hit = new Ray(state.edge.src, state.edge.vector())
-          .intersection(new Ray(state.wall.src, state.wall.vector()));
-        if (hit !== null) {
-//          state.edge = new Edge(state.edge.src, hit.point);
-        }
-      },
-    },
-  ];
-
   const draggables: Draggable[] = [
     {
       getPos: () => c.viewport.project.point(state.edge.src),
       setPos: p => {
         state.edge = new Edge(c.viewport.unproject.point(p), state.edge.dst);
-        constraints.forEach(c => c.apply());
       },
       distance: p => Vec.between(p, c.viewport.project.point(state.edge.src)).mag(),
       priority: 1,
@@ -192,7 +158,6 @@ setTimeout(() => {
       getPos: () => c.viewport.project.point(state.edge.dst),
       setPos: p => {
         state.edge = new Edge(state.edge.src, c.viewport.unproject.point(p));
-        constraints.forEach(c => c.apply());
       },
       distance: p => Vec.between(p, c.viewport.project.point(state.edge.dst)).mag(),
       priority: 1,
@@ -204,7 +169,6 @@ setTimeout(() => {
           c.viewport.unproject.point(p),
           c.viewport.unproject.point(p).plus(state.edge.vector())
         );
-        constraints.forEach(c => c.apply());
       },
       distance: p => c.viewport.project.distance(state.edge.distance(c.viewport.unproject.point(p))),
       priority: 0,
@@ -239,7 +203,12 @@ setTimeout(() => {
     dragStart: drag => {
       let closest: Draggable | null = null;
       let closestD = 0;
-      for (const d of draggables) {
+      const drags = [
+        ...App.ecs.getComponents<DragHandle>(DragHandle.cid)
+          .map(h => h.draggable),
+        ...draggables
+      ];
+      for (const d of drags) {
         const distance = d.distance(drag.start);
         if (distance > 20) continue;
         if (closest === null 
@@ -313,6 +282,8 @@ setTimeout(() => {
   };
 
   setInterval(() => {
+    Time.tick();
+
     c.clear();
 
     drawGridLines();
@@ -342,7 +313,9 @@ setTimeout(() => {
     c.strokeCircle(mouseW, 3);
 
     c.fillText(`${dist}`, c.viewport.unproject.point(new Point(200, 200))); 
-    c.fillText(`${c.viewport.unproject.distance(dist)}`, c.viewport.unproject.point(new Point(200, 220))); 
+    c.fillText(`${c.viewport.unproject.distance(dist)}`, c.viewport.unproject.point(new Point(200, 220)));
+
+    App.ecs.update();
   }, 15);
 }, 100);
 

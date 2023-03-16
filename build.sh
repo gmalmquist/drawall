@@ -50,7 +50,25 @@ cp src/{*.ts,*.js} build/
 compile
 
 mkdir -p www/
-cat build/*.js > www/all.js
+
+ORDERED=$(cat <<EOF
+util.js
+linalg.js
+ecs.js
+mouse.js
+canvas.js
+model.js
+app.js
+EOF
+)
+
+echo '' > www/all.js
+for item in ${ORDERED} ; do
+  cat "build/${item}" >> www/all.js
+  rm "build/${item}"
+done
+
+cat build/*.js >> www/all.js
 
 echo "${HTML_HEAD}" > www/index.html
 echo "${HTML_COMPONENTS}" >> www/index.html
