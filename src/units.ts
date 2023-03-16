@@ -436,6 +436,10 @@ Units.distance
   .add(new Unit('rod', 'rods'))
   .add(new Unit('parsec', 'pc'))
   .add(new Unit('astronomical unit', 'au'))
+  .add(new Unit('smoot', 'smoot')
+     .setFormat(a => a.value === 1 ? '1 smoot' : `${prettyNum(a.value)} smoots`))
+  .add(new Unit('gwen', 'gwen')
+     .setFormat(a => a.value === 1 ? '1 gwen' : `${prettyNum(a.value)} gwens`))
   .add(UnitConversions.scaling('km', 'm', 1e3))
   .add(UnitConversions.scaling('hm', 'm', 1e2))
   .add(UnitConversions.scaling('dam', 'm', 10))
@@ -468,6 +472,8 @@ Units.distance
   .add(UnitConversions.scaling('light-millisecond', 'light-microsecond', 1e3))
   .add(UnitConversions.scaling('light-millisecond', 'light-nanosecond', 1e6))
   .add(UnitConversions.scaling('light-nanosecond', 'light-femtosecond', 1e6))
+  .add(UnitConversions.scaling('smoot', 'in', 67))
+  .add(UnitConversions.scaling('gwen', 'in', 66))
 ;
 
 for (const u of Units.distance.getUnits()) {
