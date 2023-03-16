@@ -476,37 +476,3 @@ Units.distance
   .add(UnitConversions.scaling('gwen', 'in', 66))
 ;
 
-for (const u of Units.distance.getUnits()) {
-  console.log(`${u}`, u);
-}
-
-[
-  '12.2m',
-  '0.3',
-  '6cm',
-  '7 meters',
-  '1 centimeter',
-  '9 km',
-  "2'",
-  '10ft',
-  '3"',
-  `5'6"`,
-  '2 yards',
-  '1 foot',
-  '0.1 miles',
-  '0.5 light-years',
-  '0.1 furlong',
-  '100000 furlong',
-  '1,000 micrometers',
-  '100,000,000 nanometers',
-  '100 px',
-].forEach(a => {
-  const amount = Units.distance.parse(a);
-  const meters = amount ? Units.distance.convert(amount, 'meter') : null; 
-  console.log(`
-    text: ${a}
-    amount: ${amount ? Units.distance.format(amount) : '?'}
-    meters: ${meters ? Units.distance.format(meters) : '?'}
-  `.split('\n').map(s => s.trim()).filter(x=>x).join('\n'));
-});
-
