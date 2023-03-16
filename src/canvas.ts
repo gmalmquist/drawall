@@ -134,11 +134,13 @@ class Canvas2d {
 }
 
 setTimeout(() => {
+  const pane = document.getElementsByClassName('canvas-wrap')[0] as HTMLElement;
+
   const c = App.canvas;
   c.handleResize();
 
   const mouse = App.mouse;
-  mouse.listenTo(document.body);
+  mouse.listenTo(pane);
 
   const state = {
     edge: new Edge(new Point(10, 90), new Point(0, 0)),
@@ -228,7 +230,7 @@ setTimeout(() => {
     },
   });
 
-  window.addEventListener('wheel', event => {
+  pane.addEventListener('wheel', event => {
     const wheel = event as WheelEvent;
     c.viewport.radius = Math.max(10, c.viewport.radius + Math.sign(wheel.deltaY) * 10);
     c.updateTransforms();

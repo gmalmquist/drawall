@@ -67,7 +67,7 @@ class WallJoint extends Component {
     });
     entity.add(handle);
 
-    entity.ecs.createEntity(new AngleConstraint(
+    const ac = new AngleConstraint(
       Math.PI/2.,
       () => this.outgoing ?
         Vec.between(this.pos, this.outgoing.dst.pos) : null,
@@ -83,7 +83,9 @@ class WallJoint extends Component {
           this.incoming.src.pos = this.pos.plus(v);
         }
       },
-    ));
+    );
+    ac.hardness = 0.5;
+    entity.ecs.createEntity(ac);
   }
 }
 
@@ -91,6 +93,15 @@ abstract class Constraint extends Component {
   public static readonly cid = nextCid();
   id() { return Constraint.cid; }
   abstract enforce(): void;
+
+  public priority: number = 0;
+
+  // hardness between 0 and 1
+  public hardness: number = 0;
+
+  get influence() {
+    return Math.min(1, lerp(this.hardness, Time.delta, 1));
+  }
 }
 
 class LengthConstraint extends Constraint {
@@ -105,7 +116,7 @@ class LengthConstraint extends Constraint {
     const edge = this.getEdge();
     if (edge === null) return;
     const delta = this.length - edge.vector().mag();
-    const correction = edge.vector().unit().scale(delta/2 * Time.delta);
+    const correction = edge.vector().unit().scale(delta/2 * this.influence);
     this.setEdge(new Edge(
       edge.src.minus(correction),
       edge.dst.plus(correction),
@@ -133,8 +144,8 @@ class AngleConstraint extends Constraint {
     const ru = right.unit();
     const angle = Math.acos(lu.dot(ru));
     const delta = radianDelta(angle, this.angle);
-    this.setLeft(left.rotate(delta/2 * Time.delta));
-    this.setRight(right.rotate(-delta/2 * Time.delta));
+    this.setLeft(left.rotate(delta/2 * this.influence));
+    this.setRight(right.rotate(-delta/2 * this.influence));
   }
 }
 
@@ -173,7 +184,9 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
-  for (const c of ecs.getComponents<Constraint>(Constraint.cid)) {
+  const constraints = ecs.getComponents<Constraint>(Constraint.cid);
+  constraints.sort((a, b) => a.priority - b.priority);
+  for (const c of constraints) {
     c.enforce();
   }
 };
