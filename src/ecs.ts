@@ -1,71 +1,189 @@
 type Eid = Newtype<number, { readonly _: unique symbol; }>;
 const Eid = newtype<Eid>();
 
-type Cid = Newtype<number, { readonly _: unique symbol; }>;
-const Cid = newtype<Cid>();
-const Cids = {
-  _count: 0,
-};
-const nextCid = () => {
-  return Cid(Cids._count++);
-};
+const SOLO: unique symbol = Symbol();
+// a component which always
+// exists at most once on an 
+// entity, and may be automatically
+// instantiated.
+interface Solo {
+  readonly [SOLO]: true;
+}
 
 abstract class Component {
-  public entity: Entity | null = null;
+  private readonly kinds = new Set<ComponentType<Component>>();
 
-  abstract id(): Cid;
+  constructor(public readonly entity: Entity) {
+  }
 
-  attach(entity: Entity) {
-    this.entity = entity;
+  addKind<C extends Component>(c: ComponentType<C>) {
+    this.kinds.add(c);
+  }
+
+  getKinds(): ComponentType<Component>[] {
+    const result = new Set(this.kinds);
+    result.add(this.constructor as ComponentType<Component>);
+    return Array.from(result);
+  }
+
+  tearDown() {
+  }
+}
+
+class TestComponent extends Component implements Solo {
+  readonly [SOLO] = true;
+}
+
+type ComponentType<C extends Component> = new (entity: Entity, ...args: any[]) => C;
+
+class ComponentMap {
+  // map of component class constructors to component instances
+  private readonly map = new Map<ComponentType<Component>, Set<Component>>();
+
+  constructor(private readonly enforceSolo: boolean = true) {}
+
+  public add<C extends Component>(c: C): boolean {
+    if (this.enforceSolo
+        && SOLO in c
+        && this.has(c.constructor as ComponentType<Component>)) {
+      // NB: only applies solo constraint on the subclass type
+      return false;
+    }
+    for (const key of c.getKinds()) {
+      this._add(key, c);
+    }
+    return true;
+  }
+
+  private _add<C extends Component>(key: ComponentType<C>, c: C): void {
+    if (!this.map.has(key)) {
+      this.map.set(key, new Set<Component>([c]));
+    } else {
+      const set = this.map.get(key)!;
+      set.add(c);
+      this.map.get(key)!.add(c);
+    }
+  }
+
+  public get<C extends Component>(kind: ComponentType<C>): C[] {
+    const set = this.map.get(kind);
+    if (typeof set === 'undefined') {
+      return [];
+    }
+    return Array.from(set).map(c => c as C);
+  }
+
+  // gets or creates the singleton component type
+  public getOrCreate<C extends Component, Solo>(
+    kind: new (e: Entity) => C,
+    entity: Entity): C {
+    const set = this.map.get(kind);
+    if (typeof set === 'undefined' || set.size === 0) {
+      const c = new kind(entity);
+      this.map.set(kind, new Set([c]));
+      return c;
+    }
+    return Array.from(set)[0] as C;
+  }
+
+  public has<C extends Component>(kind: ComponentType<C>): boolean {
+    return this.map.has(kind) && this.map.get(kind)!.size > 0;
+  }
+
+  public hasInstance<C extends Component>(c: C): boolean {
+    const kind = c.constructor as ComponentType<Component>;
+    return this.map.has(kind) && this.map.get(kind)!.has(c);
+  }
+
+  public remove<C extends Component>(c: C): boolean {
+    let removedAny: boolean = false;
+    for (const key of c.getKinds()) {
+      const set = this.map.get(key);
+      if (typeof set === 'undefined' || !set.has(c)) {
+        continue;
+      }
+      set.delete(c);
+      removedAny = true;
+    }
+    return removedAny;
+  }
+
+  public removeAll<C extends Component>(kind: ComponentType<C>): C[] {
+    const set = this.get(kind);
+    if (set === null) return [];
+    const arr = Array.from(set).map(c => c as C);
+    arr.forEach(c => this.remove(c));
+    return arr;
+  }
+
+  public keys(): Set<ComponentType<Component>> {
+    return new Set(this.map.keys());
   }
 }
 
 class Entity {
-  private readonly componentMap = new Map<Cid, Component>();
+  private readonly components = new ComponentMap(true);
 
   constructor(
     public readonly ecs: EntityComponentSystem,
     public readonly id: Eid) {
   }
 
-  add(c: Component) {
-    if (c.entity !== null && c.entity.id !== this.id) {
-      c.entity.remove(c.id());
+  add<C extends Component, A extends Array<any>>(
+    kind: new (e: Entity, ...args: A) => C,
+    ...args: A): C {
+    const c = new kind(this, ...args);
+    return this._add(c);
+  }
+
+  private _add<C extends Component>(c: C): C {
+    if (c.entity.id !== this.id) {
+      throw new Error(`Cannot add ${c.entity.id}'s component to entity ${this.id}!`);
     }
-    this.componentMap.set(c.id(), c);
+    if (!this.components.add(c)) {
+      // is solo component, return previous instance.
+      return this.components.get(c.constructor as ComponentType<C>)[0];
+    }
     this.ecs.registerComponent(c);
-    c.attach(this);
+    return c;
   }
 
-  remove(c: Cid): Component | null {
-    const component = this.componentMap.get(c);
-    if (typeof component === 'undefined') {
-      return null;
+  remove<C extends Component>(c: C): boolean {
+    if (this.components.remove(c)) {
+      c.tearDown();
+      this.ecs.removeComponent(c);
+      return true;
     }
-    this.componentMap.delete(c);
-    component.entity = null;
-    this.ecs.removeComponent(component);
-    return component;
+    return false;
   }
 
-  delete() {
-    const cids = Array.from(this.componentMap.keys());
-    cids.forEach(c => this.remove(c));
+  removeAll<C extends Component>(kind: ComponentType<C>): C[] {
+    const arr = this.components.removeAll(kind);
+    for (const c of arr) {
+      c.tearDown();
+      this.ecs.removeComponent(c);
+    }
+    return arr;
+  }
+
+  destroy() {
+    const kinds = this.components.keys();
+    kinds.forEach(c => this.removeAll(c));
     this.ecs.deleteEntity(this.id);
   }
 
-  get<T extends Component>(id: Cid): T | null {
-    const result = this.componentMap.get(id);
-    if (typeof result === 'undefined') {
-      return null;
-    }
-    return result as T;
+  get<C extends Component>(kind: ComponentType<C>): C[] {
+    return this.components.get(kind);
+  }
+
+  getOrCreate<C extends Component, Solo>(kind: ComponentType<C>): C {
+    return this.components.getOrCreate(kind, this);
   }
 }
 
 class EntityComponentSystem {
   private readonly entities = new Map<Eid, Entity>();
-  private readonly components = new Map<Cid, Component[]>();
+  private readonly components = new ComponentMap(false);
   private readonly systems: System[] = [];
   private nextEid: number = 0;
 
@@ -77,10 +195,10 @@ class EntityComponentSystem {
       return;
     }
     this.entities.delete(e);
-    entity.delete();
+    entity.destroy();
   }
 
-  createEntity(...components: Component[]): Entity {
+  createEntity(...components: (new (e: Entity) => Component)[]): Entity {
     const e = new Entity(this, Eid(this.nextEid++));
     this.entities.set(e.id, e);
     for (const c of components) {
@@ -89,37 +207,23 @@ class EntityComponentSystem {
     return e;
   }
 
-  getComponents<T extends Component>(cid: Cid): T[] {
-    const list = this.components.get(cid);
-    if (typeof list === 'undefined') {
-      return [];
+  getComponents<C extends Component>(kind: ComponentType<C>): C[] {
+    return this.components.get(kind);
+  }
+
+  registerComponent<C extends Component>(c: C) {
+    this.components.add(c);
+  }
+
+  removeComponent(c: Component) {
+    if (!this.components.remove(c)) {
+      return;
     }
-    return list.map(c => c as T);
+    c.entity.remove(c);
   }
 
   registerSystem(s: System) {
     this.systems.push(s);
-  }
-
-  registerComponent(c: Component) {
-    if (!this.components.has(c.id())) {
-      this.components.set(c.id(), [c]);
-    } else {
-      const list = this.components.get(c.id())!;
-      list.push(c);
-    }
-  }
-
-  removeComponent(c: Component) {
-    if (c.entity !== null) {
-      c.entity.remove(c.id());
-      return; // entity will re-delecate
-    }
-    const list = this.components.get(c.id());
-    if (typeof list === 'undefined') {
-      return;
-    }
-    this.components.set(c.id(), list.filter(x => x !== c));
   }
 
   update() {

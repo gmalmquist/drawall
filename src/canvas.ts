@@ -206,7 +206,7 @@ setTimeout(() => {
       let closest: Draggable | null = null;
       let closestD = 0;
       const drags = [
-        ...App.ecs.getComponents<DragHandle>(DragHandle.cid)
+        ...App.ecs.getComponents(DragHandle)
           .map(h => h.draggable),
         ...draggables
       ];

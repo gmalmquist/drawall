@@ -1,23 +1,16 @@
-class Wall extends Component {
-  public static readonly cid = nextCid();
-  id() { return Wall.cid; }
+class Wall extends Component implements Solo {
+  public readonly [SOLO] = true;
+  private _src: WallJoint;
+  private _dst: WallJoint;
 
-  public src: WallJoint = new WallJoint();
-  public dst: WallJoint = new WallJoint();
+  constructor(entity: Entity) {
+    super(entity);
+    this._src = entity.ecs.createEntity().add(WallJoint);
+    this._dst = entity.ecs.createEntity().add(WallJoint);
+    this.src.attachOutgoing(this);
+    this.dst.attachIncoming(this);
 
-  constructor() {
-    super();
-    this.src.outgoing = this;
-    this.dst.incoming = this;
-  }
-
-  attach(entity: Entity) {
-    super.attach(entity);
-
-    entity.ecs.createEntity(this.src); 
-    entity.ecs.createEntity(this.dst);
-
-    const handle = new DragHandle({
+    entity.add(DragHandle, {
       getPos: () => App.canvas.viewport.project.point(this.src.pos),
       setPos: p => {
         const delta = Vec.between(this.src.pos, this.dst.pos);
@@ -31,31 +24,49 @@ class Wall extends Component {
       ),
       priority: 0,
     });
-    entity.add(handle);
 
-    entity.ecs.createEntity(new LengthConstraint(
+    entity.ecs.createEntity().add(LengthConstraint,
       100,
       () => new Edge(this.src.pos, this.dst.pos),
       edge => {
         this.src.pos = edge.src;
         this.dst.pos = edge.dst;
       },
-    ));
+    );
+  }
+
+  get src() { return this._src; }
+  get dst() { return this._dst; }
+
+  set src(j: WallJoint) {
+    if (j === this._src) return;
+    this._src.detachOutgoing();
+    this._src = j;
+    j.attachOutgoing(this);
+  }
+
+  set dst(j: WallJoint) {
+    if (j === this._dst) return;
+    this._dst.detachIncoming();
+    this._dst = j;
+    j.attachIncoming(this);
+  }
+
+  tearDown() {
+    this.src.detachOutgoing();
+    this.dst.detachIncoming();
   }
 }
 
 class WallJoint extends Component {
-  public static readonly cid = nextCid();
-  id() { return WallJoint.cid; }
-
   public pos: Point = Point.ZERO;
-  public outgoing: Wall | null = null;
-  public incoming: Wall | null = null;
+  private _outgoing: Wall | null = null;
+  private _incoming: Wall | null = null;
 
-  attach(entity: Entity) {
-    super.attach(entity);
+  constructor(entity: Entity) {
+    super(entity);
 
-    const handle = new DragHandle({
+    entity.add(DragHandle, {
       getPos: () => App.canvas.viewport.project.point(this.pos),
       setPos: p => {
         this.pos = App.canvas.viewport.unproject.point(p);
@@ -65,9 +76,8 @@ class WallJoint extends Component {
       ).mag(),
       priority: 1,
     });
-    entity.add(handle);
 
-    const ac = new AngleConstraint(
+    const ac = entity.add(AngleConstraint,
       Math.PI/2.,
       () => this.outgoing ?
         Vec.between(this.pos, this.outgoing.dst.pos) : null,
@@ -85,19 +95,51 @@ class WallJoint extends Component {
       },
     );
     ac.hardness = 0.5;
-    entity.ecs.createEntity(ac);
+  }
+
+  get incoming(): Wall | null {
+    return this._incoming;
+  }
+
+  get outgoing(): Wall | null {
+    return this._outgoing;
+  }
+
+  attachIncoming(wall: Wall) {
+    this._incoming = wall;
+  }
+
+  attachOutgoing(wall: Wall) {
+    this._outgoing = wall;
+  }
+
+  detachIncoming() {
+    this._incoming = null;
+    if (this._outgoing === null) {
+      this.entity.destroy();
+    }
+  }
+
+  detachOutgoing() {
+    this._outgoing = null;
+    if (this._incoming === null) {
+      this.entity.destroy();
+    }
   }
 }
 
-abstract class Constraint extends Component {
-  public static readonly cid = nextCid();
-  id() { return Constraint.cid; }
-  abstract enforce(): void;
+class Constraint extends Component {
+  enforce(): void {}
 
   public priority: number = 0;
 
   // hardness between 0 and 1
   public hardness: number = 0;
+
+  constructor(entity: Entity) {
+    super(entity);
+    this.addKind(Constraint);
+  }
 
   get influence() {
     return Math.min(1, lerp(this.hardness, Time.delta, 1));
@@ -106,10 +148,11 @@ abstract class Constraint extends Component {
 
 class LengthConstraint extends Constraint {
   constructor(
+    entity: Entity,
     private readonly length: number,
     private readonly getEdge: () => Edge | null,
     private readonly setEdge: (e: Edge) => void) {
-    super();
+    super(entity);
   }
 
   enforce() {
@@ -127,19 +170,22 @@ class LengthConstraint extends Constraint {
 
 class AngleConstraint extends Constraint {
   constructor(
-    private readonly angle: number,
+    entity: Entity,
+    public angle: number,
     private readonly getLeft: () => Vec | null,
     private readonly getRight: () => Vec | null,
     private readonly setLeft: (v: Vec) => void,
     private readonly setRight: (v: Vec) => void) {
-    super();
+    super(entity);
   }
 
   enforce() {
     const left = this.getLeft();
     if (left === null) return;
+
     const right = this.getRight();
     if (right === null) return;
+
     const lu = left.unit();
     const ru = right.unit();
     const angle = Math.acos(lu.dot(ru));
@@ -150,16 +196,13 @@ class AngleConstraint extends Constraint {
 }
 
 class DragHandle extends Component {
-  public static readonly cid = nextCid();
-  id() { return DragHandle.cid; }
-
-  constructor(public readonly draggable: Draggable) {
-    super();
+  constructor(entity: Entity, public readonly draggable: Draggable) {
+    super(entity);
   }
 }
 
 const WallRenderer = (ecs: EntityComponentSystem) => {
-  const walls = ecs.getComponents<Wall>(Wall.cid);
+  const walls = ecs.getComponents(Wall);
   for (const wall of walls) {
     if (wall.src === null || wall.dst ===  null) continue;
     const canvas = App.canvas;
@@ -184,7 +227,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
-  const constraints = ecs.getComponents<Constraint>(Constraint.cid);
+  const constraints = ecs.getComponents(Constraint);
   constraints.sort((a, b) => a.priority - b.priority);
   for (const c of constraints) {
     c.enforce();

@@ -11,15 +11,12 @@ class App {
     App.ecs.registerSystem(WallRenderer);
     App.ecs.registerSystem(ConstraintEnforcer);
 
-    const wall = new Wall();
-    const e = App.ecs.createEntity(wall);
+    const wall = App.ecs.createEntity().add(Wall);
     wall.src!.pos = new Point(-150, 60);
     wall.dst!.pos = new Point(-50, 60);
 
-    const wall2 = new Wall();
-    App.ecs.createEntity(wall2);
+    const wall2 = App.ecs.createEntity().add(Wall);
     wall2.src = wall.dst;
-    wall2.src.outgoing = wall2;
     wall2.dst.pos = new Point(-20, 30);
   }
 }
