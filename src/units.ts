@@ -15,6 +15,9 @@ const prettyNum = (num: number): string => {
   if (num === 0) return '0';
   const negative = num < 0;
   const integer = Math.floor(Math.abs(num)).toString();
+  if (integer.indexOf('e') >= 0) {
+    return num.toString(); // its so big we're using scientific notation
+  }
   const parts = [];
   if (negative) {
     parts.push('-');
@@ -71,7 +74,7 @@ class UnitPattern {
     let index = 0;
     for (const item of pattern) {
       if (unwrap(item).match(UnitPattern.DIGIT)) {
-        parts.push(`(?<i${index++}>([0-9]+([.][0-9]*)?)|([.][0-9]+))`);
+        parts.push(`(?<i${index++}>([-]?)([0-9]+([.][0-9]*)?)|([.][0-9]+))`);
       } else {
         parts.push(unwrap(item as UnitPatternLiteral));
       }
@@ -305,13 +308,13 @@ class Units {
   }
 
   convert(amount: Amount, targetUnit: string): Amount | null {
+    const canonicalTarget = this.aliases.get(targetUnit) || targetUnit;
     if (!this.units.has(amount.unit)) {
       throw new Error(`Amount is in an unknown unit: ${JSON.stringify(amount)}.`);
     }
-    if (!this.units.has(targetUnit)) {
-      throw new Error(`Cannot convert ${JSON.stringify(amount)} to unknown unit ${targetUnit}`);
+    if (!this.units.has(canonicalTarget)) {
+      throw new Error(`Cannot convert ${JSON.stringify(amount)} to unknown unit ${canonicalTarget}`);
     }
-    const canonicalTarget = this.aliases.get(targetUnit) || targetUnit;
     // do a cute lil' BFS to try to convert the given amount
     // to the target unit.
     interface Node {
@@ -365,12 +368,15 @@ class Units {
 }
 
 Units.distance
+  .add(new Unit('kilometer', 'km'))
+  .add(new Unit('hectometer', 'hm'))
+  .add(new Unit('dekameter', 'dam'))
   .add(new Unit('meter', 'm'))
+  .add(new Unit('decimeter', 'dm'))
   .add(new Unit('centimeter', 'cm'))
   .add(new Unit('millimeter', 'mm'))
   .add(new Unit('micrometer', 'μm'))
   .add(new Unit('nanometer', 'nm'))
-  .add(new Unit('kilometer', 'km'))
   .add(new Unit('feet', 'ft')
     .addParser('1 foot', x => new Amount(x, 'feet'))
     .addParser('0\'', x => new Amount(x, 'feet'))
@@ -392,6 +398,9 @@ Units.distance
   .add(new Unit('furlong', 'fur'))
   .add(new Unit('pixel', 'px'))
   .add(UnitConversions.scaling('km', 'm', 1e3))
+  .add(UnitConversions.scaling('hm', 'm', 1e2))
+  .add(UnitConversions.scaling('dam', 'm', 10))
+  .add(UnitConversions.scaling('m', 'dm', 10))
   .add(UnitConversions.scaling('m', 'cm', 1e2))
   .add(UnitConversions.scaling('m', 'mm', 1e3))
   .add(UnitConversions.scaling('m', 'μm', 1e6))
