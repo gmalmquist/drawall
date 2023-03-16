@@ -140,6 +140,7 @@ class UnitPattern {
 }
 
 class Unit {
+  private readonly aliases = new Set<string>();
   private readonly parsers: UnitParser[] = [];
   private _format: FormatUnit | null = null;
 
@@ -147,17 +148,30 @@ class Unit {
     public readonly name: string,
     public readonly abbrev: string,
   ) {
-    for (const suffix of [this.abbrev, this.name, `${this.name}s`]) {
-      this.parsers.push(new UnitParser(
-        UnitPattern.parse(`0${suffix}`),
-        (x: number) => new Amount(x, this.name),
-      ));
+    for (const alias of [this.abbrev, this.name, `${this.name}s`]) {
+      this.addAlias(alias);
     }
+  }
+
+  addAlias(alias: string): Unit {
+    if (this.aliases.has(alias)) {
+      return this;
+    }
+    this.aliases.add(alias);
+    this.parsers.push(new UnitParser(
+      UnitPattern.parse(`0${alias}`),
+      (x: number) => new Amount(x, this.name),
+    ));
+    return this;
   }
 
   addParser(pattern: string, parseFunc: ParseUnit): Unit {
     this.parsers.push(new UnitParser(UnitPattern.parse(pattern), parseFunc));
     return this;
+  }
+
+  getAliases(): string[] {
+    return Array.from(this.aliases);
   }
 
   setFormat(formatter: FormatUnit): Unit {
@@ -277,8 +291,14 @@ class Units {
 
   private addUnit(u: Unit) {
     this.units.set(u.name, u);
-    this.aliases.set(u.abbrev, u.name);
-    this.aliases.set(`${u.name}s`, u.name);
+    for (const alias of u.getAliases()) {
+      if (this.aliases.has(alias)) {
+        throw new Error(
+          `Cannot add alias ${alias}->${u.name}, as it would collid with ${this.aliases.get(alias)}`
+        );
+      }
+      this.aliases.set(alias, u.name);
+    }
   }
 
   private addConversion(c: UnitConversion) {
@@ -375,10 +395,15 @@ Units.distance
   .add(new Unit('decimeter', 'dm'))
   .add(new Unit('centimeter', 'cm'))
   .add(new Unit('millimeter', 'mm'))
-  .add(new Unit('micrometer', 'μm'))
+  .add(new Unit('micrometer', 'μm')
+    .addAlias('micron')
+    .addAlias('microns'))
   .add(new Unit('nanometer', 'nm'))
+  .add(new Unit('femtometer', 'fm'))
+  .add(new Unit('zeptometer', 'zm'))
+  .add(new Unit('thou', 'mil'))
   .add(new Unit('feet', 'ft')
-    .addParser('1 foot', x => new Amount(x, 'feet'))
+    .addAlias('foot')
     .addParser('0\'', x => new Amount(x, 'feet'))
     .addParser('0\'0\"', (feet, inches) => new Amount(feet + inches / 12.0, 'feet'))
     .setFormat(amount => {
@@ -395,23 +420,54 @@ Units.distance
   .add(new Unit('yard', 'y'))
   .add(new Unit('mile', 'mi'))
   .add(new Unit('light-year', 'ly'))
+  .add(new Unit('light-hour', 'lh'))
+  .add(new Unit('light-minute', 'lm'))
+  .add(new Unit('light-second', 'ls'))
+  .add(new Unit('light-millisecond', 'lms'))
+  .add(new Unit('light-microsecond', 'lμs'))
+  .add(new Unit('light-nanosecond', 'lns'))
+  .add(new Unit('light-femtosecond', 'lfs'))
   .add(new Unit('furlong', 'fur'))
   .add(new Unit('pixel', 'px'))
+  .add(new Unit('league', 'lg'))
+  .add(new Unit('fathom', 'ftm'))
+  .add(new Unit('nautical mile', 'nmi'))
+  .add(new Unit('chain', 'chains'))
+  .add(new Unit('rod', 'rods'))
+  .add(new Unit('parsec', 'pc'))
+  .add(new Unit('astronomical unit', 'au'))
   .add(UnitConversions.scaling('km', 'm', 1e3))
   .add(UnitConversions.scaling('hm', 'm', 1e2))
   .add(UnitConversions.scaling('dam', 'm', 10))
   .add(UnitConversions.scaling('m', 'dm', 10))
   .add(UnitConversions.scaling('m', 'cm', 1e2))
   .add(UnitConversions.scaling('m', 'mm', 1e3))
-  .add(UnitConversions.scaling('m', 'μm', 1e6))
-  .add(UnitConversions.scaling('m', 'nm', 1e9))
+  .add(UnitConversions.scaling('mm', 'μm', 1e3))
+  .add(UnitConversions.scaling('μm', 'nm', 1e3))
+  .add(UnitConversions.scaling('nm', 'fm', 1e6))
+  .add(UnitConversions.scaling('fm', 'zm', 1e6))
   .add(UnitConversions.scaling('ft', 'in', 12))
   .add(UnitConversions.scaling('yard', 'ft', 3))
   .add(UnitConversions.scaling('mile', 'feet', 5280))
   .add(UnitConversions.scaling('mile', 'furlong', 8))
+  .add(UnitConversions.scaling('in', 'mil', 1000))
+  .add(UnitConversions.scaling('league', 'mi', 3))
+  .add(UnitConversions.scaling('fathom', 'ft', 6))
+  .add(UnitConversions.scaling('nautical mile', 'm', 1852))
   .add(UnitConversions.scaling('in', 'mm', 25.4))
+  .add(UnitConversions.scaling('chain', 'yard', 22))
+  .add(UnitConversions.scaling('chain', 'rod', 4))
   .add(UnitConversions.scaling('ly', 'km', 9.46e+12))
+  .add(UnitConversions.scaling('parsec', 'light-year', 3.26156))
   .add(UnitConversions.scaling('in', 'px', 96))
+  .add(UnitConversions.scaling('au', 'km', 1.496e8))
+  .add(UnitConversions.scaling('light-year', 'light-hour', 8766))
+  .add(UnitConversions.scaling('light-hour', 'light-minute', 60))
+  .add(UnitConversions.scaling('light-minute', 'light-second', 60))
+  .add(UnitConversions.scaling('light-second', 'light-millisecond', 1000))
+  .add(UnitConversions.scaling('light-millisecond', 'light-microsecond', 1e3))
+  .add(UnitConversions.scaling('light-millisecond', 'light-nanosecond', 1e6))
+  .add(UnitConversions.scaling('light-nanosecond', 'light-femtosecond', 1e6))
 ;
 
 for (const u of Units.distance.getUnits()) {
