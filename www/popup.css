@@ -1,0 +1,147 @@
+.popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+
+  border-radius: 0.5;
+
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  align-content: stretch;
+  justify-items: stretch;
+  justify-content: stretch;
+
+
+  font-family: sans-serif;
+
+  box-shadow: 0 0 4px gray;
+  background: white;
+}
+
+
+.popup button {
+  cursor: pointer;
+}
+
+.popup-content {
+  margin: 0.5em;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  align-content: stretch;
+  justify-items: stretch;
+  justify-content: stretch;
+}
+
+.row {
+  display: flex;
+  flex-direction: row;
+  align-content: center;
+  align-items: center;
+}
+
+.row > input {
+  flex-grow: 1;
+}
+
+.row > * + * {
+  margin-left: 0.5ex;
+}
+
+.row + .row {
+  margin-top: 1ex;
+}
+
+.row > button {
+  flex-grow: 1;
+}
+
+.popup-header {
+  display: flex;
+  flex-direction: row;
+  align-content: center;
+  align-items: center;
+
+  padding: 0.25ex;
+  margin-bottom: 0.25ex;
+  user-select: none;
+  cursor: pointer;
+}
+
+.popup-title {
+  flex-grow: 1;
+  font-size: 1.1em;
+  font-weight: bold;
+  text-align: left;
+  padding: 2px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  justify-items: center;
+  justify-content: center;
+  text-align: center;
+  
+  text-decoration: none;
+  font-family: monospace;
+  font-weight: bold;
+  color: white;
+
+  aspect-ratio: 1 / 1;
+
+  min-height: 1.5ex;
+
+  margin: 2px;
+  padding: 2px;
+  border-radius: 2px;
+
+  cursor: pointer;
+}
+
+.btn:active {
+}
+
+.popup-close {
+  background: hsl(0, 90%, 60%);
+}
+
+.popup-close:hover {
+  background: hsl(0, 90%, 40%);
+}
+
+.popup.window {
+  background: #c0c0c0;
+  border-top: 2px solid white;
+  border-left: 2px solid white;
+  border-right: 2px solid #444;
+  border-bottom: 2px solid #444;
+}
+
+.window .popup-header {
+  border-bottom: thin solid #b0b0b0;
+  background: linear-gradient(to right, hsl(196.6, 94.1%, 40%), #5BCEFA, white, #F5A9B8);
+}
+
+.window .popup-title {
+  font-family: monospace;
+  color: white;
+}
+
+.window .btn, .window button {
+  cursor: pointer;
+  border-top: 2px solid white;
+  border-left: 2px solid white;
+  border-right: 2px solid #444;
+  border-bottom: 2px solid #444;
+}
+
+.window .btn:active, .window button:active {
+  border-top: 2px solid #444;
+  border-left: 2px solid #444;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+}
+

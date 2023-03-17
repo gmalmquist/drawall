@@ -74,6 +74,7 @@ class WallJoint extends Component {
       distance: (pt: Point) => Vec.between(
         App.canvas.viewport.project.point(this.pos), pt
       ).mag(),
+      onClick: () => this.showPopup(),
       priority: 1,
     });
 
@@ -126,6 +127,38 @@ class WallJoint extends Component {
       this.entity.destroy();
     }
   }
+
+  showPopup() {
+    const angleConstraint = this.entity.get(AngleConstraint)[0];
+    const p = this.entity.add(PopupWindow);
+    p.title = 'Corner';
+    const ui = p.getUiBuilder()
+      .addLabel('Angle', 'angle')
+      .addNumberInput('angle', {
+        min: 0,
+        max: 360,
+        value: angleConstraint.angle * 180 / Math.PI,
+        size: 4,
+      })
+      .addRadioGroup('units', [{ name: 'radians' }, { name: 'degrees', isDefault: true }])
+      .newRow()
+      .addLabel('strength', 'strength')
+      .addSliderInput('strength', { min: 0, max: 1, initial: 0.5 })
+      .newRow()
+      .addResetButton();
+    ui.onChange((name: string, value: string) => {
+      if (name === 'angle') {
+        const scale = ui.getValue('units') === 'degrees' ? Math.PI / 180 : 1;
+        angleConstraint.angle = parseFloat(value) * scale;
+      } else if (name === 'strength') {
+        angleConstraint.hardness = parseFloat(value);
+      } else if (name === 'units') {
+        const scale = ui.getValue('units') === 'degrees' ? 180 / Math.PI : 1;
+        ui.setValue('angle', angleConstraint.angle * scale);
+      }
+    });
+    p.show();
+  }
 }
 
 class Constraint extends Component {
@@ -134,7 +167,7 @@ class Constraint extends Component {
   public priority: number = 0;
 
   // hardness between 0 and 1
-  public hardness: number = 0;
+  public hardness: number = 0.5;
 
   constructor(entity: Entity) {
     super(entity);
@@ -142,7 +175,10 @@ class Constraint extends Component {
   }
 
   get influence() {
-    return Math.min(1, lerp(this.hardness, Time.delta, 1));
+    const dt = Math.max(0, Math.min(1, Time.delta));
+    const a = lerp(this.hardness, 0, dt);
+    const b = lerp(this.hardness, dt, 1);
+    return lerp(this.hardness, a, b);
   }
 }
 

@@ -7,6 +7,7 @@ HTML_HEAD=$(cat <<EOF
   <meta charset="utf-8">
   <title>drawall</title>
   <link rel="stylesheet" type="text/css" href="main.css"></link>
+  <link rel="stylesheet" type="text/css" href="popup.css"></link>
 </head>
 <body>
 EOF
@@ -58,6 +59,7 @@ ecs.js
 mouse.js
 canvas.js
 model.js
+popups.js
 app.js
 EOF
 )

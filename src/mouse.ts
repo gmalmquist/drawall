@@ -4,6 +4,7 @@ interface Draggable {
   distance: (pt: Point) => number;
   priority?: number;
   getState?: () => any;
+  onClick?: () => void;
 }
 
 interface DWO {

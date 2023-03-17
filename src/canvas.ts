@@ -227,6 +227,16 @@ setTimeout(() => {
     dragUpdate: drag => {
     },
     dragEnd: drag => {
+      const isClick = Vec.between(drag.start, drag.end).mag() < 3;
+      if (!isClick) return;
+      const drags = App.ecs.getComponents(DragHandle)
+        .map(h => h.draggable);
+      for (const d of drags) {
+        if (!d.onClick) continue;
+        if (d.distance(drag.end) <= 10) {
+          d.onClick();
+        }
+      }
     },
   });
 
