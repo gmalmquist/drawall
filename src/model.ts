@@ -72,7 +72,7 @@ class Wall extends Component implements Solo {
       ),
       priority: 0,
     });
-    handle.onClick(() => this.showPopup());
+    handle.onClick(({ point }) => this.showPopup(point));
     handle.onDrag({
       onStart: (e): [Point, Point] => {
         return [this.src.pos, this.dst.pos];
@@ -128,9 +128,10 @@ class Wall extends Component implements Solo {
     j.attachIncoming(this);
   }
 
-  showPopup() {
+  showPopup(openAt: Point) {
     this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
+    p.setPosition(openAt);
     p.title = 'Wall';
 
     const length = this.entity.get(LengthConstraint)[0]!;
@@ -213,7 +214,7 @@ class WallJoint extends Component {
       },
       priority: 1,
     });
-    handle.onClick(() => this.showPopup());
+    handle.onClick(({ point }) => this.showPopup(point));
 
     entity.add(AngleConstraint,
       () => ({
@@ -264,9 +265,10 @@ class WallJoint extends Component {
     }
   }
 
-  showPopup() {
+  showPopup(openAt: Point) {
     this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
+    p.setPosition(openAt);
     p.title = 'Corner';
     const ui = p.getUiBuilder()
     this.createAnchorUi(ui);
@@ -577,6 +579,35 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       baseline: 'middle',
     });
   }
+};
+
+const WallJointRenderer = (ecs: EntityComponentSystem) => {
+  const joints = ecs.getComponents(WallJoint);
+  const canvas = App.canvas;
+  for (const joint of joints) {
+    const hovered = joint.entity.get(Handle).some(h => h.isHovered);
+    const active = hovered || joint.entity.get(PopupWindow).some(p => p.isVisible);
+    const locked = joint.entity.get(FixedConstraint).some(f => f.enabled);
+
+    canvas.fillStyle = 'black';
+    canvas.strokeStyle = 'black';
+
+    if (locked) {
+      canvas.fillStyle = 'black';
+      canvas.fillCircle(joint.pos, 5);
+    } else {
+      canvas.fillStyle = 'white';
+      canvas.fillCircle(joint.pos, 5);
+    }
+    canvas.lineWidth = 1;
+    canvas.strokeCircle(joint.pos, 5);
+
+    if (active) {
+      canvas.lineWidth = 2;
+      canvas.strokeCircle(joint.pos, 10);
+    }
+  }
+
 };
 
 const AngleRenderer = (ecs: EntityComponentSystem) => {

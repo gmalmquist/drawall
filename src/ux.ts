@@ -67,6 +67,7 @@ class Handle extends Component {
   public draggable: boolean = true;
   public clickable: boolean = true;
   public hoverable: boolean = true;
+  public ignoreNonPrimary: boolean = true;
   public priority: number = 0;
 
   constructor(entity: Entity, private readonly props: HandleProps) {
@@ -193,13 +194,18 @@ class DragUi {
 
   private pickHandle(
     pos: Point,
+    buttons: number,
     radius: number,
     filter?: (h: Handle) => boolean,
   ): Handle | null {
+    const isPrimary = buttons <= 1;
     let choice: Handle | null = null;
     let choiceDistance = 0;
     for (const handle of this.getHandles()) {
       if (typeof filter !== 'undefined' && !filter(handle)) {
+        continue;
+      }
+      if (!isPrimary && handle.ignoreNonPrimary) {
         continue;
       }
       if (choice !== null && choice.priority > handle.priority) {
@@ -221,10 +227,20 @@ class DragUi {
 
   private connectListeners(canvas: HTMLElement) {
     canvas.addEventListener('mousedown', (e) => {
+      if (e.buttons <= 1) {
+        // hide any popups when we click on the canvas
+        App.ecs.getComponents(Popup).forEach(p => {
+          if (p.closeOnUnfocus) {
+            p.hide();
+          }
+        });
+      }
+
       const pos = this.getPoint(e);
       this.clicking = true;
       this.dragStart = pos;
-      this.dragging = this.pickHandle(pos, this.dragRadius, h => h.draggable);
+      this.dragging = this.pickHandle(
+        pos, e.buttons, this.dragRadius, h => h.draggable);
       if (this.dragging !== null) {
         this.dragging.fireDragStart({
           start: this.dragStart,
@@ -282,7 +298,8 @@ class DragUi {
       }
       if (this.clicking) {
         this.clicking = false;
-        const handle = this.pickHandle(point, this.dragRadius, h => h.clickable);
+        const handle = this.pickHandle(
+          point, e.buttons, this.dragRadius, h => h.clickable);
         if (handle !== null) {
           handle.fireClick({ point });
         }

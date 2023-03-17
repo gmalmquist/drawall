@@ -230,6 +230,8 @@ setTimeout(() => {
     hoverable: false,
     priority: -1,
   });
+  canvasHandle.ignoreNonPrimary = false;
+
   canvasHandle.onDrag({
     onStart: (e) => ({
       origin: c.viewport.origin,

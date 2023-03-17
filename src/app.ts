@@ -13,8 +13,11 @@ class App {
   }
 
   static init() {
-    App.ecs.registerSystem(WallRenderer);
     App.ecs.registerSystem(AngleRenderer);
+
+    App.ecs.registerSystem(WallRenderer);
+    App.ecs.registerSystem(WallJointRenderer);
+
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
 

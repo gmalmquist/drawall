@@ -1,22 +1,38 @@
+interface Anchor {
+  position: Point;
+}
+
 class Popup extends Component {
   readonly element: HTMLElement;
   private visible: boolean = false;
+  private anchor: Anchor = { position: Point.ZERO };
+  public closeOnUnfocus: boolean = true;
 
   constructor(entity: Entity) {
     super(entity);
 
     this.element = document.createElement('div');
     this.element.setAttribute('class', 'popup');
+
+    this.addKind(Popup);
   }
 
   get isVisible(): boolean {
    return this.visible;
   }
 
+  setPosition(pos: Point) {
+    this.anchor = {
+      position: pos,
+    };
+    this.moveToAnchor();
+  }
+
   show() {
     if (this.visible) return;
     this.visible = true;
     document.body.appendChild(this.element);
+    this.moveToAnchor();
   }
 
   hide() {
@@ -28,12 +44,26 @@ class Popup extends Component {
   tearDown() {
     this.hide();
   }  
+
+  private moveToAnchor() {
+    const pos = this.anchor.position;
+    const bounds = this.element.getBoundingClientRect();
+    const width = bounds.width;
+    const height = bounds.height;
+
+    const tx = pos.x - width / 2;
+    const ty = pos.y - height / 2;
+
+    this.element.style.left = `${tx}px`;
+    this.element.style.top = `${ty}px`;
+  }
 }
 
 class PopupWindow extends Popup {
   private readonly headerEl: HTMLElement;
   private readonly titleEl: HTMLElement;
   private readonly contentEl: HTMLElement;
+  private readonly uiBuilder: UiBuilder;
 
   constructor(entity: Entity) {
     super(entity);
@@ -61,6 +91,8 @@ class PopupWindow extends Popup {
     this.titleEl = title;
     this.contentEl = content;
 
+    this.uiBuilder = new UiBuilder(this.contentEl);
+
     close.addEventListener('click', () => this.hide());
 
     this.makeDraggable(this.element, header);
@@ -71,11 +103,16 @@ class PopupWindow extends Popup {
   }
 
   getUiBuilder(): UiBuilder {
-    return new UiBuilder(this.contentEl);
+    return this.uiBuilder;
   }
 
   appendHTML(el: Element) {
     this.contentEl.appendChild(el);
+  }
+
+  show() {
+    super.show();
+    this.uiBuilder.focus();
   }
 
   private makeDraggable(element: HTMLElement, handle: HTMLElement) {
@@ -123,6 +160,7 @@ interface RadioOption {
 class UiBuilder {
   private readonly changeListeners: ((name: string, value: string) => void)[] = [];
   private readonly inputs = new Map<string, InputState>();
+  private initialFocus: HTMLInputElement | null = null;
   private static index: number = 0;
   private row: Element;
   private salt: string;
@@ -131,6 +169,12 @@ class UiBuilder {
     this.salt = `uib-${UiBuilder.index++}-`;
     this.row = UiBuilder.createRow();
     this.pane.appendChild(this.row);
+  }
+
+  focus() {
+    if (this.initialFocus !== null) {
+      this.initialFocus.focus();
+    }
   }
 
   fireChange(field: string) {
@@ -370,7 +414,14 @@ class UiBuilder {
     atts: AttrMap,
     innerHTML: string = '',
   ): Element {
-    return UiBuilder.createSalted(this.salt, tagName, atts, innerHTML);
+    const element = UiBuilder.createSalted(this.salt, tagName, atts, innerHTML);
+    const autofocusTypes = new Set(['text', 'number']);
+    if (this.initialFocus === null
+      && tagName === 'input'
+      && autofocusTypes.has(`${atts['type']}` || '')) {
+      this.initialFocus = element as HTMLInputElement;
+    }
+    return element;
   }
 
   private static createRow(): Element {
