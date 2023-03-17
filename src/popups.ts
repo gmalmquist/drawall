@@ -200,7 +200,7 @@ class UiBuilder {
     return this.addInput(name, 'number', attrs);
   }
 
-  addSliderInput(
+  addSlider(
     name: string,
     attrs: { min: number, max: number, initial: number },
   ): UiBuilder {

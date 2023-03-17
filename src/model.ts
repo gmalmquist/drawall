@@ -13,9 +13,6 @@ class Wall extends Component implements Solo {
     const handle = entity.add(Handle, {
       getPos: () => App.canvas.viewport.project.point(this.src.pos),
       setPos: p => {
-        const delta = Vec.between(this.src.pos, this.dst.pos);
-        this.src.pos = App.canvas.viewport.unproject.point(p);
-        this.dst.pos = this.src.pos.plus(delta);
       },
       distance: (pt: Point) => App.canvas.viewport.project.distance(
         new Edge(this.src.pos, this.dst.pos).distance(
@@ -23,10 +20,40 @@ class Wall extends Component implements Solo {
         )
       ),
       priority: 0,
-      clickable: false,
+    });
+    handle.onClick(() => this.showPopup());
+    handle.onDrag({
+      onStart: (e): [Point, Point] => {
+        return [this.src.pos, this.dst.pos];
+      },
+      onUpdate: (e, [src, dst]) => {
+        const delta = App.canvas.viewport.unproject.vec(e.delta);
+        const srcLocked = this.src.entity.get(FixedConstraint).some(f => f.enabled);
+        const dstLocked = this.dst.entity.get(FixedConstraint).some(f => f.enabled);
+        if (srcLocked && !dstLocked) {
+          const start = App.canvas.viewport.unproject.point(e.start);
+          const point = App.canvas.viewport.unproject.point(e.point);
+          const initial = Vec.between(src, start);
+          const current = Vec.between(src, point);
+          const angle = current.angle() - initial.angle();
+          this.dst.pos = src.plus(Vec.between(src, dst).rotate(angle));
+        } else if (!srcLocked && dstLocked) {
+          const start = App.canvas.viewport.unproject.point(e.start);
+          const point = App.canvas.viewport.unproject.point(e.point);
+          const initial = Vec.between(dst, start);
+          const current = Vec.between(dst, point);
+          const angle = current.angle() - initial.angle();
+          this.src.pos = dst.plus(Vec.between(dst, src).rotate(angle));
+        } else {
+          this.src.pos = src.plus(delta);
+          this.dst.pos = dst.plus(delta);
+        }
+      },
+      onEnd: (e, [src, dst]) => {
+      },
     });
 
-    entity.ecs.createEntity().add(LengthConstraint,
+    entity.add(LengthConstraint,
       100,
       () => new Edge(this.src.pos, this.dst.pos),
       edge => {
@@ -51,6 +78,33 @@ class Wall extends Component implements Solo {
     this._dst.detachIncoming();
     this._dst = j;
     j.attachIncoming(this);
+  }
+
+  showPopup() {
+    this.entity.removeAll(PopupWindow);
+    const p = this.entity.add(PopupWindow);
+    p.title = 'Wall';
+
+    const length = this.entity.get(LengthConstraint)[0]!;
+
+    const ui = p.getUiBuilder()
+      .addLabel('length', 'length')
+      .addNumberInput('length', { value: length.length, min: 0 })
+      .newRow()
+      .addLabel('tension', 'tension')
+      .addSlider('tension', { min: 0, max: 1, initial: length.hardness })
+      .newRow();
+
+    ui.onChange((name, value) => {
+      if (name === 'length') {
+        length.length = parseFloat(value);
+      } else if (name === 'tension') {
+        length.hardness = parseFloat(value);
+      }
+    });
+
+    ui.addResetButton();
+    p.show();
   }
 
   tearDown() {
@@ -99,6 +153,10 @@ class WallJoint extends Component {
       () => [ this.pos ],
       ([p]: Point[]) => { this.pos = p; },
     );
+  }
+
+  get isCorner(): boolean {
+    return this.incoming !== null && this.outgoing !== null;
   }
 
   get incoming(): Wall | null {
@@ -169,8 +227,8 @@ class WallJoint extends Component {
       })
       .addRadioGroup('units', [{ name: 'radians' }, { name: 'degrees', isDefault: true }])
       .newRow()
-      .addLabel('strength', 'strength')
-      .addSliderInput('strength', { min: 0, max: 1, initial: angleConstraint.hardness })
+      .addLabel('tension', 'strength')
+      .addSlider('strength', { min: 0, max: 1, initial: angleConstraint.hardness })
       .newRow();
     ui.onChange((name: string, value: string) => {
       if (name === 'angle') {
@@ -242,7 +300,7 @@ class FixedConstraint extends Constraint {
 class LengthConstraint extends Constraint {
   constructor(
     entity: Entity,
-    private readonly length: number,
+    public length: number,
     private readonly getEdge: () => Edge | null,
     private readonly setEdge: (e: Edge) => void) {
     super(entity);

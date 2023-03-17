@@ -21,7 +21,7 @@ interface HandleHoverEvent {
 
 interface HandleDragListener<C> {
   onStart: (event: HandleDragEvent) => C;
-  onUpdate: (event: HandleDragEvent, context: C) => C;
+  onUpdate: (event: HandleDragEvent, context: C) => void;
   onEnd: (event: HandleDragEvent, context: C) => void;
 }
 
@@ -89,7 +89,6 @@ class Handle extends Component {
         },
         onUpdate: (e, start: Point) => {
           setPos(start.plus(e.delta));
-          return start;
         },
         onEnd: (e, start: Point) => {
           setPos(start.plus(e.delta));
