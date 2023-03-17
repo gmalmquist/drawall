@@ -58,6 +58,7 @@ linalg.js
 ecs.js
 mouse.js
 canvas.js
+ux.js
 model.js
 popups.js
 app.js

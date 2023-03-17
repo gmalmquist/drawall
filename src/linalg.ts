@@ -18,6 +18,13 @@ const radianDelta = (a: number, b: number) => {
   return Math.abs(forward) < Math.abs(backward) ? forward : backward;
 };
 
+const toDegrees = (r: number): number => r * 180 / Math.PI;
+const toRadians = (d: number): number => d * Math.PI / 180;
+
+const degreeDelta = (a: number, b: number): number => {
+  return toDegrees(radianDelta(toRadians(a), toRadians(b)));
+};
+
 class Point {
   constructor(public readonly x: number, public readonly y: number) {}
 
@@ -81,6 +88,10 @@ class Axis {
 
 class Vec {
   constructor(public readonly x: number, public readonly y: number) {}
+
+  angle(): number {
+    return Math.atan2(this.y, this.x);
+  }
 
   r90(): Vec {
     return new Vec(-this.y, this.x);

@@ -73,7 +73,7 @@ class Canvas2d {
   }
 
   set fillStyle(style: string) {
-    this.g.strokeStyle = style;
+    this.g.fillStyle = style;
   }
 
   set lineWidth(w: number) {
@@ -86,6 +86,50 @@ class Canvas2d {
 
   set textBaseline(a: CanvasTextBaseline) {
     this.g.textBaseline = a;
+  }
+
+  fill() {
+    this.g.fill();
+  }
+
+  stroke() {
+    this.g.stroke();
+  }
+
+  beginPath() {
+    this.g.beginPath();
+  }
+
+  closePath() {
+    this.g.closePath();
+  }
+
+  moveTo(pos: Point) {
+    const p = this.transform.point(pos);
+    this.g.moveTo(p.x, p.y);
+  }
+
+  lineTo(pos: Point) {
+    const p = this.transform.point(pos);
+    this.g.lineTo(p.x, p.y);
+  }
+
+  bezierCurveTo(two: Point, three: Point, four: Point) {
+    const b = this.transform.point(two);
+    const c = this.transform.point(three);
+    const d = this.transform.point(four);
+    this.g.bezierCurveTo(b.x, b.y, c.x, c.y, d.x, d.y);
+  }
+
+  arc(
+    center: Point,
+    radius: number,
+    startAngle: number,
+    endAngle: number,
+    counterClockwise?: boolean,
+  ) {
+    const c = this.transform.point(center);
+    this.g.arc(c.x, c.y, radius, startAngle, endAngle, counterClockwise);
   }
 
   strokeLine(src: Point, dst: Point) {
@@ -110,8 +154,8 @@ class Canvas2d {
     const g = this.g;
     const c = this.transform.point(src);
     g.beginPath();
-    g.arc(src.x, src.y, radius, 0, 2 * Math.PI);
-    g.stroke();
+    g.arc(c.x, c.y, radius, 0, 2 * Math.PI);
+    g.fill();
   }
 
   fillText(text: string, point: Point) {
@@ -134,113 +178,39 @@ class Canvas2d {
 }
 
 setTimeout(() => {
-  const pane = document.getElementsByClassName('canvas-wrap')[0] as HTMLElement;
-
   const c = App.canvas;
   c.handleResize();
 
+  window.addEventListener('resize', () => App.canvas.handleResize());
+
   const mouse = App.mouse;
-  mouse.listenTo(pane);
+  mouse.listenTo(App.pane);
 
-  const state = {
-    edge: new Edge(new Point(10, 90), new Point(0, 0)),
-    wall: new Edge(new Point(0, 0), new Point(80, 40)),
-  };
-
-  const draggables: Draggable[] = [
-    {
-      getPos: () => c.viewport.project.point(state.edge.src),
-      setPos: p => {
-        state.edge = new Edge(c.viewport.unproject.point(p), state.edge.dst);
-      },
-      distance: p => Vec.between(p, c.viewport.project.point(state.edge.src)).mag(),
-      priority: 1,
+  const canvasHandle = App.ecs.createEntity().add(Handle, {
+    getPos: () => c.viewport.project.point(c.viewport.origin),
+    distance: (p) => 0,
+    draggable: true,
+    clickable: false,
+    hoverable: false,
+    priority: -1,
+  });
+  canvasHandle.onDrag({
+    onStart: (e) => ({
+      origin: c.viewport.origin,
+      project: c.viewport.project,
+      unproject: c.viewport.unproject,
+    }),
+    onUpdate: (e, context) => {
+      const { origin, project, unproject } = context;
+      c.viewport.origin = origin.minus(unproject.vec(e.delta));
+      c.updateTransforms();
+      return context;
     },
-    {
-      getPos: () => c.viewport.project.point(state.edge.dst),
-      setPos: p => {
-        state.edge = new Edge(state.edge.src, c.viewport.unproject.point(p));
-      },
-      distance: p => Vec.between(p, c.viewport.project.point(state.edge.dst)).mag(),
-      priority: 1,
-    },
-    {
-      getPos: () => c.viewport.project.point(state.edge.src),
-      setPos: p => {
-        state.edge = new Edge(
-          c.viewport.unproject.point(p),
-          c.viewport.unproject.point(p).plus(state.edge.vector())
-        );
-      },
-      distance: p => c.viewport.project.distance(state.edge.distance(c.viewport.unproject.point(p))),
-      priority: 0,
-    },
-    {
-      getPos: () => c.viewport.project.point(c.viewport.origin),
-      setPos: (p, delta, o) => {
-        const { origin, project, unproject } = o as {
-          origin: Point,
-          project: Transform2,
-          unproject: Transform2,
-        };
-        c.viewport.origin = origin.minus(unproject.vec(delta));
-        c.updateTransforms();
-      },
-      distance: (p) => 0,
-      priority: -1,
-      getState: () => ({
-        origin: c.viewport.origin,
-        project: c.viewport.project,
-        unproject: c.viewport.unproject,
-      }),
-    },
-  ];
-
-  const priority = (draggable: Draggable): number => {
-    if (typeof draggable.priority === 'undefined') return 0;
-    return draggable.priority;
-  };
-
-  mouse.addDragListener({
-    dragStart: drag => {
-      let closest: Draggable | null = null;
-      let closestD = 0;
-      const drags = [
-        ...App.ecs.getComponents(DragHandle)
-          .map(h => h.draggable),
-        ...draggables
-      ];
-      for (const d of drags) {
-        const distance = d.distance(drag.start);
-        if (distance > 20) continue;
-        if (closest === null 
-          || priority(d) > priority(closest) 
-          || (priority(d) === priority(closest) && distance < closestD)) {
-          closest = d;
-          closestD = distance;
-        }
-      }
-      if (closest !== null) {
-        drag.addDraggable(closest);
-      }
-    }, 
-    dragUpdate: drag => {
-    },
-    dragEnd: drag => {
-      const isClick = Vec.between(drag.start, drag.end).mag() < 3;
-      if (!isClick) return;
-      const drags = App.ecs.getComponents(DragHandle)
-        .map(h => h.draggable);
-      for (const d of drags) {
-        if (!d.onClick) continue;
-        if (d.distance(drag.end) <= 10) {
-          d.onClick();
-        }
-      }
+    onEnd: (e, context) => {
     },
   });
 
-  pane.addEventListener('wheel', event => {
+  App.pane.addEventListener('wheel', event => {
     const wheel = event as WheelEvent;
     c.viewport.radius = Math.max(10, c.viewport.radius + Math.sign(wheel.deltaY) * 10);
     c.updateTransforms();
@@ -265,7 +235,10 @@ setTimeout(() => {
     const gridX = Vec.between(topLeft, bottomRight).onAxis(c.viewport.unproject.vec(Axis.X));
     const gridY = Vec.between(topLeft, bottomRight).onAxis(c.viewport.unproject.vec(Axis.Y));
     const steps = Math.floor(Math.max(gridX.mag(), gridY.mag()) / gridSpacing);
+
+    c.lineWidth = 1;
     c.strokeStyle = '#ccc'; 
+    c.fillStyle = 'black'; 
     c.textAlign = 'center';
     c.textBaseline = 'top';
     for (let i = 0; i <= steps; i++) {
@@ -295,38 +268,8 @@ setTimeout(() => {
 
   setInterval(() => {
     Time.tick();
-
     c.clear();
-
     drawGridLines();
-
-    const { edge, wall } = state;
-
-    const mouseW = c.viewport.unproject.point(mouse.pos);
-
-    const dist = c.viewport.project.distance(edge.distance(mouseW));
-
-    c.lineWidth = dist < 10 ? 2 : 1;
-    c.strokeStyle = 'blue';
-    c.strokeLine(edge.src, edge.dst);
-
-    c.lineWidth = 1;
-    c.strokeStyle = 'green';
-    c.strokeLine(wall.src, wall.dst);
-    c.strokeStyle = 'black';
-    c.lineWidth = 1;
-   
-    const hit = new Ray(edge.src, edge.vector())
-      .intersection(new Ray(wall.src, wall.vector()));
-    if (hit !== null) {
-      c.strokeCircle(hit.point, 3);
-    }
- 
-    c.strokeCircle(mouseW, 3);
-
-    c.fillText(`${dist}`, c.viewport.unproject.point(new Point(200, 200))); 
-    c.fillText(`${c.viewport.unproject.distance(dist)}`, c.viewport.unproject.point(new Point(200, 220)));
-
     App.ecs.update();
   }, 15);
 }, 100);

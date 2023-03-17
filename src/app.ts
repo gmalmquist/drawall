@@ -1,8 +1,11 @@
 class App {
   public static readonly ecs = new EntityComponentSystem();
-  public static readonly canvas: Canvas2d = new Canvas2d(
-      document.getElementById('main-canvas') as HTMLCanvasElement);
   public static readonly mouse: Mouse = new Mouse();
+  public static readonly pane: HTMLElement =
+    document.getElementsByClassName('canvas-wrap')[0]! as HTMLElement;
+  public static readonly dragUi = new DragUi(App.pane);
+  public static readonly canvas = new Canvas2d(
+      document.getElementById('main-canvas') as HTMLCanvasElement)
 
   constructor() {
   }

@@ -1,4 +1,5 @@
 type Transform<T> = (t: T) => T;
+type Consume<T> = (t: T) => void;
 
 const createUuid = () => {
   const letters: string[] = [];
@@ -11,3 +12,4 @@ const createUuid = () => {
   }
   return letters.join('');
 };
+

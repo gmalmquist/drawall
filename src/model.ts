@@ -10,7 +10,7 @@ class Wall extends Component implements Solo {
     this.src.attachOutgoing(this);
     this.dst.attachIncoming(this);
 
-    entity.add(DragHandle, {
+    const handle = entity.add(Handle, {
       getPos: () => App.canvas.viewport.project.point(this.src.pos),
       setPos: p => {
         const delta = Vec.between(this.src.pos, this.dst.pos);
@@ -23,6 +23,7 @@ class Wall extends Component implements Solo {
         )
       ),
       priority: 0,
+      clickable: false,
     });
 
     entity.ecs.createEntity().add(LengthConstraint,
@@ -66,19 +67,17 @@ class WallJoint extends Component {
   constructor(entity: Entity) {
     super(entity);
 
-    entity.add(DragHandle, {
+    const handle = entity.add(Handle, {
       getPos: () => App.canvas.viewport.project.point(this.pos),
       setPos: p => {
         this.pos = App.canvas.viewport.unproject.point(p);
+        entity.get(FixedConstraint).forEach(c => c.updateTargets([this.pos]));
       },
-      distance: (pt: Point) => Vec.between(
-        App.canvas.viewport.project.point(this.pos), pt
-      ).mag(),
-      onClick: () => this.showPopup(),
       priority: 1,
     });
+    handle.onClick(() => this.showPopup());
 
-    const ac = entity.add(AngleConstraint,
+    entity.add(AngleConstraint,
       Math.PI/2.,
       () => this.outgoing ?
         Vec.between(this.pos, this.outgoing.dst.pos) : null,
@@ -95,7 +94,11 @@ class WallJoint extends Component {
         }
       },
     );
-    ac.hardness = 0.5;
+
+    entity.add(FixedConstraint,
+      () => [ this.pos ],
+      ([p]: Point[]) => { this.pos = p; },
+    );
   }
 
   get incoming(): Wall | null {
@@ -129,11 +132,35 @@ class WallJoint extends Component {
   }
 
   showPopup() {
-    const angleConstraint = this.entity.get(AngleConstraint)[0];
+    this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
     p.title = 'Corner';
     const ui = p.getUiBuilder()
-      .addLabel('Angle', 'angle')
+    this.createAnchorUi(ui);
+    this.createAngleUi(ui);
+    ui.addResetButton();
+    p.show();
+  }
+
+  private createAnchorUi(ui: UiBuilder) {
+    const fixed = this.entity.get(FixedConstraint)[0]!;
+    ui.addCheckbox('fix', fixed.enabled)
+      .addLabel('lock position', 'fix')
+      .addSpacer()
+      .newRow();
+    ui.onChange((name, value) => {
+      if (name === 'fix') {
+        fixed.enabled = value === 'true';
+      }
+    });
+  }
+
+  private createAngleUi(ui: UiBuilder) {
+    if (this.incoming === null || this.outgoing === null) {
+      return;
+    }
+    const angleConstraint = this.entity.get(AngleConstraint)[0];
+    ui.addLabel('Angle', 'angle')
       .addNumberInput('angle', {
         min: 0,
         max: 360,
@@ -143,9 +170,8 @@ class WallJoint extends Component {
       .addRadioGroup('units', [{ name: 'radians' }, { name: 'degrees', isDefault: true }])
       .newRow()
       .addLabel('strength', 'strength')
-      .addSliderInput('strength', { min: 0, max: 1, initial: 0.5 })
-      .newRow()
-      .addResetButton();
+      .addSliderInput('strength', { min: 0, max: 1, initial: angleConstraint.hardness })
+      .newRow();
     ui.onChange((name: string, value: string) => {
       if (name === 'angle') {
         const scale = ui.getValue('units') === 'degrees' ? Math.PI / 180 : 1;
@@ -157,7 +183,6 @@ class WallJoint extends Component {
         ui.setValue('angle', angleConstraint.angle * scale);
       }
     });
-    p.show();
   }
 }
 
@@ -179,6 +204,38 @@ class Constraint extends Component {
     const a = lerp(this.hardness, 0, dt);
     const b = lerp(this.hardness, dt, 1);
     return lerp(this.hardness, a, b);
+  }
+}
+
+class FixedConstraint extends Constraint {
+  public enabled: boolean = false;
+  private targets: Point[] = [];
+
+  constructor(
+    entity: Entity,
+    private readonly getPoints: () => Point[],
+    private readonly setPoints: (pts: Point[]) => void,
+  ) {
+    super(entity);
+    this.hardness = 1.0;
+    this.priority = 5;
+  }
+
+  updateTargets(pts: Point[]) {
+    this.targets = pts; 
+  }
+
+  enforce() {
+    const influence = this.influence;
+    if (!this.enabled || influence === 0) {
+      this.targets = this.getPoints();
+      return;
+    }
+    const points = [...this.getPoints()];
+    for (let i = 0; i < points.length && i < this.targets.length; i++) {
+      points[i] = points[i].lerp(influence, this.targets[i]);
+    }
+    this.setPoints(points);
   }
 }
 
@@ -205,6 +262,8 @@ class LengthConstraint extends Constraint {
 }
 
 class AngleConstraint extends Constraint {
+  private currentAngle: number = 0;
+
   constructor(
     entity: Entity,
     public angle: number,
@@ -224,8 +283,11 @@ class AngleConstraint extends Constraint {
 
     const lu = left.unit();
     const ru = right.unit();
-    const angle = Math.acos(lu.dot(ru));
-    const delta = radianDelta(angle, this.angle);
+    const angle = lu.angle() - ru.angle();
+
+    this.currentAngle = normalizeRadians(angle);
+
+    const delta = normalizeRadians(this.angle) - normalizeRadians(angle);
     this.setLeft(left.rotate(delta/2 * this.influence));
     this.setRight(right.rotate(-delta/2 * this.influence));
   }
@@ -238,13 +300,17 @@ class DragHandle extends Component {
 }
 
 const WallRenderer = (ecs: EntityComponentSystem) => {
+  const canvas = App.canvas;
+
   const walls = ecs.getComponents(Wall);
   for (const wall of walls) {
     if (wall.src === null || wall.dst ===  null) continue;
-    const canvas = App.canvas;
+    const hovered = wall.entity.get(Handle).some(h => h.isHovered);
+    const active = hovered || wall.entity.get(PopupWindow).some(p => p.isVisible);
     canvas.strokeStyle = 'black';
-    canvas.lineWidth = 1;
+    canvas.lineWidth = active ? 2 : 1;
     canvas.strokeLine(wall.src.pos, wall.dst.pos);
+    canvas.lineWidth = 1;
     const ray = new Edge(wall.src.pos, wall.dst.pos).ray();
     const tickSpacing = 10; // px
     const tickSize = 10; // px
@@ -260,10 +326,90 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     }
 
   }
+
+  const joints = ecs.getComponents(WallJoint);
+  for (const joint of joints) {
+    const hovered = joint.entity.get(Handle).some(h => h.isHovered);
+    const active = hovered || joint.entity.get(PopupWindow).some(p => p.isVisible);
+    const pos = joint.pos;
+
+    if (joint.incoming === null || joint.outgoing === null) {
+      const rad = active ? 2 : 5;
+      if (active) {
+        canvas.lineWidth = 1;
+        canvas.strokeStyle = 'black';
+        canvas.fillStyle = BLUE;
+        canvas.fillCircle(pos, 2);
+        canvas.strokeCircle(pos, 2);
+        canvas.strokeCircle(pos, 5);
+      } else {
+        canvas.fillStyle = 'black';
+        canvas.fillCircle(pos, 2);
+      }
+      continue;
+    }
+
+    const incW = Vec.between(pos, joint.incoming.src.pos).unit();
+    const outW = Vec.between(pos, joint.outgoing.dst.pos).unit();
+    const incS = canvas.viewport.project.vec(incW).unit();
+    const outS = canvas.viewport.project.vec(outW).unit();
+    const angle = incS.angle() - outS.angle();
+    const middle = incW.rotate(angle / 2);
+
+    const arcRadius = active ? 20 : 10;
+    const textDistance = canvas.viewport.unproject.distance(arcRadius + 12);
+
+    const targetAngle = joint.entity.get(AngleConstraint)
+      .map(a => a.angle)
+      .reduce((_,a) => a, angle);
+    const angleOff = normalizeRadians(targetAngle) - normalizeRadians(angle);
+    const degText = (r: number, signed?: boolean) => {
+      const s =`${Math.round(toDegrees(r))}°`;
+      if (signed && r >= 0) {
+        return `+${s}`;
+      }
+      return s;
+    };
+    const angleOffDegrees = Math.round(toDegrees(angleOff));
+    const label = Math.abs(toDegrees(angleOff)) >= 1
+      ? `${degText(angle)} (${degText(-angleOff, true)})`
+      : degText(angle);
+
+    canvas.beginPath();
+    canvas.moveTo(pos);
+    canvas.lineTo(pos.splus(canvas.viewport.unproject.distance(arcRadius), incW));
+    canvas.arc(pos, arcRadius, incS.angle(), outS.angle(), true);
+    canvas.closePath();
+
+    canvas.strokeStyle = 'black';
+
+    if (active) {
+      canvas.fillStyle = 'black';
+      canvas.lineWidth = 2;
+      canvas.fill();
+    } else {
+      canvas.lineWidth = 1;
+    }
+    canvas.stroke();
+
+    canvas.textAlign = 'center';
+    canvas.textBaseline = 'middle';
+    if (angleOffDegrees !== 0) {
+      canvas.fillStyle = angleOffDegrees === 0 ? 'black'
+        : angleOffDegrees > 0 ? PINK
+        : BLUE;
+      canvas.fillText(label, pos.splus(textDistance, middle)
+        .plus(canvas.viewport.unproject.vec(new Vec(1,1))));
+    }
+    canvas.fillStyle = 'black';
+    canvas.fillText(label, pos.splus(textDistance, middle));
+  }
 };
 
 const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
   const constraints = ecs.getComponents(Constraint);
+  // sort ascending so that higher priority constraints
+  // have the last say in the next frame's configuration.
   constraints.sort((a, b) => a.priority - b.priority);
   for (const c of constraints) {
     c.enforce();

@@ -9,6 +9,10 @@ class Popup extends Component {
     this.element.setAttribute('class', 'popup');
   }
 
+  get isVisible(): boolean {
+   return this.visible;
+  }
+
   show() {
     if (this.visible) return;
     this.visible = true;
@@ -177,8 +181,14 @@ class UiBuilder {
     input.addEventListener('change', () => this.fireChange(name));
     this.inputs.set(name, {
       value: () => input.value,
-      reset: () => { input.value = `${attrs.value || ''}`; },
-      set: (v: string) => { input.value = v; },
+      reset: () => {
+        input.value = `${attrs.value || ''}`;
+        this.fireChange(name);
+      },
+      set: (v: string) => {
+        input.value = v;
+        this.fireChange(name);
+      },
     });
     return this.add(e);
   }
@@ -199,6 +209,7 @@ class UiBuilder {
       'input',
       {
         name,
+        id: name,
         'type': 'range',
         min: 0,
         max: 10000,
@@ -211,13 +222,45 @@ class UiBuilder {
         const s = parseFloat(slider.value) / 10000.;
         return `${lerp(s, attrs.min, attrs.max)}`;
       },
-      reset: () => { slider.value = `${initial}`; },
+      reset: () => {
+        slider.value = `${initial}`;
+        this.fireChange(name);
+      },
       set: (v: string) => {
         const f = 10000 * (parseFloat(v) - attrs.min) / (attrs.max - attrs.min);
         slider.value = `${f}`;
+        this.fireChange(name);
       },
     });
     return this.add(slider);
+  }
+
+  addCheckbox(
+    name: string,
+    checked: boolean = false,
+  ): UiBuilder {
+    const checkbox = this.create(
+      'input',
+      {
+        name,
+        id: name,
+        'type': 'checkbox',
+      },
+    ) as HTMLInputElement;
+    checkbox.checked = checked;
+    checkbox.addEventListener('change', () => this.fireChange(name));
+    this.inputs.set(name, {
+      value: () => checkbox.checked ? 'true' : 'false',
+      reset: () => {
+        checkbox.checked = checked;
+        this.fireChange(name);
+      },
+      set: (v: string) => {
+        checkbox.checked = v === 'true';
+        this.fireChange(name);
+      },
+    });
+    return this.add(checkbox);
   }
 
   addRadioGroup(
@@ -284,6 +327,12 @@ class UiBuilder {
     this.row = UiBuilder.createRow();
     this.pane.appendChild(this.row);
     return this;
+  }
+
+  addSpacer(): UiBuilder {
+    const e = document.createElement('div') as HTMLElement;
+    e.setAttribute('style', 'flex-grow: 1;');
+    return this.add(e);
   }
 
   private create(

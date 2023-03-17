@@ -34,6 +34,10 @@
   justify-content: stretch;
 }
 
+.popup-content label {
+  user-select: none;
+}
+
 .row {
   display: flex;
   flex-direction: row;
@@ -42,7 +46,6 @@
 }
 
 .row > input {
-  flex-grow: 1;
 }
 
 .row > * + * {

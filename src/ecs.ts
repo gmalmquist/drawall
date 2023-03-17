@@ -73,8 +73,7 @@ class ComponentMap {
     return Array.from(set).map(c => c as C);
   }
 
-  // gets or creates the singleton component type
-  public getOrCreate<C extends Component, Solo>(
+  public getOrCreate<C extends Component>(
     kind: new (e: Entity) => C,
     entity: Entity): C {
     const set = this.map.get(kind);
@@ -176,7 +175,7 @@ class Entity {
     return this.components.get(kind);
   }
 
-  getOrCreate<C extends Component, Solo>(kind: ComponentType<C>): C {
+  getOrCreate<C extends Component>(kind: ComponentType<C>): C {
     return this.components.getOrCreate(kind, this);
   }
 }
