@@ -133,7 +133,7 @@ class UiBuilder {
     this.pane.appendChild(this.row);
   }
 
-  private fireChange(field: string) {
+  fireChange(field: string) {
     const value = this.getValue(field);
     this.changeListeners.forEach(listener => listener(field, value));
   }
@@ -191,6 +191,36 @@ class UiBuilder {
       },
     });
     return this.add(e);
+  }
+
+  addFormattedInput(
+    name: string,
+    reformat: (s: string) => string,
+    attrs: AttrMap,
+  ): UiBuilder {
+    const input = this.create(
+      'input',
+      { name, id: name, 'type': 'text', ...attrs },
+    ) as HTMLInputElement;
+    input.addEventListener('change', () => {
+      const formatted = reformat(input.value);
+      if (input.value !== formatted) {
+         input.value = formatted;
+      }
+      this.fireChange(name);
+    });
+    this.inputs.set(name, {
+      value: () => reformat(input.value),
+      reset: () => {
+        reformat(`${attrs.value}` || '');
+        this.fireChange(name);
+      },
+      set: (v: string) => {
+        input.value = reformat(v);
+        this.fireChange(name);
+      },
+    });
+    return this.add(input);
   }
 
   addNumberInput(

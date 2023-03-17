@@ -174,6 +174,7 @@ class Handle extends Component {
 }
 
 class DragUi {
+  public mousePos: Point = Point.ZERO;
   public dragRadius = 10; // px
   public clickRadius = 10;
   private dragging: Handle | null = null;
@@ -234,6 +235,7 @@ class DragUi {
     });
     canvas.addEventListener('mousemove', (e) => {
       const pos = this.getPoint(e);
+      this.mousePos = pos;
       if (this.clicking && Vec.between(this.dragStart, pos).mag() > this.clickRadius) {
         this.clicking = false;
       }
@@ -286,6 +288,16 @@ class DragUi {
         }
       }
     });
+  }
+
+  public update() {
+    if (this.dragging !== null) {
+      this.dragging.fireDragUpdate({
+        point: this.mousePos,
+        start: this.dragStart,
+        delta: Vec.between(this.dragStart, this.mousePos),
+      });
+    }
   }
 
   private getPoint(e: MouseEvent): Point {

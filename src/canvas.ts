@@ -1,4 +1,3 @@
-
 class CanvasViewport {
   constructor(
     public origin: Point = Point.ZERO,
@@ -158,9 +157,33 @@ class Canvas2d {
     g.fill();
   }
 
-  fillText(text: string, point: Point) {
-    const p = this.transform.point(point);
-    this.g.fillText(text, p.x, p.y);
+  text(props: TextDrawProps) {
+    const p = this.transform.point(props.point);
+    const fillStyle = props.fill || this.g.fillStyle;
+    const axisAngle = typeof props.axis === 'undefined' ? 0
+      : this.transform.vec(props.axis).angle();
+    const angle = props.keepUpright ? uprightAngle(axisAngle) : axisAngle;
+    this.g.translate(p.x, p.y);
+    this.g.rotate(angle);
+    if (typeof props.align !== 'undefined') {
+      this.g.textAlign = props.align;
+    }
+    if (typeof props.baseline !== 'undefined') {
+      this.g.textBaseline = props.baseline;
+    }
+    if (typeof props.shadow !== 'undefined') {
+      this.g.fillStyle = props.shadow;
+      this.g.fillText(props.text, 1, 1);
+    }
+    this.g.fillStyle = fillStyle;
+    this.g.fillText(props.text, 0, 0);
+    if (typeof props.stroke !== 'undefined') {
+      this.g.lineWidth = props.lineWidth || this.g.lineWidth;
+      this.g.strokeStyle = props.stroke;
+      this.g.strokeText(props.text, 0, 0);
+    }
+    this.g.rotate(-angle);
+    this.g.translate(-p.x, -p.y);
   }
 
   handleResize() {
@@ -175,6 +198,19 @@ class Canvas2d {
     this.transform = this.viewport.project;
     this.untransform = this.viewport.unproject;
   }
+}
+
+interface TextDrawProps {
+  text: string;
+  point: Point;
+  fill?: string;
+  stroke?: string;
+  lineWidth?: number;
+  shadow?: string;
+  axis?: Vec;
+  keepUpright?: boolean;
+  align?: CanvasTextAlign;
+  baseline?: CanvasTextBaseline;
 }
 
 setTimeout(() => {
@@ -218,7 +254,7 @@ setTimeout(() => {
 
   const drawGridLines = () => {
     // render grid
-    const gridSpacing = 10;
+    const gridSpacing = App.project.worldUnit.from(App.project.gridSpacing).value;
     const left = c.viewport.unproject.vec(new Vec(-1, 0)).unit();
     const right = c.viewport.unproject.vec(new Vec(1, 0)).unit();
     const up = c.viewport.unproject.vec(new Vec(0, -1)).unit();
@@ -245,10 +281,15 @@ setTimeout(() => {
       const s = gridSpacing * i;
       const x = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.X)).unit());
       c.strokeLine(x, x.plus(gridY));
-      c.fillText(`${x.trunc().x}`, x.onLine(
-        c.viewport.unproject.point(new Point(0, 10)),
-        c.viewport.unproject.vec(Axis.X), 
-      ));
+      const value = App.project.worldUnit.newAmount(x.trunc().x);
+      const label = App.project.displayUnit.format(value);
+      c.text({
+        text: label,
+        point: x.onLine(
+          c.viewport.unproject.point(new Point(0, 10)),
+          c.viewport.unproject.vec(Axis.X),
+        ),
+      });
     }
     c.textAlign = 'left';
     c.textBaseline = 'middle';
@@ -256,11 +297,16 @@ setTimeout(() => {
       const s = gridSpacing * i;
       const y = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.Y)).unit());
       c.strokeLine(y, y.plus(gridX));
+      const value = App.project.worldUnit.newAmount(y.trunc().y);
+      const label = App.project.displayUnit.format(value);
       if (i > 0) {
-        c.fillText(`${y.trunc().y}`, y.onLine(
-          c.viewport.unproject.point(new Point(10, 0)),
-          c.viewport.unproject.vec(Axis.Y), 
-        ));
+        c.text({
+          text: label,
+          point: y.onLine(
+            c.viewport.unproject.point(new Point(10, 0)),
+            c.viewport.unproject.vec(Axis.Y), 
+          ),
+        });
       }
     }
     c.strokeStyle = 'black';
@@ -270,7 +316,7 @@ setTimeout(() => {
     Time.tick();
     c.clear();
     drawGridLines();
-    App.ecs.update();
+    App.update();
   }, 15);
 }, 100);
 

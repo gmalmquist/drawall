@@ -1,3 +1,54 @@
+class Position extends Component implements Solo {
+  readonly [SOLO] = true;
+
+  private _pos: Point = Point.ZERO;
+  private velocity: Vec = Vec.ZERO;
+  private acceleration: Vec = Vec.ZERO;
+  private forceAccum: Vec = Vec.ZERO;
+  private mass: number = 1.0;
+  private dragFactor: number = 0.5;
+
+  constructor(
+    entity: Entity,
+    private readonly getPos?: () => Point,
+    private readonly setPos?: (p: Point) => void) {
+    super(entity);
+  }
+
+  get pos(): Point {
+    return typeof this.getPos === 'undefined' ? this._pos : this.getPos();
+  }
+
+  set pos(p: Point) {
+    if (typeof this.setPos !== 'undefined') {
+      this.setPos(p);
+    } else {
+      this._pos = p;
+    }
+  }
+
+  update() {
+    const dt = Time.delta;
+
+    // fake physics: if there are no forces, we don't move
+    if (this.forceAccum.mag() < 0.1) {
+      this.velocity = Vec.ZERO;
+    }
+
+    const dragForce = this.velocity.scale(-this.dragFactor * this.velocity.mag());
+
+    this.velocity = this.velocity.splus(dt / this.mass, dragForce);
+    this.velocity = this.velocity.splus(dt, this.acceleration);
+    this.velocity = this.velocity.splus(dt / this.mass, this.forceAccum);
+    this.pos = this.pos.splus(dt, this.velocity);
+    this.forceAccum = Vec.ZERO;
+  }
+
+  addForce(f: Vec) {
+    this.forceAccum = this.forceAccum.plus(f);
+  }
+}
+
 class Wall extends Component implements Solo {
   public readonly [SOLO] = true;
   private _src: WallJoint;
@@ -55,11 +106,8 @@ class Wall extends Component implements Solo {
 
     entity.add(LengthConstraint,
       100,
-      () => new Edge(this.src.pos, this.dst.pos),
-      edge => {
-        this.src.pos = edge.src;
-        this.dst.pos = edge.dst;
-      },
+      () => this.src.entity.only(Position),
+      () => this.dst.entity.only(Position),
     );
   }
 
@@ -88,8 +136,29 @@ class Wall extends Component implements Solo {
     const length = this.entity.get(LengthConstraint)[0]!;
 
     const ui = p.getUiBuilder()
-      .addLabel('length', 'length')
-      .addNumberInput('length', { value: length.length, min: 0 })
+      .addCheckbox('enable', length.enabled)
+      .addLabel('length', 'enable')
+      .addFormattedInput(
+        'length', 
+        (value: string): string => {
+          try {
+            let measure = Units.distance.parse(value)!;
+            if (measure.unit === UNITLESS) {
+              measure = App.project.worldUnit.newAmount(measure.value);
+            }
+            return App.project.displayUnit.format(measure);
+          } catch (_) {
+            return value;
+          }
+        },
+        {
+          value: App.project.displayUnit.format(
+            App.project.worldUnit.newAmount(
+              length.enabled ? length.length : Vec.between(this.src.pos, this.dst.pos).mag())
+          ),
+          size: 8,
+        },
+      )
       .newRow()
       .addLabel('tension', 'tension')
       .addSlider('tension', { min: 0, max: 1, initial: length.hardness })
@@ -97,9 +166,18 @@ class Wall extends Component implements Solo {
 
     ui.onChange((name, value) => {
       if (name === 'length') {
-        length.length = parseFloat(value);
+        try {
+          const amount = Units.distance.parse(value)!;
+          length.length = App.project.worldUnit.from(amount).value;
+        } catch (e) {
+          console.error(`could not parse distance '${value}'`);
+        }
       } else if (name === 'tension') {
         length.hardness = parseFloat(value);
+      } else if (name === 'enable') {
+        console.log(`enable = '${value}'`);
+        length.enabled = value === 'true';
+        ui.fireChange('length');
       }
     });
 
@@ -121,6 +199,12 @@ class WallJoint extends Component {
   constructor(entity: Entity) {
     super(entity);
 
+    const position = entity.add(
+      Position,
+      () => this.pos,
+      (pos: Point) => { this.pos = pos; },
+    );
+
     const handle = entity.add(Handle, {
       getPos: () => App.canvas.viewport.project.point(this.pos),
       setPos: p => {
@@ -132,21 +216,12 @@ class WallJoint extends Component {
     handle.onClick(() => this.showPopup());
 
     entity.add(AngleConstraint,
+      () => ({
+        center: position,
+        left: this.outgoing ? this.outgoing.dst.entity.only(Position) : position,
+        right: this.incoming ? this.incoming.src.entity.only(Position) : position,
+      }),
       Math.PI/2.,
-      () => this.outgoing ?
-        Vec.between(this.pos, this.outgoing.dst.pos) : null,
-      () => this.incoming ?
-        Vec.between(this.pos, this.incoming.src.pos) : null,
-      v => {
-        if (this.outgoing) {
-          this.outgoing.dst.pos = this.pos.plus(v);
-        }
-      },
-      v => {
-        if (this.incoming) {
-          this.incoming.src.pos = this.pos.plus(v);
-        }
-      },
     );
 
     entity.add(FixedConstraint,
@@ -217,12 +292,16 @@ class WallJoint extends Component {
     if (this.incoming === null || this.outgoing === null) {
       return;
     }
-    const angleConstraint = this.entity.get(AngleConstraint)[0];
-    ui.addLabel('Angle', 'angle')
+    const angleConstraint = this.entity.only(AngleConstraint);
+    ui
+      .addCheckbox('lock angle', angleConstraint?.enabled)
+      .addLabel('angle', 'lock angle')
       .addNumberInput('angle', {
         min: 0,
         max: 360,
-        value: angleConstraint.angle * 180 / Math.PI,
+        value: Math.round(toDegrees(angleConstraint.enabled
+          ? angleConstraint.targetAngle
+          : angleConstraint.currentAngle) * 10)/10.,
         size: 4,
       })
       .addRadioGroup('units', [{ name: 'radians' }, { name: 'degrees', isDefault: true }])
@@ -233,40 +312,71 @@ class WallJoint extends Component {
     ui.onChange((name: string, value: string) => {
       if (name === 'angle') {
         const scale = ui.getValue('units') === 'degrees' ? Math.PI / 180 : 1;
-        angleConstraint.angle = parseFloat(value) * scale;
+        angleConstraint.targetAngle = parseFloat(value) * scale;
       } else if (name === 'strength') {
         angleConstraint.hardness = parseFloat(value);
       } else if (name === 'units') {
         const scale = ui.getValue('units') === 'degrees' ? 180 / Math.PI : 1;
-        ui.setValue('angle', angleConstraint.angle * scale);
+        ui.setValue('angle', angleConstraint.targetAngle * scale);
+      } else if (name === 'lock angle') {
+        angleConstraint.enabled = value === 'true';
+        ui.fireChange('angle');
       }
     });
   }
 }
 
 class Constraint extends Component {
-  enforce(): void {}
+  private _enabled: boolean = false;
+
+  public enforce(): void {}
 
   public priority: number = 0;
 
   // hardness between 0 and 1
-  public hardness: number = 0.5;
+  private _hardness: number = 0.5;
 
   constructor(entity: Entity) {
     super(entity);
     this.addKind(Constraint);
   }
 
+  public get enabled(): boolean {
+    return this._enabled;
+  }
+
+  public set enabled(enabled: boolean) {
+    if (enabled === this._enabled) return;
+    if (enabled) {
+      this.onEnable();
+    } else {
+      this.onDisable();
+    }
+    this._enabled = enabled;
+  }
+
+  public get hardness(): number {
+    return this._hardness;
+  }
+
+  public set hardness(hardness: number) {
+    this._hardness = Math.min(1, Math.max(0, hardness));
+  }
+
   get influence() {
+    if (!this.enabled) return 0;
     const dt = Math.max(0, Math.min(1, Time.delta));
     const a = lerp(this.hardness, 0, dt);
     const b = lerp(this.hardness, dt, 1);
     return lerp(this.hardness, a, b);
   }
+
+  // for subclasses to override
+  onEnable() {}
+  onDisable() {}
 }
 
 class FixedConstraint extends Constraint {
-  public enabled: boolean = false;
   private targets: Point[] = [];
 
   constructor(
@@ -277,6 +387,7 @@ class FixedConstraint extends Constraint {
     super(entity);
     this.hardness = 1.0;
     this.priority = 5;
+    this.enabled = false;
   }
 
   updateTargets(pts: Point[]) {
@@ -285,15 +396,15 @@ class FixedConstraint extends Constraint {
 
   enforce() {
     const influence = this.influence;
-    if (!this.enabled || influence === 0) {
-      this.targets = this.getPoints();
-      return;
-    }
     const points = [...this.getPoints()];
     for (let i = 0; i < points.length && i < this.targets.length; i++) {
       points[i] = points[i].lerp(influence, this.targets[i]);
     }
     this.setPoints(points);
+  }
+
+  onEnable() {
+    this.targets = this.getPoints();
   }
 }
 
@@ -301,53 +412,111 @@ class LengthConstraint extends Constraint {
   constructor(
     entity: Entity,
     public length: number,
-    private readonly getEdge: () => Edge | null,
-    private readonly setEdge: (e: Edge) => void) {
+    private readonly getSrc: () => Position,
+    private readonly getDst: () => Position,
+  ) {
     super(entity);
+    this.enabled = false;
+  }
+
+  private get springConstant(): number {
+    return this.hardness * 3;
+  }
+
+  private getEdge(): Edge {
+    return new Edge(this.getSrc().pos, this.getDst().pos);
   }
 
   enforce() {
     const edge = this.getEdge();
     if (edge === null) return;
     const delta = this.length - edge.vector().mag();
-    const correction = edge.vector().unit().scale(delta/2 * this.influence);
-    this.setEdge(new Edge(
-      edge.src.minus(correction),
-      edge.dst.plus(correction),
-    ));
+    const correction = edge.vector().unit().scale(delta/2 * this.springConstant);
+    this.getSrc().addForce(correction.neg());
+    this.getDst().addForce(correction);
   }
 
+  onEnable() {
+    const mag = this.getEdge()?.vector()?.mag();
+    if (typeof mag !== 'undefined') {
+      this.length = mag;
+    }
+  }
+}
+
+interface Corner {
+  center: Position;
+  left: Position;
+  right: Position;
 }
 
 class AngleConstraint extends Constraint {
-  private currentAngle: number = 0;
-
   constructor(
     entity: Entity,
-    public angle: number,
-    private readonly getLeft: () => Vec | null,
-    private readonly getRight: () => Vec | null,
-    private readonly setLeft: (v: Vec) => void,
-    private readonly setRight: (v: Vec) => void) {
+    public readonly getCorner: () => Corner,
+    public targetAngle: number = Math.PI/2,
+  ) {
     super(entity);
+  }
+
+  private getLeft(): Vec {
+    const c = this.getCorner();
+    return Vec.between(c.center.pos, c.left.pos);
+  }
+
+  private getRight(): Vec {
+    const c = this.getCorner();
+    return Vec.between(c.center.pos, c.right.pos);
+  }
+
+  get currentAngle(): number {
+    const left = this.getLeft();
+    if (left === null || left.mag2() === 0) return 0;
+
+    const right = this.getRight();
+    if (right === null || right.mag2() === 0) return 0;
+
+    const lu = left.unit();
+    const ru = right.unit();
+    return normalizeRadians(lu.angle() - ru.angle());
+  }
+
+  get springConstant(): number {
+    return this.hardness * 3;
   }
 
   enforce() {
     const left = this.getLeft();
-    if (left === null) return;
-
     const right = this.getRight();
-    if (right === null) return;
+    if (left === null || right === null
+      || left.mag2() === 0 || right.mag2() === 0) {
+      return;
+    }
+    const delta = normalizeRadians(this.targetAngle) - this.currentAngle;
+    const corner = this.getCorner();
+    const targetLeft = corner.center.pos.plus(left.rotate(delta/2 * this.springConstant));
+    const targetRight = corner.center.pos.plus(right.rotate(-delta/2 * this.springConstant));
+    const deltaL = Vec.between(corner.left.pos, targetLeft);
+    const deltaR = Vec.between(corner.right.pos, targetRight);
+    corner.left.addForce(deltaL.scale(this.hardness));
+    corner.right.addForce(deltaR.scale(this.hardness));
 
-    const lu = left.unit();
-    const ru = right.unit();
-    const angle = lu.angle() - ru.angle();
+    if (!App.debug) return;
+    App.canvas.lineWidth = 1;
 
-    this.currentAngle = normalizeRadians(angle);
+    App.canvas.strokeStyle = 'green';
+    App.canvas.strokeLine(corner.center.pos, targetLeft);
+    App.canvas.strokeStyle = 'blue';
+    App.canvas.strokeLine(corner.left.pos, targetLeft);
 
-    const delta = normalizeRadians(this.angle) - normalizeRadians(angle);
-    this.setLeft(left.rotate(delta/2 * this.influence));
-    this.setRight(right.rotate(-delta/2 * this.influence));
+    App.canvas.strokeStyle = 'red';
+    App.canvas.strokeLine(corner.center.pos, targetRight);
+    App.canvas.strokeStyle = 'blue';
+    App.canvas.strokeLine(corner.right.pos, targetRight);
+  }
+
+  onEnable() {
+    this.targetAngle = this.currentAngle;
   }
 }
 
@@ -383,84 +552,88 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       canvas.strokeLine(p, p.plus(v));
     }
 
+    const constraint = wall.entity.get(LengthConstraint)[0];
+    const length = Vec.between(wall.src.pos, wall.dst.pos).mag();
+    const error = constraint?.enabled ? length - constraint.length : 0;
+    const dispLength = App.project.displayUnit.from(
+      App.project.worldUnit.newAmount(length)
+    );
+    const dispError = App.project.worldUnit.newAmount(error);
+    dispError.value = Math.round(dispError.value);
+    const hasError = Math.abs(dispError.value) > 0;
+    const lengthText = App.project.displayUnit.format(dispLength);
+    const errorTextU = App.project.displayUnit.format(dispError);
+    const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
+    const label = hasError ? `${lengthText} (${errorText})` : lengthText;
+    const textOffset = App.canvas.viewport.unproject.distance(10);
+    canvas.text({
+      point: ray.at(0.5).splus(-textOffset, ray.direction.r90().unit()),
+      axis: ray.direction,
+      keepUpright: true,
+      text: label,
+      fill: 'black',
+      shadow: hasError ? (dispError.value > 0 ? PINK : BLUE) : undefined,
+      align: 'center',
+      baseline: 'middle',
+    });
   }
+};
 
-  const joints = ecs.getComponents(WallJoint);
-  for (const joint of joints) {
-    const hovered = joint.entity.get(Handle).some(h => h.isHovered);
-    const active = hovered || joint.entity.get(PopupWindow).some(p => p.isVisible);
-    const pos = joint.pos;
+const AngleRenderer = (ecs: EntityComponentSystem) => {
+  const constraints = ecs.getComponents(AngleConstraint);
 
-    if (joint.incoming === null || joint.outgoing === null) {
-      const rad = active ? 2 : 5;
-      if (active) {
-        canvas.lineWidth = 1;
-        canvas.strokeStyle = 'black';
-        canvas.fillStyle = BLUE;
-        canvas.fillCircle(pos, 2);
-        canvas.strokeCircle(pos, 2);
-        canvas.strokeCircle(pos, 5);
-      } else {
-        canvas.fillStyle = 'black';
-        canvas.fillCircle(pos, 2);
-      }
+  const canvas = App.canvas;
+
+  for (const constraint of constraints) {
+    const corner = constraint.getCorner();
+    const center = corner.center.pos;
+    const leftVec = Vec.between(center, corner.left.pos);
+    const rightVec = Vec.between(center, corner.right.pos);
+
+    if (leftVec.mag2() === 0 || rightVec.mag2() === 0) {
       continue;
     }
 
-    const incW = Vec.between(pos, joint.incoming.src.pos).unit();
-    const outW = Vec.between(pos, joint.outgoing.dst.pos).unit();
-    const incS = canvas.viewport.project.vec(incW).unit();
-    const outS = canvas.viewport.project.vec(outW).unit();
-    const angle = incS.angle() - outS.angle();
-    const middle = incW.rotate(angle / 2);
+    const leftVecS = canvas.viewport.project.vec(leftVec);
+    const rightVecS = canvas.viewport.project.vec(rightVec);
 
-    const arcRadius = active ? 20 : 10;
-    const textDistance = canvas.viewport.unproject.distance(arcRadius + 12);
+    const arcRadius = 15; // px
+    const textDistance = canvas.viewport.unproject.distance(arcRadius + 20);
 
-    const targetAngle = joint.entity.get(AngleConstraint)
-      .map(a => a.angle)
-      .reduce((_,a) => a, angle);
-    const angleOff = normalizeRadians(targetAngle) - normalizeRadians(angle);
-    const degText = (r: number, signed?: boolean) => {
-      const s =`${Math.round(toDegrees(r))}°`;
-      if (signed && r >= 0) {
-        return `+${s}`;
-      }
-      return s;
-    };
-    const angleOffDegrees = Math.round(toDegrees(angleOff));
-    const label = Math.abs(toDegrees(angleOff)) >= 1
-      ? `${degText(angle)} (${degText(-angleOff, true)})`
-      : degText(angle);
+    const angle = Math.round(toDegrees(constraint.currentAngle));
+    const error = Math.round(toDegrees(constraint.currentAngle - constraint.targetAngle));
+
+    const middle = rightVec.rotate(constraint.currentAngle / 2).unit();
+
+    const formatAngle = (a: number) => `${a}°`;
+
+    let label = formatAngle(angle);
+    if (error > 0) {
+      label = `${label} (+${formatAngle(error)})`;
+    } else if (error < 0) {
+      label = `${label} (${formatAngle(error)})`;
+    }
+
+    canvas.text({
+      text: label,
+      align: 'center',
+      baseline: 'middle',
+      point: center.splus(textDistance, middle),
+      fill: 'black',
+      shadow: error === 0 ? undefined
+        : error > 0 ? PINK
+        : BLUE,
+    });
 
     canvas.beginPath();
-    canvas.moveTo(pos);
-    canvas.lineTo(pos.splus(canvas.viewport.unproject.distance(arcRadius), incW));
-    canvas.arc(pos, arcRadius, incS.angle(), outS.angle(), true);
+    canvas.moveTo(center);
+    canvas.lineTo(center.splus(canvas.viewport.unproject.distance(arcRadius), rightVec.unit()));
+    canvas.arc(center, arcRadius, rightVecS.angle(), leftVecS.angle(), true);
     canvas.closePath();
 
     canvas.strokeStyle = 'black';
-
-    if (active) {
-      canvas.fillStyle = 'black';
-      canvas.lineWidth = 2;
-      canvas.fill();
-    } else {
-      canvas.lineWidth = 1;
-    }
+    canvas.lineWidth = 1;
     canvas.stroke();
-
-    canvas.textAlign = 'center';
-    canvas.textBaseline = 'middle';
-    if (angleOffDegrees !== 0) {
-      canvas.fillStyle = angleOffDegrees === 0 ? 'black'
-        : angleOffDegrees > 0 ? PINK
-        : BLUE;
-      canvas.fillText(label, pos.splus(textDistance, middle)
-        .plus(canvas.viewport.unproject.vec(new Vec(1,1))));
-    }
-    canvas.fillStyle = 'black';
-    canvas.fillText(label, pos.splus(textDistance, middle));
   }
 };
 
@@ -470,6 +643,36 @@ const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
   // have the last say in the next frame's configuration.
   constraints.sort((a, b) => a.priority - b.priority);
   for (const c of constraints) {
+    if (!c.enabled) continue;
     c.enforce();
   }
 };
+
+const Kinematics = (ecs: EntityComponentSystem) => {
+  const positions = ecs.getComponents(Position);
+  const points = positions.map(p => p.pos);
+
+  positions.forEach(p => p.update());
+
+  // correct drift
+  if (positions.length > 0) {
+    let dx = 0.;
+    let dy = 0.;
+    for (let i = 0; i < positions.length; i++) {
+      const a = points[i];
+      const b = positions[i].pos;
+      dx += b.x - a.x;
+      dy += b.y - a.y;
+    }
+    dx /= positions.length;
+    dy /= positions.length;
+    const drift = new Vec(dx, dy);
+    if (drift.mag2() > 0) {
+      positions.forEach(p => {
+        p.pos = p.pos.minus(drift);
+      });
+    }
+  }
+};
+
+

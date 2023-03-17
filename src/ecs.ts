@@ -122,6 +122,7 @@ class ComponentMap {
 
 class Entity {
   private readonly components = new ComponentMap(true);
+  public name: string = '';
 
   constructor(
     public readonly ecs: EntityComponentSystem,
@@ -175,8 +176,20 @@ class Entity {
     return this.components.get(kind);
   }
 
+  only<C extends Component, Solo>(kind: ComponentType<C>): C {
+    const arr = this.get(kind);
+    if (arr.length !== 1) {
+      throw new Error(`Expected exactly one of ${kind} on ${this}!`);
+    }
+    return arr[0];
+  }
+
   getOrCreate<C extends Component>(kind: ComponentType<C>): C {
     return this.components.getOrCreate(kind, this);
+  }
+
+  toString() {
+    return `Entity(id=${this.id}, name=${this.name})`;
   }
 }
 

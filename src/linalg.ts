@@ -25,6 +25,13 @@ const degreeDelta = (a: number, b: number): number => {
   return toDegrees(radianDelta(toRadians(a), toRadians(b)));
 };
 
+const uprightAngle = (angle: number): number => {
+  if (Math.abs(Math.PI - angle) < Math.PI/2) {
+    return angle + Math.PI;
+  }
+  return angle;
+};
+
 class Point {
   constructor(public readonly x: number, public readonly y: number) {}
 

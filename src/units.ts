@@ -1,5 +1,7 @@
 const WHITESPACE_PATTERN = /\s+/img;
 
+const UNITLESS = 'unitless';
+
 class Amount {
   constructor(
     public value: number,
@@ -143,6 +145,7 @@ class Unit {
   private readonly aliases = new Set<string>();
   private readonly parsers: UnitParser[] = [];
   private _format: FormatUnit | null = null;
+  private _units: Units | null = null;
 
   constructor(
     public readonly name: string,
@@ -151,6 +154,11 @@ class Unit {
     for (const alias of [this.abbrev, this.name, `${this.name}s`]) {
       this.addAlias(alias);
     }
+  }
+
+  // set reference to other units of the same measurement type
+  setUnits(units: Units) {
+    this._units = units;
   }
 
   addAlias(alias: string): Unit {
@@ -191,14 +199,27 @@ class Unit {
     return null;
   }
 
-  format(amount: Amount): string {
-    if (amount.unit !== this.name) {
-      throw new Error(`Cannot format ${JSON.stringify(amount)} with ${this.name}`);
+  from(amount: Amount): Amount {
+    if (this.aliases.has(amount.unit)) return amount;
+    return this._units!.convert(amount, this.name);
+  }
+
+  format(amount: Amount, decimals: number = 2): string {
+    if (!this.aliases.has(amount.unit)) {
+      return this.format(this.from(amount));
     }
     if (this._format !== null) {
       return this._format(amount);
     }
-    return `${prettyNum(amount.value)} ${this.abbrev}`;
+    const value = Math.round(amount.value * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    return `${prettyNum(value)} ${this.abbrev}`;
+  }
+
+  newAmount(value: number): Amount {
+    return {
+      value,
+      unit: this.name,
+    };
   }
 
   toString() {
@@ -261,7 +282,7 @@ class Units {
   private readonly aliases: Map<string, string> = new Map();
 
   constructor() {
-    this.add(new Unit('unitless', ''));
+    this.add(new Unit(UNITLESS, ''));
   }
 
   add(x: Unit | UnitConversion): Units {
@@ -291,6 +312,7 @@ class Units {
 
   private addUnit(u: Unit) {
     this.units.set(u.name, u);
+    u.setUnits(this);
     for (const alias of u.getAliases()) {
       if (this.aliases.has(alias)) {
         throw new Error(
@@ -327,7 +349,7 @@ class Units {
     this.conversions.get(c.dstUnit)!.push(UnitConversions.invert(c));
   }
 
-  convert(amount: Amount, targetUnit: string): Amount | null {
+  convert(amount: Amount, targetUnit: string): Amount {
     const canonicalTarget = this.aliases.get(targetUnit) || targetUnit;
     if (!this.units.has(amount.unit)) {
       throw new Error(`Amount is in an unknown unit: ${JSON.stringify(amount)}.`);
@@ -376,7 +398,8 @@ class Units {
         });
       }
     }
-    return null; 
+
+    throw new Error(`No conversion path found from ${amount.unit} to ${canonicalTarget}.`);
   }
 
   format(amount: Amount) {
@@ -412,7 +435,7 @@ Units.distance
       if (inches < 0.001) {
         return `${prettyNum(feet)}'`;
       }
-      return `${prettyNum(feet)}'${prettyNum(inches)}"`;
+      return `${prettyNum(feet)}'${Math.round(inches*10)/10.0}"`;
     }))
   .add(new Unit('inch', 'in')
     .addParser('0\"', x => new Amount(x, 'inch'))
