@@ -104,7 +104,12 @@ class Wall extends Component implements Solo {
     });
 
     entity.add(LengthConstraint,
+      () => this.src.entity.only(PhysNode),
+      () => this.dst.entity.only(PhysNode),
       100,
+    );
+
+    entity.add(MinLengthConstraint,
       () => this.src.entity.only(PhysNode),
       () => this.dst.entity.only(PhysNode),
     );
@@ -168,7 +173,12 @@ class Wall extends Component implements Solo {
       if (name === 'length') {
         try {
           const amount = Units.distance.parse(value)!;
+          const original = length.length;
           length.length = App.project.worldUnit.from(amount).value;
+          if (original !== length.length) {
+            length.enabled = true;
+            ui.setValue('enable', 'true');
+          }
         } catch (e) {
           console.error(`could not parse distance '${value}'`);
         }
@@ -313,7 +323,12 @@ class WallJoint extends Component {
     ui.onChange((name: string, value: string) => {
       if (name === 'angle') {
         const scale = ui.getValue('units') === 'degrees' ? Math.PI / 180 : 1;
+        const prev = angleConstraint.targetAngle;
         angleConstraint.targetAngle = parseFloat(value) * scale;
+        if (angleConstraint.targetAngle !== prev) {
+          angleConstraint.enabled = true;
+          ui.setValue('lock angle', true);
+        }
       } else if (name === 'strength') {
         angleConstraint.hardness = parseFloat(value);
       } else if (name === 'units') {
@@ -409,12 +424,49 @@ class FixedConstraint extends Constraint {
   }
 }
 
+class MinLengthConstraint extends Constraint {
+  constructor(
+    entity: Entity,
+    private readonly getSrc: () => PhysNode,
+    private readonly getDst: () => PhysNode,
+    public length: number = App.project.worldUnit.from(App.project.gridSpacing).value,
+  ) {
+    super(entity);
+    this.enabled = true;
+    this.hardness = 1;
+  }
+
+  private get springConstant(): number {
+    return this.hardness * 3;
+  }
+
+  private getEdge(): Edge {
+    return new Edge(this.getSrc().pos, this.getDst().pos);
+  }
+
+  enforce() {
+    if (this.entity.get(LengthConstraint).some(c => c.enabled)) {
+      // only apply this constraint in the absense of another length constraint.
+      return;
+    }
+    const edge = this.getEdge();
+    if (edge === null) return;
+    const delta = this.length - edge.vector().mag();
+    if (delta < 0) {
+      return;
+    }
+    const correction = edge.vector().unit().scale(delta/2 * this.springConstant);
+    this.getSrc().addForce(correction.neg());
+    this.getDst().addForce(correction);
+  }
+}
+
 class LengthConstraint extends Constraint {
   constructor(
     entity: Entity,
-    public length: number,
     private readonly getSrc: () => PhysNode,
     private readonly getDst: () => PhysNode,
+    public length: number,
   ) {
     super(entity);
     this.enabled = false;
@@ -518,12 +570,6 @@ class AngleConstraint extends Constraint {
 
   onEnable() {
     this.targetAngle = this.currentAngle;
-  }
-}
-
-class DragHandle extends Component {
-  constructor(entity: Entity, public readonly draggable: Draggable) {
-    super(entity);
   }
 }
 
@@ -642,7 +688,9 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
     const textDistance = arcRadius.apply(r => r + 20);
 
     const angle = Math.round(toDegrees(constraint.currentAngle));
-    const error = Math.round(toDegrees(constraint.currentAngle - constraint.targetAngle));
+    const error = constraint.enabled
+      ? Math.round(toDegrees(constraint.currentAngle - constraint.targetAngle))
+      : 0;
 
     const middle = rightVec.rotate(constraint.currentAngle / 2).unit();
 

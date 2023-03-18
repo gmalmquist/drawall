@@ -1,6 +1,5 @@
 class App {
   public static readonly ecs = new EntityComponentSystem();
-  public static readonly mouse: Mouse = new Mouse();
   public static readonly pane: HTMLElement =
     document.getElementsByClassName('canvas-wrap')[0]! as HTMLElement;
   public static readonly dragUi = new DragUi(App.pane);
@@ -36,6 +35,11 @@ class App {
     wall3.src = wall2.dst;
     wall3.dst.pos = new Point(-30, 0);
 
+    const wall4 = App.ecs.createEntity().add(Wall);
+    wall4.entity.name = 'wall4';
+    wall4.src = wall3.dst;
+    wall4.dst = wall.src;
+
     wall.src.entity.name = 'joint1';
     wall2.src.entity.name = 'joint2';
     wall3.src.entity.name = 'joint3';
@@ -43,7 +47,7 @@ class App {
 
     // enable length and angle constraints
     App.ecs.getComponents(AngleConstraint).forEach(a => { a.enabled = true; });
-    App.ecs.getComponents(LengthConstraint).forEach(a => { a.enabled = true; });
+    //App.ecs.getComponents(LengthConstraint).forEach(a => { a.enabled = true; });
   }
 
   static update() {

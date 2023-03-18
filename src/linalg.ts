@@ -25,7 +25,8 @@ const degreeDelta = (a: number, b: number): number => {
   return toDegrees(radianDelta(toRadians(a), toRadians(b)));
 };
 
-const uprightAngle = (angle: number): number => {
+const uprightAngle = (a: number): number => {
+  const angle = normalizeRadians(a);
   if (Math.abs(Math.PI - angle) < Math.PI/2) {
     return angle + Math.PI;
   }

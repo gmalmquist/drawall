@@ -1,7 +1,7 @@
 class CanvasViewport {
   constructor(
     public origin: Point = Point.ZERO,
-    public radius: number = 100.,
+    public radius: number = 150.,
     public screen_width: number = 1000,
     public screen_height: number = 1000) {}
 
@@ -227,9 +227,6 @@ setTimeout(() => {
   c.handleResize();
 
   window.addEventListener('resize', () => App.canvas.handleResize());
-
-  const mouse = App.mouse;
-  mouse.listenTo(App.pane);
 
   const canvasHandle = App.ecs.createEntity().add(Handle, {
     getPos: () => Position(c.viewport.origin, 'model'),
