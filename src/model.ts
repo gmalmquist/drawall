@@ -1,4 +1,4 @@
-class Position extends Component implements Solo {
+class PhysNode extends Component implements Solo {
   readonly [SOLO] = true;
 
   private _pos: Point = Point.ZERO;
@@ -106,8 +106,8 @@ class Wall extends Component implements Solo {
 
     entity.add(LengthConstraint,
       100,
-      () => this.src.entity.only(Position),
-      () => this.dst.entity.only(Position),
+      () => this.src.entity.only(PhysNode),
+      () => this.dst.entity.only(PhysNode),
     );
   }
 
@@ -201,7 +201,7 @@ class WallJoint extends Component {
     super(entity);
 
     const position = entity.add(
-      Position,
+      PhysNode,
       () => this.pos,
       (pos: Point) => { this.pos = pos; },
     );
@@ -219,8 +219,8 @@ class WallJoint extends Component {
     entity.add(AngleConstraint,
       () => ({
         center: position,
-        left: this.outgoing ? this.outgoing.dst.entity.only(Position) : position,
-        right: this.incoming ? this.incoming.src.entity.only(Position) : position,
+        left: this.outgoing ? this.outgoing.dst.entity.only(PhysNode) : position,
+        right: this.incoming ? this.incoming.src.entity.only(PhysNode) : position,
       }),
       Math.PI/2.,
     );
@@ -414,8 +414,8 @@ class LengthConstraint extends Constraint {
   constructor(
     entity: Entity,
     public length: number,
-    private readonly getSrc: () => Position,
-    private readonly getDst: () => Position,
+    private readonly getSrc: () => PhysNode,
+    private readonly getDst: () => PhysNode,
   ) {
     super(entity);
     this.enabled = false;
@@ -447,9 +447,9 @@ class LengthConstraint extends Constraint {
 }
 
 interface Corner {
-  center: Position;
-  left: Position;
-  right: Position;
+  center: PhysNode;
+  left: PhysNode;
+  right: PhysNode;
 }
 
 class AngleConstraint extends Constraint {
@@ -657,8 +657,12 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
     });
 
     canvas.beginPath();
-    canvas.moveTo(center);
-    canvas.lineTo(center.splus(canvas.viewport.unproject.distance(arcRadius), rightVec.unit()));
+    canvas.moveTo(Position(center, 'model'));
+    canvas.lineTo(Position(center, 'model').apply(
+      (c: Point, s: number, v: Vec) => c.splus(s, v),
+      Distance(arcRadius, 'screen'),
+      Vector(rightVec.unit(), 'model'),
+    ));
     canvas.arc(center, arcRadius, rightVecS.angle(), leftVecS.angle(), true);
     canvas.closePath();
 
@@ -680,7 +684,7 @@ const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
 };
 
 const Kinematics = (ecs: EntityComponentSystem) => {
-  const positions = ecs.getComponents(Position);
+  const positions = ecs.getComponents(PhysNode);
   const points = positions.map(p => p.pos);
 
   positions.forEach(p => p.update());

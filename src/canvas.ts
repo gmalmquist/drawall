@@ -47,8 +47,8 @@ class CanvasViewport {
 
 class Canvas2d {
   private readonly g: CanvasRenderingContext2D;
-  private transform: Transform2 = Frame.IDENTITY.project;
-  private untransform: Transform2 = Frame.IDENTITY.unproject;
+  private transform: Transform2 = Frame.identity.project;
+  private untransform: Transform2 = Frame.identity.unproject;
   viewport: CanvasViewport = new CanvasViewport();
 
   constructor(private readonly el: HTMLCanvasElement) {
@@ -103,20 +103,18 @@ class Canvas2d {
     this.g.closePath();
   }
 
-  moveTo(pos: Point) {
-    const p = this.transform.point(pos);
+  moveTo(pos: Position) {
+    const p = pos.get('screen');
     this.g.moveTo(p.x, p.y);
   }
 
-  lineTo(pos: Point) {
-    const p = this.transform.point(pos);
+  lineTo(pos: Position) {
+    const p = pos.get('screen');
     this.g.lineTo(p.x, p.y);
   }
 
-  bezierCurveTo(two: Point, three: Point, four: Point) {
-    const b = this.transform.point(two);
-    const c = this.transform.point(three);
-    const d = this.transform.point(four);
+  bezierCurveTo(two: Position, three: Position, four: Position) {
+    const [b, c, d] = [two, three, four].map(p => p.get('screen'));
     this.g.bezierCurveTo(b.x, b.y, c.x, c.y, d.x, d.y);
   }
 
@@ -197,6 +195,18 @@ class Canvas2d {
   updateTransforms() {
     this.transform = this.viewport.project;
     this.untransform = this.viewport.unproject;
+    
+    CoordinateSystems.put({
+      name: 'model',
+      project: this.viewport.getWorldFrame().project,
+      unproject: this.viewport.getWorldFrame().unproject,
+    });
+    
+    CoordinateSystems.put({
+      name: 'screen',
+      project: this.viewport.getScreenFrame().project,
+      unproject: this.viewport.getScreenFrame().unproject,
+    });
   }
 }
 

@@ -304,7 +304,7 @@ class Frame {
     return `{O=${this.origin}, I=${this.axisI}, J=${this.axisJ}}`;
   }
 
-  static get IDENTITY() {
+  static get identity() {
     return new Frame(Point.ZERO, Axis.X, Axis.Y);
   }
 }

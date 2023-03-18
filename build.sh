@@ -55,6 +55,7 @@ mkdir -p www/
 ORDERED=$(cat <<EOF
 util.js
 linalg.js
+coordinates.js
 time.js
 units.js
 ecs.js
