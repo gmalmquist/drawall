@@ -94,10 +94,10 @@ class Handle extends Component {
           return props.getPos();
         },
         onUpdate: (e, start: Position) => {
-          setPos(start.apply((a: Point, b: Vec) => a.plus(b), e.delta));
+          setPos(start.plus(e.delta));
         },
         onEnd: (e, start: Position) => {
-          setPos(start.apply((a: Point, b: Vec) => a.plus(b), e.delta));
+          setPos(start.plus(e.delta));
           return start;
         },
       });

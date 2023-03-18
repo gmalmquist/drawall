@@ -30,21 +30,21 @@ class Spaces {
     };
   }
 
-  public static calc<First, Args extends readonly unknown[], R>(
-    wrapResult: (value: R, space: SpaceName) => SpaceValue<R>,
+  public static calc<First, Args extends readonly unknown[], R, W extends Spaced<R>>(
+    wrapResult: (value: R, space: SpaceName) => W,
     func: (f: First, ...args: Args) => R,
-    first: SpaceValue<First>,
+    first: Spaced<First>,
     ...args: SpaceValues<Args>
-  ): SpaceValue<R> {
+  ): W {
     return wrapResult(Spaces.getCalc(first.space, func, first, ...args), first.space);
   }
 
-  public static calcN<First, Args extends readonly unknown[], R>(
-    wrapResult: (value: R, space: SpaceName) => SpaceValue<R>,
+  public static calcN<First, Args extends readonly unknown[], R, W extends Spaced<R>>(
+    wrapResult: (value: R, space: SpaceName) => W,
     func: (f: First, ...args: Args) => R[],
-    first: SpaceValue<First>,
+    first: Spaced<First>,
     ...args: SpaceValues<Args>
-  ): Array<SpaceValue<R>> {
+  ): Array<W> {
     const result = Spaces.getCalc(first.space, func, first, ...args);
     return result.map(r => wrapResult(r, first.space));
   }
@@ -52,7 +52,7 @@ class Spaces {
   public static getCalc<First, Rest extends readonly unknown[], R>(
     space: SpaceName,
     func: (first: First, ...args: Rest) => R,
-    first: SpaceValue<First>,
+    first: Spaced<First>,
     ...args: SpaceValues<Rest>
   ): R {
     const unwrap = <T>(a: SpaceValue<T>) => a.get(space);
@@ -67,10 +67,41 @@ type CoordinateTransform<V> = (cs: Space, v: V) => V;
 type SpaceValues<T extends readonly unknown[]> = T extends readonly []
   ? readonly []
   : T extends readonly [infer Start, ...infer End]
-    ? readonly [SpaceValue<Start>, ...SpaceValues<End>]
+    ? readonly [Spaced<Start>, ...SpaceValues<End>]
     : never;
 
-class SpaceValue<V> {
+interface Spaced<V> {
+  get: (space: SpaceName) => V;
+  space: SpaceName;
+}
+
+abstract class BaseSpaceValue<V> implements Spaced<V> {
+  constructor(public readonly space: SpaceName) {}
+
+  map<Args extends readonly unknown[]>(
+    func: (v: V, ...args: Args) => V,
+    ...args: SpaceValues<Args> 
+  ): typeof this {
+    return Spaces.calc(this.create, func, this, ...args) as typeof this;
+  }
+
+  abstract get(space: SpaceName): V;
+
+  abstract get create(): (v: V, space: SpaceName) => BaseSpaceValue<V>;
+
+  as<W extends Spaced<V>>(wrap: new (s: Spaced<V>) => W) {
+    if (wrap === this.constructor) {
+      return this as unknown as W;
+    }
+    return new wrap(this);
+  }
+
+  toString(): string {
+    return `${this.constructor.name}(${this.get(this.space)}, ${this.space})`;
+  }
+}
+
+class SpaceValue<V> implements Spaced<V> {
   constructor(
     public readonly val: V,
     public readonly space: SpaceName,
@@ -79,7 +110,7 @@ class SpaceValue<V> {
   ) {
   }
 
-  get(space: SpaceName = this.space): V {
+  get(space: SpaceName): V {
     if (space === this.space) return this.val;
     const src = Spaces.get(this.space);
     const dst = Spaces.get(space);
@@ -91,6 +122,10 @@ class SpaceValue<V> {
     return this.create(this.get(space), space);
   }
 
+  get value() {
+    return this;
+  }
+
   apply<Args extends readonly unknown[]>(
     func: (v: V, ...args: Args) => V,
     ...args: SpaceValues<Args> 
@@ -98,21 +133,23 @@ class SpaceValue<V> {
     return this.applyInto((v,s) => this.create(v,s), func, ...args);
   }
 
-  applyInto<Args extends readonly unknown[], R>(
-    wrapResult: (value: R, space: SpaceName) => SpaceValue<R>,
+  applyInto<Args extends readonly unknown[], R, W extends Spaced<R>>(
+    wrapResult: (value: R, space: SpaceName) => W,
     func: (v: V, ...args: Args) => R,
     ...args: SpaceValues<Args> 
-  ): SpaceValue<R> {
+  ): W {
     return Spaces.calc(wrapResult, func, this, ...args);
   }
 
-  private create(v: V, space: SpaceName): SpaceValue<V> {
-    return new SpaceValue<V>(
-      v,
-      space,
-      this.project,
-      this.unproject,
-    );
+  private get create() {
+   return (v: V, space: SpaceName): SpaceValue<V> => {
+      return new SpaceValue<V>(
+        v,
+        space,
+        this.project,
+        this.unproject,
+      );
+    }
   }
 }
 
@@ -122,14 +159,6 @@ const Distance = (val: number, space: SpaceName): Distance => new SpaceValue(
   space,
   (s, d) => s.project.distance(d),
   (s, d) => s.unproject.distance(d),
-);
-
-type Position = SpaceValue<Point>;
-const Position = (val: Point, space: SpaceName): Position => new SpaceValue(
-  val,
-  space,
-  (s, p) => s.project.point(p),
-  (s, p) => s.unproject.point(p),
 );
 
 type Vector = SpaceValue<Vec>;
@@ -222,8 +251,67 @@ class SpaceEdge {
   static fromRay(origin: Position, direction: Vector): SpaceEdge {
     return new SpaceEdge(
       origin,
-      origin.apply((a: Point, b: Vec) => a.plus(b), direction),
+      origin.map((a: Point, b: Vec) => a.plus(b), direction),
     );
   }
 }
+
+class SpacePos extends BaseSpaceValue<Point> {
+  constructor(private readonly pos: Spaced<Point>) {
+    super(pos.space);
+  }
+
+  get(space: SpaceName): Point {
+    return this.pos.get(space);
+  }
+
+  splus(scale: number, vec: Spaced<Vec>): SpacePos {
+    return this.map((p: Point, v: Vec) => p.splus(scale, v), vec);
+  }
+
+  dplus(distance: Distance, vec: Spaced<Vec>): SpacePos {
+    return this.map((p: Point, scale: number, v: Vec) => p.splus(scale, v), distance, vec);
+  }
+
+  plus(vec: Vector): SpacePos {
+    return this.splus(1.0, vec);
+  }
+
+  minus(vec: Vector): SpacePos {
+    return this.splus(-1.0, vec);
+  }
+
+  trunc(f: Distance): SpacePos {
+    return this.map((p: Point, f: number) => p.trunc(f), f);
+  }
+
+  onLine(origin: Position, tangent: Vector): SpacePos {
+    return this.map((p: Point, o: Point, t: Vec) => p.onLine(o, t), origin, tangent);
+  }
+
+  lerp(s: number, p: Position): SpacePos {
+    return this.map((a: Point, b: Point) => a.lerp(s, b), p);
+  }
+
+  toVector(): Vector {
+    return Spaces.calc(Vector, (p: Point) => p.toVec(), this);
+  }
+
+  get create() { return SpacePos.of; }
+
+  public static of(point: Point, space: SpaceName): SpacePos {
+    return new SpacePos(new SpaceValue(
+      point,
+      space,
+      (s, p) => s.project.point(p),
+      (s, p) => s.unproject.point(p),
+    ));
+  }
+}
+
+type Position = SpacePos;
+const Position = SpacePos.of;
+
+const test = Position(new Point(1, 5), 'screen');
+const pos: SpacePos = test.as(SpacePos);
 

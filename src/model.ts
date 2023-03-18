@@ -40,7 +40,7 @@ class PhysNode extends Component implements Solo {
     this.velocity = this.velocity.splus(dt / this.mass, dragForce);
     this.velocity = this.velocity.splus(dt, this.acceleration);
     this.velocity = this.velocity.splus(dt / this.mass, this.forceAccum);
-    this.pos = this.pos.apply((p: Point, v: Vec) => p.splus(dt, v), Vector(this.velocity, 'model'));
+    this.pos = this.pos.splus(dt, Vector(this.velocity, 'model'));
     this.forceAccum = Vec.ZERO;
   }
 
@@ -100,8 +100,8 @@ class Wall extends Component implements Solo {
             src, dst, angle
           );
         } else {
-          this.src.pos = src.apply((s: Point, d: Vec) => s.plus(d), delta);
-          this.dst.pos = dst.apply((s: Point, d: Vec) => s.plus(d), delta);
+          this.src.pos = src.plus(delta);
+          this.dst.pos = dst.plus(delta);
         }
       },
       onEnd: (e, [src, dst]) => {
@@ -675,7 +675,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
         .rotate(toRadians(Degrees(30))),
         edge.vector.apply(v => v.unit()), tickSize,
       );
-      canvas.strokeLine(p, p.apply((p: Point, v: Vec) => p.plus(v), v));
+      canvas.strokeLine(p, p.plus(v));
     }
 
     const constraint = wall.entity.only(LengthConstraint);
@@ -711,11 +711,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.ecs.getComponents(Popup).some(p => p.isVisible)) {
       canvas.text({
-        point: textPosition.apply(
-          (o: Point, s: number, v: Vec) => o.splus(s, v),
-          Distance(-15, 'screen'),
-          edge.vector.apply(v => v.r90().unit()),
-        ),
+        point: textPosition.dplus(Distance(-15, 'screen'), edge.vector.apply(v => v.r90().unit())),
         axis: edge.vector,
         keepUpright: true,
         text: wall.name,
@@ -801,10 +797,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       text: label,
       align: 'center',
       baseline: 'middle',
-      point: center.apply(
-        (p: Point, s: number, v: Vec) => p.splus(s, v),
-        textDistance, middle
-      ),
+      point: center.dplus(textDistance, middle),
       fill: 'black',
       shadow: error === Degrees(0) ? undefined
         : error > Degrees(0) ? PINK
@@ -813,11 +806,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
 
     canvas.beginPath();
     canvas.moveTo(center);
-    canvas.lineTo(center.apply(
-      (c: Point, s: number, v: Vec) => c.splus(s, v),
-      arcRadius,
-      rightVec.apply(r => r.unit()),
-    ));
+    canvas.lineTo(center.dplus(arcRadius, rightVec.apply(r => r.unit())));
     canvas.arc(
       center,
       arcRadius,
@@ -865,7 +854,7 @@ const Kinematics = (ecs: EntityComponentSystem) => {
     const drift = Vector(new Vec(dx, dy), 'model');
     if (drift.get('model').mag2() > 0) {
       positions.forEach(p => {
-        p.pos = p.pos.apply((a: Point, v: Vec) => a.minus(v), drift);
+        p.pos = p.pos.minus(drift);
       });
     }
   }

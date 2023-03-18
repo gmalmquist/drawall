@@ -302,10 +302,8 @@ setTimeout(() => {
       const label = App.project.displayUnit.format(value);
       c.text({
         text: label,
-        point: Position(x, 'model').apply(
-          (a: Point, b: Point, c: Vec) => a.onLine(b, c),
-          Position(new Point(0, 10), 'screen'), axisX
-        ),
+        point: Position(x, 'model')
+          .onLine(Position(new Point(0, 10), 'screen'), axisX),
       });
     }
     c.textAlign = 'left';
@@ -322,10 +320,8 @@ setTimeout(() => {
       if (i > 0) {
         c.text({
           text: label,
-          point: Position(y, 'model').apply(
-            (a: Point, b: Point, c: Vec) => a.onLine(b, c),
-            Position(new Point(10, 0), 'screen'), axisY
-          ),
+          point: Position(y, 'model')
+            .onLine(Position(new Point(10, 0), 'screen'), axisY),
         });
       }
     }
