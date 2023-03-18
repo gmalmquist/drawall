@@ -169,6 +169,91 @@ const Vector = (val: Vec, space: SpaceName): Vector => new SpaceValue(
   (s, v) => s.unproject.vec(v),
 );
 
+class SpaceVec extends BaseSpaceValue<Vec> {
+  constructor(private readonly pos: Spaced<Vec>) {
+    super(pos.space);
+  }
+
+  get(space: SpaceName): Vec {
+    return this.pos.get(space);
+  }
+
+  angle(): Angle {
+    return Spaces.calc(Angle, (v: Vec) => v.angle(), this);
+  }
+
+  rotate(angle: Spaced<Radians>): Vector {
+    return Spaces.calc(Vector, (a: Radians, v: Vec) => v.rotate(a), angle, this);
+  }
+
+  scale(factor: number): SpaceVec {
+    return this.map(v => v.scale(factor));
+  }
+
+  unit(): SpaceVec {
+    return this.map(v => v.unit());
+  }
+
+  splus(scale: number, vec: Spaced<Vec>): Vector {
+    return Spaces.calc(Vector, (a: Vec, b: Vec) => a.splus(scale, b), this, vec);
+  }
+
+  dplus(distance: Spaced<number>, vec: Spaced<Vec>): Vector {
+    return Spaces.calc(Vector, (a: Vec, s: number, b: Vec) => a.splus(s, b), this, distance, vec);
+  }
+
+  plus(vec: Spaced<Vec>): Vector {
+    return this.splus(1.0, vec);
+  }
+
+  minus(vec: Spaced<Vec>): Vector {
+    return this.splus(-1.0, vec);
+  }
+
+  onAxis(vec: Spaced<Vec>): Vector {
+    return Spaces.calc(Vector, (a: Vec, b: Vec) => a.onAxis(b), this, vec);
+  }
+
+  offAxis(vec: Spaced<Vec>): Vector {
+    return Spaces.calc(Vector, (a: Vec, b: Vec) => a.offAxis(b), this, vec);
+  }
+
+  toPosition(): Position {
+    return Spaces.calc(Position, (a: Vec) => a.toPoint(), this);
+  }
+
+  dot(v: Spaced<Vec>): number {
+    return Spaces.getCalc(this.space, (a: Vec, b: Vec) => a.dot(b), v, this);
+  }
+
+  mag2(): Distance {
+    return Spaces.calc(Distance, (v: Vec) => v.mag2(), this);
+  }
+
+  mag(): Distance {
+    return Spaces.calc(Distance, (v: Vec) => v.mag(), this);
+  }
+
+  static between(a: Spaced<Point>, b: Spaced<Point>): Vector {
+    return Spaces.calc(Vector, (a: Point, b: Point) => Vec.between(a, b), a, b);
+  }
+
+  static zero(space: SpaceName): SpaceVec {
+    return SpaceVec.of(Vec.ZERO, space);
+  }
+
+  get create() { return SpaceVec.of; }
+
+  public static of(vec: Vec, space: SpaceName) {
+    return new SpaceVec(new SpaceValue(
+      vec,
+      space,
+      (s, v) => s.project.vec(v),
+      (s, v) => s.unproject.vec(v),
+    ));
+  }
+}
+
 type Angle = SpaceValue<Radians>;
 const Angle = (val: Radians, space: SpaceName): Angle => new SpaceValue(
   val,
@@ -269,19 +354,19 @@ class SpacePos extends BaseSpaceValue<Point> {
     return this.map((p: Point, v: Vec) => p.splus(scale, v), vec);
   }
 
-  dplus(distance: Distance, vec: Spaced<Vec>): SpacePos {
+  dplus(distance: Spaced<number>, vec: Spaced<Vec>): SpacePos {
     return this.map((p: Point, scale: number, v: Vec) => p.splus(scale, v), distance, vec);
   }
 
-  plus(vec: Vector): SpacePos {
+  plus(vec: Spaced<Vec>): SpacePos {
     return this.splus(1.0, vec);
   }
 
-  minus(vec: Vector): SpacePos {
+  minus(vec: Spaced<Vec>): SpacePos {
     return this.splus(-1.0, vec);
   }
 
-  trunc(f: Distance): SpacePos {
+  trunc(f: Spaced<number>): SpacePos {
     return this.map((p: Point, f: number) => p.trunc(f), f);
   }
 
@@ -289,7 +374,7 @@ class SpacePos extends BaseSpaceValue<Point> {
     return this.map((p: Point, o: Point, t: Vec) => p.onLine(o, t), origin, tangent);
   }
 
-  lerp(s: number, p: Position): SpacePos {
+  lerp(s: number, p: Spaced<Point>): SpacePos {
     return this.map((a: Point, b: Point) => a.lerp(s, b), p);
   }
 
