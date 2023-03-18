@@ -2,6 +2,10 @@ const TAU = Math.PI * 2;
 
 const lerp = (s: number, a: number, b: number) => (1.0 - s) * a + s * b;
 
+const clamp = (s: number, min: number, max: number) => Math.min(max, Math.max(min, s));
+
+const clamp01 = (s: number) => clamp(s, 0.0, 1.0);
+
 const normalizeRadians = (a: number) => {
   let r = a;
   while (r < 0) r += TAU;

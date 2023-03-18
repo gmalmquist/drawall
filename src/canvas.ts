@@ -5,7 +5,7 @@ class CanvasViewport {
     public screen_width: number = 1000,
     public screen_height: number = 1000) {}
 
-  getWorldFrame(): Frame {
+  getModelFrame(): Frame {
     return new Frame(
       this.origin,
       new Vec(this.radius, 0),
@@ -25,22 +25,22 @@ class CanvasViewport {
   }
 
   get project(): Transform2  {
-    const world = this.getWorldFrame().unproject;
+    const model = this.getModelFrame().unproject;
     const screen = this.getScreenFrame().project;
     return {
-      point: p => screen.point(world.point(p)),
-      vec: v => screen.vec(world.vec(v)),
-      distance: d => screen.distance(world.distance(d)),
+      point: p => screen.point(model.point(p)),
+      vec: v => screen.vec(model.vec(v)),
+      distance: d => screen.distance(model.distance(d)),
     };
   }
 
   get unproject(): Transform2  {
-    const world = this.getWorldFrame().project;
+    const model = this.getModelFrame().project;
     const screen = this.getScreenFrame().unproject;
     return {
-      point: p => world.point(screen.point(p)),
-      vec: v => world.vec(screen.vec(v)),
-      distance: d => world.distance(screen.distance(d)),
+      point: p => model.point(screen.point(p)),
+      vec: v => model.vec(screen.vec(v)),
+      distance: d => model.distance(screen.distance(d)),
     };
   }
 }
@@ -195,13 +195,13 @@ class Canvas2d {
   }
 
   updateTransforms() {
-    CoordinateSystems.put({
+    Spaces.put({
       name: 'model',
-      project: this.viewport.getWorldFrame().project,
-      unproject: this.viewport.getWorldFrame().unproject,
+      project: this.viewport.getModelFrame().project,
+      unproject: this.viewport.getModelFrame().unproject,
     });
     
-    CoordinateSystems.put({
+    Spaces.put({
       name: 'screen',
       project: this.viewport.getScreenFrame().project,
       unproject: this.viewport.getScreenFrame().unproject,
@@ -263,7 +263,7 @@ setTimeout(() => {
 
   const drawGridLines = () => {
     // render grid
-    const gridSpacing = App.project.worldUnit.from(App.project.gridSpacing).value;
+    const gridSpacing = App.project.modelUnit.from(App.project.gridSpacing).value;
     const left = Vector(new Vec(-1, 0), 'screen').get('model').unit();
     const right = Vector(new Vec(1, 0), 'screen').get('model').unit();
     const up = Vector(new Vec(0, -1), 'screen').get('model').unit();
@@ -297,7 +297,7 @@ setTimeout(() => {
         Position(x, 'model'), 
         Position(x.plus(gridY), 'model'),
       );
-      const value = App.project.worldUnit.newAmount(x.trunc().x);
+      const value = App.project.modelUnit.newAmount(x.trunc().x);
       const label = App.project.displayUnit.format(value);
       c.text({
         text: label,
@@ -316,7 +316,7 @@ setTimeout(() => {
         Position(y, 'model'),
         Position(y.plus(gridX), 'model'),
       );
-      const value = App.project.worldUnit.newAmount(y.trunc().y);
+      const value = App.project.modelUnit.newAmount(y.trunc().y);
       const label = App.project.displayUnit.format(value);
       if (i > 0) {
         c.text({

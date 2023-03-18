@@ -1,26 +1,26 @@
-type CsName = 'screen' | 'model' | 'identity';
+type SpaceName = 'screen' | 'model' | 'identity';
 
-interface CoordinateSystem {
-  name: CsName;
+interface Space {
+  name: SpaceName;
   project: Transform2;
   unproject: Transform2;
 }
 
-class CoordinateSystems {
-  private static readonly map = new Map<CsName, CoordinateSystem>();
+class Spaces {
+  private static readonly map = new Map<SpaceName, Space>();
 
-  public static get(name: CsName): CoordinateSystem {
-    if (!CoordinateSystems.map.has(name)) {
-      return CoordinateSystems.identity;
+  public static get(name: SpaceName): Space {
+    if (!Spaces.map.has(name)) {
+      return Spaces.identity;
     }
-    return CoordinateSystems.map.get(name)!;
+    return Spaces.map.get(name)!;
   }
 
-  public static put(system: CoordinateSystem) {
-    CoordinateSystems.map.set(system.name, system);
+  public static put(space: Space) {
+    Spaces.map.set(space.name, space);
   }
 
-  public static get identity(): CoordinateSystem {
+  public static get identity(): Space {
     const frame = Frame.identity;
     return {
       name: 'identity',
@@ -30,84 +30,84 @@ class CoordinateSystems {
   }
 }
 
-type CoordinateTransform<V> = (cs: CoordinateSystem, v: V) => V;
+type CoordinateTransform<V> = (cs: Space, v: V) => V;
 
 // thx to kanwren for help w typing witchcraft 💓
-type CoordinateSystemValues<T extends readonly unknown[]> = T extends readonly []
+type SpaceValues<T extends readonly unknown[]> = T extends readonly []
   ? readonly []
   : T extends readonly [infer Start, ...infer End]
-    ? readonly [CoordinateSystemValue<Start>, ...CoordinateSystemValues<End>]
+    ? readonly [SpaceValue<Start>, ...SpaceValues<End>]
     : never;
 
-class CoordinateSystemValue<V> {
+class SpaceValue<V> {
   constructor(
     public readonly val: V,
-    public readonly system: CsName,
+    public readonly space: SpaceName,
     private readonly project: CoordinateTransform<V>,
     private readonly unproject: CoordinateTransform<V>,
   ) {
   }
 
-  get(system: CsName = this.system): V {
-    if (system === this.system) return this.val;
-    const src = CoordinateSystems.get(this.system);
-    const dst = CoordinateSystems.get(system);
+  get(space: SpaceName = this.space): V {
+    if (space === this.space) return this.val;
+    const src = Spaces.get(this.space);
+    const dst = Spaces.get(space);
     return this.project(dst, this.unproject(src, this.val));
   }
 
-  to(system: CsName): CoordinateSystemValue<V> {
-    if (system === this.system) return this;
-    return this.create(this.get(system), system);
+  to(space: SpaceName): SpaceValue<V> {
+    if (space === this.space) return this;
+    return this.create(this.get(space), space);
   }
 
   apply<Args extends readonly unknown[]>(
     func: (v: V, ...args: Args) => V,
-    ...args: CoordinateSystemValues<Args> 
-  ): CoordinateSystemValue<V> {
+    ...args: SpaceValues<Args> 
+  ): SpaceValue<V> {
     return this.applyInto(func, (v,s) => this.create(v,s), ...args);
   }
 
   applyInto<Args extends readonly unknown[], R>(
     func: (v: V, ...args: Args) => R,
-    csValueType: (value: R, system: CsName) => CoordinateSystemValue<R>,
-    ...args: CoordinateSystemValues<Args> 
-  ): CoordinateSystemValue<R> {
-    const unwrap = <T>(a: CoordinateSystemValue<T>) => a.get(this.system);
+    csValueType: (value: R, space: SpaceName) => SpaceValue<R>,
+    ...args: SpaceValues<Args> 
+  ): SpaceValue<R> {
+    const unwrap = <T>(a: SpaceValue<T>) => a.get(this.space);
     const unwrapped = args.map(unwrap) as any as Args;
     const result = func(this.val, ...unwrapped);
-    return csValueType(result, this.system);
+    return csValueType(result, this.space);
   }
 
-  private create(v: V, system: CsName): CoordinateSystemValue<V> {
-    return new CoordinateSystemValue<V>(
+  private create(v: V, space: SpaceName): SpaceValue<V> {
+    return new SpaceValue<V>(
       v,
-      system,
+      space,
       this.project,
       this.unproject,
     );
   }
 }
 
-type Distance = CoordinateSystemValue<number>;
-const Distance = (val: number, system: CsName): Distance => new CoordinateSystemValue(
+type Distance = SpaceValue<number>;
+const Distance = (val: number, space: SpaceName): Distance => new SpaceValue(
   val,
-  system,
+  space,
   (s, d) => s.project.distance(d),
   (s, d) => s.unproject.distance(d),
 );
 
-type Position = CoordinateSystemValue<Point>;
-const Position = (val: Point, system: CsName): Position => new CoordinateSystemValue(
+type Position = SpaceValue<Point>;
+const Position = (val: Point, space: SpaceName): Position => new SpaceValue(
   val,
-  system,
+  space,
   (s, p) => s.project.point(p),
   (s, p) => s.unproject.point(p),
 );
 
-type Vector = CoordinateSystemValue<Vec>;
-const Vector = (val: Vec, system: CsName): Vector => new CoordinateSystemValue(
+type Vector = SpaceValue<Vec>;
+const Vector = (val: Vec, space: SpaceName): Vector => new SpaceValue(
   val,
-  system,
+  space,
   (s, v) => s.project.vec(v),
   (s, v) => s.unproject.vec(v),
 );
@@ -115,10 +115,10 @@ const Vector = (val: Vec, system: CsName): Vector => new CoordinateSystemValue(
 type Radians = Newtype<number, { readonly _: unique symbol; }>;
 const Radians = newtype<Radians>();
 
-type Angle = CoordinateSystemValue<Radians>;
-const Angle = (val: Radians, system: CsName): Angle => new CoordinateSystemValue(
+type Angle = SpaceValue<Radians>;
+const Angle = (val: Radians, space: SpaceName): Angle => new SpaceValue(
   val,
-  system,
+  space,
   (s, angle) => Radians(s.project.vec(Axis.X.rotate(unwrap(angle))).angle()),
   (s, angle) => Radians(s.unproject.vec(Axis.X.rotate(unwrap(angle))).angle()),
 );

@@ -53,6 +53,7 @@ compile
 mkdir -p www/
 
 ORDERED=$(cat <<EOF
+typeutil.js
 util.js
 linalg.js
 coordinates.js

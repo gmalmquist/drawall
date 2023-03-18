@@ -162,7 +162,7 @@ class Wall extends Component implements Solo {
           try {
             let measure = Units.distance.parse(value)!;
             if (measure.unit === UNITLESS) {
-              measure = App.project.worldUnit.newAmount(measure.value);
+              measure = App.project.modelUnit.newAmount(measure.value);
             }
             return App.project.displayUnit.format(measure);
           } catch (_) {
@@ -171,7 +171,7 @@ class Wall extends Component implements Solo {
         },
         {
           value: App.project.displayUnit.format(
-            App.project.worldUnit.newAmount(
+            App.project.modelUnit.newAmount(
               length.enabled ? length.length : Vec.between(this.src.pos, this.dst.pos).mag())
           ),
           size: 8,
@@ -196,7 +196,7 @@ class Wall extends Component implements Solo {
         try {
           const amount = Units.distance.parse(value)!;
           const original = length.length;
-          length.length = App.project.worldUnit.from(amount).value;
+          length.length = App.project.modelUnit.from(amount).value;
           if (original !== length.length) {
             length.enabled = true;
             length.lengthReference = null;
@@ -407,12 +407,12 @@ class Constraint extends Component {
   }
 
   public set hardness(hardness: number) {
-    this._hardness = Math.min(1, Math.max(0, hardness));
+    this._hardness = clamp01(hardness);
   }
 
   get influence() {
     if (!this.enabled) return 0;
-    const dt = Math.max(0, Math.min(1, Time.delta));
+    const dt = clamp01(Time.delta);
     const a = lerp(this.hardness, 0, dt);
     const b = lerp(this.hardness, dt, 1);
     return lerp(this.hardness, a, b);
@@ -460,7 +460,7 @@ class MinLengthConstraint extends Constraint {
     entity: Entity,
     private readonly getSrc: () => PhysNode,
     private readonly getDst: () => PhysNode,
-    public length: number = App.project.worldUnit.from(App.project.gridSpacing).value,
+    public length: number = App.project.modelUnit.from(App.project.gridSpacing).value,
   ) {
     super(entity);
     this.enabled = true;
@@ -656,9 +656,9 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const length = Vec.between(wall.src.pos, wall.dst.pos).mag();
     const error = constraint?.enabled ? length - constraint.length : 0;
     const dispLength = App.project.displayUnit.from(
-      App.project.worldUnit.newAmount(Math.round(length))
+      App.project.modelUnit.newAmount(Math.round(length))
     );
-    const dispError = App.project.worldUnit.newAmount(error);
+    const dispError = App.project.modelUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
     const hasError = Math.abs(dispError.value) > 0;
     const lengthText = App.project.displayUnit.format(dispLength);
