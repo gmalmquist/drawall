@@ -543,15 +543,17 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     );
     canvas.lineWidth = 1;
     const ray = new Edge(wall.src.pos, wall.dst.pos).ray();
-    const tickSpacing = 10; // px
-    const tickSize = 10; // px
-    const ticks = Math.floor(canvas.viewport.project
-      .distance(ray.direction.mag()) / tickSpacing);
+    const tickSpacing = Distance(10, 'screen');
+    const tickSize = Distance(10, 'screen');
+    const ticks = Math.floor(
+      Distance(ray.direction.mag(), 'model').get('screen') 
+      / tickSpacing.get('screen')
+    );
     for (let i = 0; i < ticks; i++) {
       const s = 1.0 * i / ticks;
       const p = ray.at(s);
       const v = ray.direction.unit()
-        .scale(canvas.viewport.unproject.distance(tickSize))
+        .scale(tickSize.get('model'))
         .rotate(30 * Math.PI / 180);
       canvas.strokeLine(Position(p, 'model'), Position(p.plus(v), 'model'));
     }
@@ -569,9 +571,13 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorTextU = App.project.displayUnit.format(dispError);
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
-    const textOffset = App.canvas.viewport.unproject.distance(10);
+    const textOffset = Distance(10, 'screen');
     canvas.text({
-      point: Position(ray.at(0.5).splus(-textOffset, ray.direction.r90().unit()), 'model'),
+      point: Position(ray.at(0.5), 'model').apply(
+        (o: Point, s: number, v: Vec) => o.splus(s, v),
+        textOffset.apply(t => -t),
+        Vector(ray.direction.r90().unit(), 'model'),
+      ),
       axis: Vector(ray.direction, 'model'),
       keepUpright: true,
       text: label,

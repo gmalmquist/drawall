@@ -47,8 +47,6 @@ class CanvasViewport {
 
 class Canvas2d {
   private readonly g: CanvasRenderingContext2D;
-  private transform: Transform2 = Frame.identity.project;
-  private untransform: Transform2 = Frame.identity.unproject;
   viewport: CanvasViewport = new CanvasViewport();
 
   constructor(private readonly el: HTMLCanvasElement) {
@@ -197,9 +195,6 @@ class Canvas2d {
   }
 
   updateTransforms() {
-    this.transform = this.viewport.project;
-    this.untransform = this.viewport.unproject;
-    
     CoordinateSystems.put({
       name: 'model',
       project: this.viewport.getWorldFrame().project,
@@ -319,7 +314,7 @@ setTimeout(() => {
     c.textBaseline = 'middle';
     for (let i = 0; i <= steps; i++) {
       const s = gridSpacing * i;
-      const y = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.Y)).unit());
+      const y = topLeft.splus(s, dirPlus.onAxis(axisY.get('model')).unit());
       c.strokeLine(
         Position(y, 'model'),
         Position(y.plus(gridX), 'model'),
