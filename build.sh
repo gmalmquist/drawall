@@ -56,7 +56,7 @@ ORDERED=$(cat <<EOF
 typeutil.js
 util.js
 linalg.js
-coordinates.js
+spaces.js
 time.js
 units.js
 ecs.js
