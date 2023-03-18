@@ -1,11 +1,11 @@
 interface Anchor {
-  position: Point;
+  position: Position;
 }
 
 class Popup extends Component {
   readonly element: HTMLElement;
   private visible: boolean = false;
-  private anchor: Anchor = { position: Point.ZERO };
+  private anchor: Anchor = { position: Position(Point.ZERO, 'screen') };
   public closeOnUnfocus: boolean = true;
 
   constructor(entity: Entity) {
@@ -21,7 +21,7 @@ class Popup extends Component {
    return this.visible;
   }
 
-  setPosition(pos: Point) {
+  setPosition(pos: Position) {
     this.anchor = {
       position: pos,
     };
@@ -46,7 +46,7 @@ class Popup extends Component {
   }  
 
   private moveToAnchor() {
-    const pos = this.anchor.position;
+    const pos = this.anchor.position.get('screen');
     const bounds = this.element.getBoundingClientRect();
     const width = bounds.width;
     const height = bounds.height;

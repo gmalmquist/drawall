@@ -5,17 +5,17 @@ const PINK = '#F5A9B8';
 const BLUE = '#5BCEFA';
 
 interface HandleClickEvent {
-  point: Point;
+  point: Position;
 }
 
 interface HandleDragEvent {
-  point: Point;
-  start: Point;
-  delta: Vec;
+  point: Position;
+  start: Position;
+  delta: Vector;
 }
 
 interface HandleHoverEvent {
-  point: Point;
+  point: Position;
   hovered: boolean;
 }
 
@@ -47,9 +47,9 @@ class StatefulHandleDragListener<C> {
 }
 
 interface HandleProps {
-  getPos: () => Point;
-  setPos?: (p: Point) => void;
-  distance?: (p: Point) => number;
+  getPos: () => Position;
+  setPos?: (p: Position) => void;
+  distance?: (p: Position) => Distance;
   draggable?: boolean;
   clickable?: boolean;
   hoverable?: boolean;
@@ -60,7 +60,7 @@ class Handle extends Component {
   private readonly onClicks = new Set<Consume<HandleClickEvent>>();
   private readonly onDrags = new Set<StatefulHandleDragListener<any>>();
   private readonly onHovers = new Set<Consume<HandleHoverEvent>>();
-  private readonly distanceFunc: (p: Point) => number;
+  private readonly distanceFunc: (p: Position) => Distance;
   private _dragging: boolean = false;
   private _hovered: boolean = false;
 
@@ -78,9 +78,13 @@ class Handle extends Component {
     this.clickable = typeof props.clickable === 'undefined' ? true : props.clickable;
     this.hoverable = typeof props.hoverable === 'undefined' ? true : props.hoverable;
 
+    const defaultDistanceFunc = (p: Position) => p.applyInto(
+      (a: Point, b: Point) => Vec.between(a, b).mag(),
+      Distance,
+      props.getPos(),
+    );
     this.distanceFunc = typeof props.distance === 'undefined'
-      ? (p: Point) => Vec.between(props.getPos(), p).mag()
-      : props.distance;
+      ? defaultDistanceFunc : props.distance;
 
     if (typeof props.setPos !== 'undefined') {
       const setPos = props.setPos!;
@@ -88,11 +92,11 @@ class Handle extends Component {
         onStart: (e) => {
           return props.getPos();
         },
-        onUpdate: (e, start: Point) => {
-          setPos(start.plus(e.delta));
+        onUpdate: (e, start: Position) => {
+          setPos(start.apply((a: Point, b: Vec) => a.plus(b), e.delta));
         },
-        onEnd: (e, start: Point) => {
-          setPos(start.plus(e.delta));
+        onEnd: (e, start: Position) => {
+          setPos(start.apply((a: Point, b: Vec) => a.plus(b), e.delta));
           return start;
         },
       });
@@ -107,11 +111,11 @@ class Handle extends Component {
     return this._hovered;
   }
 
-  get pos(): Point {
+  get pos(): Position {
     return this.props.getPos();
   }
 
-  set pos(p: Point) {
+  set pos(p: Position) {
     const setPos = this.props.setPos;
     if (typeof setPos === 'undefined') {
       return;
@@ -119,7 +123,7 @@ class Handle extends Component {
     setPos(p);
   }
 
-  distanceFrom(p: Point): number {
+  distanceFrom(p: Position): Distance {
     return this.distanceFunc(p);
   }
 
@@ -175,11 +179,11 @@ class Handle extends Component {
 }
 
 class DragUi {
-  public mousePos: Point = Point.ZERO;
+  public mousePos: Position = Position(Point.ZERO, 'screen');
   public dragRadius = 10; // px
   public clickRadius = 10;
   private dragging: Handle | null = null;
-  private dragStart: Point = Point.ZERO;
+  private dragStart: Position = Position(Point.ZERO, 'screen');
   private clicking: boolean = false;
 
   constructor(canvas: HTMLElement) {
@@ -193,7 +197,7 @@ class DragUi {
   }
 
   private pickHandle(
-    pos: Point,
+    pos: Position,
     buttons: number,
     radius: number,
     filter?: (h: Handle) => boolean,
@@ -213,7 +217,7 @@ class DragUi {
         // can exit early here. 
         return choice;
       }
-      const handleDistance = handle.distanceFrom(pos);
+      const handleDistance = handle.distanceFrom(pos).get('screen');
       if (handleDistance > this.dragRadius) {
         continue;
       }
@@ -245,21 +249,22 @@ class DragUi {
         this.dragging.fireDragStart({
           start: this.dragStart,
           point: pos,
-          delta: Vec.ZERO,
+          delta: Vector(Vec.ZERO, 'screen'),
         });
       }
     });
     canvas.addEventListener('mousemove', (e) => {
       const pos = this.getPoint(e);
       this.mousePos = pos;
-      if (this.clicking && Vec.between(this.dragStart, pos).mag() > this.clickRadius) {
+      const delta = this.dragStart.applyInto(Vec.between, Vector, pos);
+      if (this.clicking && delta.get('screen').mag() > this.clickRadius) {
         this.clicking = false;
       }
       if (this.dragging !== null) {
         this.dragging.fireDragUpdate({
           start: this.dragStart,
           point: pos,
-          delta: Vec.between(this.dragStart, pos),
+          delta,
         });
         App.pane.style.cursor = 'grab';
       } else {
@@ -267,7 +272,7 @@ class DragUi {
         let nearDraggable = false;
         for (const handle of this.getHandles()) {
           if (!handle.hoverable) continue;
-          const isNear = handle.distanceFrom(pos) <= this.dragRadius;
+          const isNear = handle.distanceFrom(pos).get('screen') <= this.dragRadius;
           nearClickable = nearClickable || (isNear && handle.clickable);
           nearDraggable = nearDraggable || (isNear && handle.draggable);
           if (handle.isHovered !== isNear) {
@@ -285,11 +290,12 @@ class DragUi {
     });
     canvas.addEventListener('mouseup', (e) => {
       const point = this.getPoint(e);
+      const delta = this.dragStart.applyInto(Vec.between, Vector, point);
       if (this.dragging !== null) {
         const event = {
           point,
           start: this.dragStart,
-          delta: Vec.between(this.dragStart, point),
+          delta,
         };
         this.dragging.fireDragUpdate(event);
         this.dragging.fireDragEnd(event);
@@ -312,13 +318,13 @@ class DragUi {
       this.dragging.fireDragUpdate({
         point: this.mousePos,
         start: this.dragStart,
-        delta: Vec.between(this.dragStart, this.mousePos),
+        delta: this.dragStart.applyInto(Vec.between, Vector, this.mousePos),
       });
     }
   }
 
-  private getPoint(e: MouseEvent): Point {
-    return new Point(e.clientX, e.clientY);
+  private getPoint(e: MouseEvent): Position {
+    return Position(new Point(e.clientX, e.clientY), 'screen');
   }
 }
 

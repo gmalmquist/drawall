@@ -119,47 +119,51 @@ class Canvas2d {
   }
 
   arc(
-    center: Point,
-    radius: number,
-    startAngle: number,
-    endAngle: number,
+    center: Position,
+    radius: Distance,
+    startAngle: Angle,
+    endAngle: Angle,
     counterClockwise?: boolean,
   ) {
-    const c = this.transform.point(center);
-    this.g.arc(c.x, c.y, radius, startAngle, endAngle, counterClockwise);
+    const c = center.get('screen');
+    this.g.arc(
+      c.x, 
+      c.y, 
+      radius.get('screen'), 
+      unwrap(startAngle.get('screen')), 
+      unwrap(endAngle.get('screen')), 
+      counterClockwise,
+    );
   }
 
-  strokeLine(src: Point, dst: Point) {
+  strokeLine(src: Position, dst: Position) {
+    this.beginPath();
+    this.moveTo(src);
+    this.lineTo(dst);
+    this.stroke();
+  }
+
+  strokeCircle(src: Position, radius: Distance) {
     const g = this.g;
-    const t = this.transform.point;
-    const [a, b] = [t(src), t(dst)];
+    const c = src.get('screen');
     g.beginPath();
-    g.moveTo(a.x, a.y);
-    g.lineTo(b.x, b.y);
+    g.arc(c.x, c.y, radius.get('screen'), 0, 2 * Math.PI);
     g.stroke();
   }
 
-  strokeCircle(src: Point, radius: number) {
+  fillCircle(src: Position, radius: Distance) {
     const g = this.g;
-    const c = this.transform.point(src);
+    const c = src.get('screen');
     g.beginPath();
-    g.arc(c.x, c.y, radius, 0, 2 * Math.PI);
-    g.stroke();
-  }
-
-  fillCircle(src: Point, radius: number) {
-    const g = this.g;
-    const c = this.transform.point(src);
-    g.beginPath();
-    g.arc(c.x, c.y, radius, 0, 2 * Math.PI);
+    g.arc(c.x, c.y, radius.get('screen'), 0, 2 * Math.PI);
     g.fill();
   }
 
   text(props: TextDrawProps) {
-    const p = this.transform.point(props.point);
+    const p = props.point.get('screen');
     const fillStyle = props.fill || this.g.fillStyle;
     const axisAngle = typeof props.axis === 'undefined' ? 0
-      : this.transform.vec(props.axis).angle();
+      : props.axis.get('screen').angle();
     const angle = props.keepUpright ? uprightAngle(axisAngle) : axisAngle;
     this.g.translate(p.x, p.y);
     this.g.rotate(angle);
@@ -212,12 +216,12 @@ class Canvas2d {
 
 interface TextDrawProps {
   text: string;
-  point: Point;
+  point: Position;
   fill?: string;
   stroke?: string;
   lineWidth?: number;
   shadow?: string;
-  axis?: Vec;
+  axis?: Vector;
   keepUpright?: boolean;
   align?: CanvasTextAlign;
   baseline?: CanvasTextBaseline;
@@ -233,8 +237,8 @@ setTimeout(() => {
   mouse.listenTo(App.pane);
 
   const canvasHandle = App.ecs.createEntity().add(Handle, {
-    getPos: () => c.viewport.project.point(c.viewport.origin),
-    distance: (p) => 0,
+    getPos: () => Position(c.viewport.origin, 'model'),
+    distance: (_) => Distance(0, 'screen'),
     draggable: true,
     clickable: false,
     hoverable: false,
@@ -244,13 +248,14 @@ setTimeout(() => {
 
   canvasHandle.onDrag({
     onStart: (e) => ({
+      // have to save original transformations
       origin: c.viewport.origin,
       project: c.viewport.project,
       unproject: c.viewport.unproject,
     }),
     onUpdate: (e, context) => {
       const { origin, project, unproject } = context;
-      c.viewport.origin = origin.minus(unproject.vec(e.delta));
+      c.viewport.origin = origin.minus(unproject.vec(e.delta.get('screen')));
       c.updateTransforms();
       return context;
     },
@@ -267,21 +272,25 @@ setTimeout(() => {
   const drawGridLines = () => {
     // render grid
     const gridSpacing = App.project.worldUnit.from(App.project.gridSpacing).value;
-    const left = c.viewport.unproject.vec(new Vec(-1, 0)).unit();
-    const right = c.viewport.unproject.vec(new Vec(1, 0)).unit();
-    const up = c.viewport.unproject.vec(new Vec(0, -1)).unit();
-    const down = c.viewport.unproject.vec(new Vec(0, 1)).unit();
+    const left = Vector(new Vec(-1, 0), 'screen').get('model').unit();
+    const right = Vector(new Vec(1, 0), 'screen').get('model').unit();
+    const up = Vector(new Vec(0, -1), 'screen').get('model').unit();
+    const down = Vector(new Vec(0, 1), 'screen').get('model').unit();
 
     const dirMinus = left.plus(up);
     const dirPlus = right.plus(down);
-    const topLeft = c.viewport.unproject.point(Point.ZERO)
+    const topLeft = Position(Point.ZERO, 'screen').get('model')
       .trunc(gridSpacing)
       .splus(gridSpacing, dirMinus);
-    const bottomRight = c.viewport.unproject.point(new Point(c.width, c.height))
+    const bottomRight = Position(new Point(c.width, c.height), 'screen').get('model')
       .trunc(gridSpacing)
       .splus(gridSpacing, dirPlus);
-    const gridX = Vec.between(topLeft, bottomRight).onAxis(c.viewport.unproject.vec(Axis.X));
-    const gridY = Vec.between(topLeft, bottomRight).onAxis(c.viewport.unproject.vec(Axis.Y));
+
+    const axisX = Vector(Axis.X, 'screen');
+    const axisY = Vector(Axis.Y, 'screen');
+
+    const gridX = Vec.between(topLeft, bottomRight).onAxis(axisX.get('model'));
+    const gridY = Vec.between(topLeft, bottomRight).onAxis(axisY.get('model'));
     const steps = Math.floor(Math.max(gridX.mag(), gridY.mag()) / gridSpacing);
 
     c.lineWidth = 1;
@@ -291,15 +300,18 @@ setTimeout(() => {
     c.textBaseline = 'top';
     for (let i = 0; i <= steps; i++) {
       const s = gridSpacing * i;
-      const x = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.X)).unit());
-      c.strokeLine(x, x.plus(gridY));
+      const x = topLeft.splus(s, dirPlus.onAxis(axisX.get('model')).unit());
+      c.strokeLine(
+        Position(x, 'model'), 
+        Position(x.plus(gridY), 'model'),
+      );
       const value = App.project.worldUnit.newAmount(x.trunc().x);
       const label = App.project.displayUnit.format(value);
       c.text({
         text: label,
-        point: x.onLine(
-          c.viewport.unproject.point(new Point(0, 10)),
-          c.viewport.unproject.vec(Axis.X),
+        point: Position(x, 'model').apply(
+          (a: Point, b: Point, c: Vec) => a.onLine(b, c),
+          Position(new Point(0, 10), 'screen'), axisX
         ),
       });
     }
@@ -308,15 +320,18 @@ setTimeout(() => {
     for (let i = 0; i <= steps; i++) {
       const s = gridSpacing * i;
       const y = topLeft.splus(s, dirPlus.onAxis(c.viewport.unproject.vec(Axis.Y)).unit());
-      c.strokeLine(y, y.plus(gridX));
+      c.strokeLine(
+        Position(y, 'model'),
+        Position(y.plus(gridX), 'model'),
+      );
       const value = App.project.worldUnit.newAmount(y.trunc().y);
       const label = App.project.displayUnit.format(value);
       if (i > 0) {
         c.text({
           text: label,
-          point: y.onLine(
-            c.viewport.unproject.point(new Point(10, 0)),
-            c.viewport.unproject.vec(Axis.Y), 
+          point: Position(y, 'model').apply(
+            (a: Point, b: Point, c: Vec) => a.onLine(b, c),
+            Position(new Point(10, 0), 'screen'), axisY
           ),
         });
       }

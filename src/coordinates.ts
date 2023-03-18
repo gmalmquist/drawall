@@ -7,9 +7,9 @@ interface CoordinateSystem {
 }
 
 class CoordinateSystems {
-  private static readonly map = new Map<string, CoordinateSystem>();
+  private static readonly map = new Map<CsName, CoordinateSystem>();
 
-  public static get(name: string): CoordinateSystem {
+  public static get(name: CsName): CoordinateSystem {
     if (!CoordinateSystems.map.has(name)) {
       return CoordinateSystems.identity;
     }
@@ -111,4 +111,16 @@ const Vector = (val: Vec, system: CsName): Vector => new CoordinateSystemValue(
   (s, v) => s.project.vec(v),
   (s, v) => s.unproject.vec(v),
 );
+
+type Radians = Newtype<number, { readonly _: unique symbol; }>;
+const Radians = newtype<Radians>();
+
+type Angle = CoordinateSystemValue<Radians>;
+const Angle = (val: Radians, system: CsName): Angle => new CoordinateSystemValue(
+  val,
+  system,
+  (s, angle) => Radians(s.project.vec(Axis.X.rotate(unwrap(angle))).angle()),
+  (s, angle) => Radians(s.unproject.vec(Axis.X.rotate(unwrap(angle))).angle()),
+);
+
 

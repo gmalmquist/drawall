@@ -62,13 +62,12 @@ class Wall extends Component implements Solo {
     this.dst.attachIncoming(this);
 
     const handle = entity.add(Handle, {
-      getPos: () => App.canvas.viewport.project.point(this.src.pos),
+      getPos: () => Position(this.src.pos, 'model'),
       setPos: p => {
       },
-      distance: (pt: Point) => App.canvas.viewport.project.distance(
-        new Edge(this.src.pos, this.dst.pos).distance(
-          App.canvas.viewport.unproject.point(pt),
-        )
+      distance: (pt: Position) => Distance(
+        new Edge(this.src.pos, this.dst.pos).distance(pt.get('model')),
+        'model',
       ),
       priority: 0,
     });
@@ -78,19 +77,19 @@ class Wall extends Component implements Solo {
         return [this.src.pos, this.dst.pos];
       },
       onUpdate: (e, [src, dst]) => {
-        const delta = App.canvas.viewport.unproject.vec(e.delta);
+        const delta = e.delta.get('model');
         const srcLocked = this.src.entity.get(FixedConstraint).some(f => f.enabled);
         const dstLocked = this.dst.entity.get(FixedConstraint).some(f => f.enabled);
         if (srcLocked && !dstLocked) {
-          const start = App.canvas.viewport.unproject.point(e.start);
-          const point = App.canvas.viewport.unproject.point(e.point);
+          const start = e.start.get('model');
+          const point = e.point.get('model');
           const initial = Vec.between(src, start);
           const current = Vec.between(src, point);
           const angle = current.angle() - initial.angle();
           this.dst.pos = src.plus(Vec.between(src, dst).rotate(angle));
         } else if (!srcLocked && dstLocked) {
-          const start = App.canvas.viewport.unproject.point(e.start);
-          const point = App.canvas.viewport.unproject.point(e.point);
+          const start = e.start.get('model');
+          const point = e.point.get('model');
           const initial = Vec.between(dst, start);
           const current = Vec.between(dst, point);
           const angle = current.angle() - initial.angle();
@@ -128,7 +127,7 @@ class Wall extends Component implements Solo {
     j.attachIncoming(this);
   }
 
-  showPopup(openAt: Point) {
+  showPopup(openAt: Position) {
     this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
     p.setPosition(openAt);
@@ -207,9 +206,9 @@ class WallJoint extends Component {
     );
 
     const handle = entity.add(Handle, {
-      getPos: () => App.canvas.viewport.project.point(this.pos),
+      getPos: () => Position(this.pos, 'model'),
       setPos: p => {
-        this.pos = App.canvas.viewport.unproject.point(p);
+        this.pos = p.get('model');
         entity.get(FixedConstraint).forEach(c => c.updateTargets([this.pos]));
       },
       priority: 1,
@@ -265,7 +264,7 @@ class WallJoint extends Component {
     }
   }
 
-  showPopup(openAt: Point) {
+  showPopup(openAt: Position) {
     this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
     p.setPosition(openAt);
@@ -507,14 +506,14 @@ class AngleConstraint extends Constraint {
     App.canvas.lineWidth = 1;
 
     App.canvas.strokeStyle = 'green';
-    App.canvas.strokeLine(corner.center.pos, targetLeft);
+    App.canvas.strokeLine(Position(corner.center.pos, 'model'), Position(targetLeft, 'model'));
     App.canvas.strokeStyle = 'blue';
-    App.canvas.strokeLine(corner.left.pos, targetLeft);
+    App.canvas.strokeLine(Position(corner.left.pos, 'model'), Position(targetLeft, 'model'));
 
     App.canvas.strokeStyle = 'red';
-    App.canvas.strokeLine(corner.center.pos, targetRight);
+    App.canvas.strokeLine(Position(corner.center.pos, 'model'), Position(targetRight, 'model'));
     App.canvas.strokeStyle = 'blue';
-    App.canvas.strokeLine(corner.right.pos, targetRight);
+    App.canvas.strokeLine(Position(corner.left.pos, 'model'), Position(targetRight, 'model'));
   }
 
   onEnable() {
@@ -538,7 +537,10 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const active = hovered || wall.entity.get(PopupWindow).some(p => p.isVisible);
     canvas.strokeStyle = 'black';
     canvas.lineWidth = active ? 2 : 1;
-    canvas.strokeLine(wall.src.pos, wall.dst.pos);
+    canvas.strokeLine(
+      Position(wall.src.pos, 'model'),
+      Position(wall.dst.pos, 'model'),
+    );
     canvas.lineWidth = 1;
     const ray = new Edge(wall.src.pos, wall.dst.pos).ray();
     const tickSpacing = 10; // px
@@ -551,7 +553,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       const v = ray.direction.unit()
         .scale(canvas.viewport.unproject.distance(tickSize))
         .rotate(30 * Math.PI / 180);
-      canvas.strokeLine(p, p.plus(v));
+      canvas.strokeLine(Position(p, 'model'), Position(p.plus(v), 'model'));
     }
 
     const constraint = wall.entity.get(LengthConstraint)[0];
@@ -569,8 +571,8 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = App.canvas.viewport.unproject.distance(10);
     canvas.text({
-      point: ray.at(0.5).splus(-textOffset, ray.direction.r90().unit()),
-      axis: ray.direction,
+      point: Position(ray.at(0.5).splus(-textOffset, ray.direction.r90().unit()), 'model'),
+      axis: Vector(ray.direction, 'model'),
       keepUpright: true,
       text: label,
       fill: 'black',
@@ -592,19 +594,21 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
     canvas.fillStyle = 'black';
     canvas.strokeStyle = 'black';
 
+    const pos = Position(joint.pos, 'model');
+    const radius = Distance(5, 'screen');
     if (locked) {
       canvas.fillStyle = 'black';
-      canvas.fillCircle(joint.pos, 5);
+      canvas.fillCircle(pos, radius);
     } else {
       canvas.fillStyle = 'white';
-      canvas.fillCircle(joint.pos, 5);
+      canvas.fillCircle(pos, radius);
     }
     canvas.lineWidth = 1;
-    canvas.strokeCircle(joint.pos, 5);
+    canvas.strokeCircle(pos, radius);
 
     if (active) {
       canvas.lineWidth = 2;
-      canvas.strokeCircle(joint.pos, 10);
+      canvas.strokeCircle(pos, radius.apply(r => r * 2));
     }
   }
 
@@ -625,11 +629,11 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       continue;
     }
 
-    const leftVecS = canvas.viewport.project.vec(leftVec);
-    const rightVecS = canvas.viewport.project.vec(rightVec);
+    const leftAngle = Angle(Radians(leftVec.angle()), 'model');
+    const rightAngle = Angle(Radians(rightVec.angle()), 'model');
 
-    const arcRadius = 15; // px
-    const textDistance = canvas.viewport.unproject.distance(arcRadius + 20);
+    const arcRadius = Distance(15, 'screen');
+    const textDistance = arcRadius.apply(r => r + 20);
 
     const angle = Math.round(toDegrees(constraint.currentAngle));
     const error = Math.round(toDegrees(constraint.currentAngle - constraint.targetAngle));
@@ -649,7 +653,10 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       text: label,
       align: 'center',
       baseline: 'middle',
-      point: center.splus(textDistance, middle),
+      point: Position(center, 'model').apply(
+        (p: Point, s: number, v: Vec) => p.splus(s, v),
+        textDistance, Vector(middle, 'model')
+      ),
       fill: 'black',
       shadow: error === 0 ? undefined
         : error > 0 ? PINK
@@ -660,10 +667,16 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
     canvas.moveTo(Position(center, 'model'));
     canvas.lineTo(Position(center, 'model').apply(
       (c: Point, s: number, v: Vec) => c.splus(s, v),
-      Distance(arcRadius, 'screen'),
+      arcRadius,
       Vector(rightVec.unit(), 'model'),
     ));
-    canvas.arc(center, arcRadius, rightVecS.angle(), leftVecS.angle(), true);
+    canvas.arc(
+      Position(center, 'model'),
+      arcRadius,
+      rightAngle,
+      leftAngle,
+      true,
+    );
     canvas.closePath();
 
     canvas.strokeStyle = 'black';
