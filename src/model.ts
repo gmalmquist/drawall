@@ -666,10 +666,11 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = Distance(10, 'screen');
-    const textPosition = Position(ray.at(0.5), 'model').apply(
-      (o: Point, s: number, v: Vec) => o.splus(s, v),
-      textOffset.apply(t => -t),
-      Vector(ray.direction.r90().unit(), 'model'),
+    const textPosition = Spaces.calc(
+      Position,
+      (ray: Ray, offset: number) => ray.at(0.5).splus(-offset, ray.direction.r90().unit()),
+      Line(ray, 'model'),
+      textOffset,
     );
     canvas.text({
       point: textPosition,
@@ -746,8 +747,8 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       continue;
     }
 
-    const leftAngle = Angle(Radians(leftVec.angle()), 'model');
-    const rightAngle = Angle(Radians(rightVec.angle()), 'model');
+    const leftAngle = Angle.fromVec(leftVec, 'model');
+    const rightAngle = Angle.fromVec(rightVec, 'model');
 
     const arcRadius = Distance(15, 'screen');
     const textDistance = arcRadius.apply(r => r + 20);
