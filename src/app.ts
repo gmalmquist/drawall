@@ -20,20 +20,22 @@ class App {
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
 
+    const pt = (x: number, y: number) => Position(new Point(x, y), 'model');
+
     const wall = App.ecs.createEntity().add(Wall);
     wall.entity.name = 'wall1';
-    wall.src!.pos = new Point(-150, 60);
-    wall.dst!.pos = new Point(-50, 60);
+    wall.src!.pos = pt(-150, 60);
+    wall.dst!.pos = pt(-50, 60);
 
     const wall2 = App.ecs.createEntity().add(Wall);
     wall2.entity.name = 'wall2';
     wall2.src = wall.dst;
-    wall2.dst.pos = new Point(-20, 30);
+    wall2.dst.pos = pt(-20, 30);
 
     const wall3 = App.ecs.createEntity().add(Wall);
     wall3.entity.name = 'wall3';
     wall3.src = wall2.dst;
-    wall3.dst.pos = new Point(-30, 0);
+    wall3.dst.pos = pt(-30, 0);
 
     const wall4 = App.ecs.createEntity().add(Wall);
     wall4.entity.name = 'wall4';
@@ -46,7 +48,7 @@ class App {
     wall3.dst.entity.name = 'joint4';
 
     // enable length and angle constraints
-    App.ecs.getComponents(AngleConstraint).forEach(a => { a.enabled = true; a.targetAngle = Math.PI/2; });
+    App.ecs.getComponents(AngleConstraint).forEach(a => { a.enabled = true; a.targetAngle = Angle(Radians(Math.PI/2), 'model'); });
     //App.ecs.getComponents(LengthConstraint).forEach(a => { a.enabled = true; });
   }
 

@@ -39,6 +39,16 @@ class Spaces {
     return wrapResult(Spaces.getCalc(first.space, func, first, ...args), first.space);
   }
 
+  public static calcN<First, Args extends readonly unknown[], R>(
+    wrapResult: (value: R, space: SpaceName) => SpaceValue<R>,
+    func: (f: First, ...args: Args) => R[],
+    first: SpaceValue<First>,
+    ...args: SpaceValues<Args>
+  ): Array<SpaceValue<R>> {
+    const result = Spaces.getCalc(first.space, func, first, ...args);
+    return result.map(r => wrapResult(r, first.space));
+  }
+
   public static getCalc<First, Rest extends readonly unknown[], R>(
     space: SpaceName,
     func: (first: First, ...args: Rest) => R,
@@ -129,15 +139,13 @@ const Vector = (val: Vec, space: SpaceName): Vector => new SpaceValue(
   (s, v) => s.project.vec(v),
   (s, v) => s.unproject.vec(v),
 );
-type Radians = Newtype<number, { readonly _: unique symbol; }>;
-const Radians = newtype<Radians>();
 
 type Angle = SpaceValue<Radians>;
 const Angle = (val: Radians, space: SpaceName): Angle => new SpaceValue(
   val,
   space,
-  (s, angle) => Radians(s.project.vec(Axis.X.rotate(unwrap(angle))).angle()),
-  (s, angle) => Radians(s.unproject.vec(Axis.X.rotate(unwrap(angle))).angle()),
+  (s, angle) => s.project.vec(Axis.X.rotate(angle)).angle(),
+  (s, angle) => s.unproject.vec(Axis.X.rotate(angle)).angle(),
 );
 
 type Line = SpaceValue<Ray>;
@@ -152,19 +160,70 @@ Distance.between = (a: Position, b: Position): Distance =>
   Spaces.calc(Distance, (a: Point, b: Point) => Vec.between(a, b).mag(), a, b);
 
 Vector.fromAngle = (a: Angle): Vector =>
-  Spaces.calc(Vector, (a: Radians) => Axis.X.rotate(unwrap(a)), a);
+  Spaces.calc(Vector, (a: Radians) => Axis.X.rotate(a), a);
 
 Vector.between = (a: Position, b: Position): Vector => 
   Spaces.calc(Vector, (a: Point, b: Point) => Vec.between(a, b), a, b);
 
-Angle.fromVector = (v: Vector): Angle =>
-  v.applyInto(Angle, (v: Vec) => Radians(v.angle()));
+Angle.fromVector = (v: Vector): Angle => v.applyInto(Angle, (v: Vec) => v.angle());
 
 Angle.fromVec = (v: Vec, space: SpaceName): Angle => Angle.fromVector(Vector(v, space));
+
+Angle.between = (src: Angle, dst: Angle): Angle =>
+  src.apply((a: Radians, b: Radians) => Radians(unwrap(b) - unwrap(a)), dst); 
+
+Angle.sum = (src: Angle, dst: Angle): Angle =>
+  src.apply((a: Radians, b: Radians) => Radians(unwrap(a) + unwrap(b)), dst); 
 
 Line.from = (origin: Position, direction: Vector): Line => Spaces.calc(
   Line,
   (o: Point, d: Vec) => new Ray(o, d),
   origin, direction
 );
+
+Line.fromEdge = (a: Position, b: Position): Line => Spaces.calc(
+  Line,
+  (a: Point, b: Point) => new Edge(a, b).ray(),
+  a, b
+);
+
+Line.at = (line: Line, at: number) => Spaces.calc(Position, (r: Ray) => r.at(at), line);
+
+class SpaceEdge {
+  constructor(
+    public readonly src: Position,
+    public readonly dst: Position) {
+  }
+
+  get origin(): Position {
+    return this.src;
+  }
+
+  get vector(): Vector {
+    return Vector.between(this.src, this.dst);
+  }
+
+  get length(): Distance {
+    return Distance.between(this.src, this.dst);
+  }
+
+  public lerp(s: number): Position {
+    return Spaces.calc(Position, (a: Point, b: Point) => (
+      a.lerp(s, b)
+    ), this.src, this.dst);
+  }
+
+  public distance(point: Position): Distance {
+    return Spaces.calc(Distance, (a: Point, b: Point, p: Point) => {
+      return new Edge(a, b).distance(p);
+    }, this.src, this.dst, point);
+  }
+
+  static fromRay(origin: Position, direction: Vector): SpaceEdge {
+    return new SpaceEdge(
+      origin,
+      origin.apply((a: Point, b: Vec) => a.plus(b), direction),
+    );
+  }
+}
 

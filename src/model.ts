@@ -10,20 +10,20 @@ class PhysNode extends Component implements Solo {
 
   constructor(
     entity: Entity,
-    private readonly getPos?: () => Point,
-    private readonly setPos?: (p: Point) => void) {
+    private readonly getPos?: () => Position,
+    private readonly setPos?: (p: Position) => void) {
     super(entity);
   }
 
-  get pos(): Point {
-    return typeof this.getPos === 'undefined' ? this._pos : this.getPos();
+  get pos(): Position {
+    return typeof this.getPos === 'undefined' ? Position(this._pos, 'model') : this.getPos();
   }
 
-  set pos(p: Point) {
+  set pos(p: Position) {
     if (typeof this.setPos !== 'undefined') {
       this.setPos(p);
     } else {
-      this._pos = p;
+      this._pos = p.get('model');
     }
   }
 
@@ -40,12 +40,12 @@ class PhysNode extends Component implements Solo {
     this.velocity = this.velocity.splus(dt / this.mass, dragForce);
     this.velocity = this.velocity.splus(dt, this.acceleration);
     this.velocity = this.velocity.splus(dt / this.mass, this.forceAccum);
-    this.pos = this.pos.splus(dt, this.velocity);
+    this.pos = this.pos.apply((p: Point, v: Vec) => p.splus(dt, v), Vector(this.velocity, 'model'));
     this.forceAccum = Vec.ZERO;
   }
 
-  addForce(f: Vec) {
-    this.forceAccum = this.forceAccum.plus(f);
+  addForce(f: Vector) {
+    this.forceAccum = this.forceAccum.plus(f.get('model'));
   }
 }
 
@@ -62,41 +62,46 @@ class Wall extends Component implements Solo {
     this.dst.attachIncoming(this);
 
     const handle = entity.add(Handle, {
-      getPos: () => Position(this.src.pos, 'model'),
+      getPos: () => this.src.pos,
       setPos: p => {
       },
-      distance: (pt: Position) => Distance(
-        new Edge(this.src.pos, this.dst.pos).distance(pt.get('model')),
-        'model',
+      distance: (pt: Position) => Spaces.calc(
+        Distance,
+        (src: Point, pos: Point, pt: Point) => new Edge(src, pos).distance(pt),
+        this.src.pos, this.dst.pos, pt
       ),
       priority: 0,
     });
     handle.onClick(({ point }) => this.showPopup(point));
     handle.onDrag({
-      onStart: (e): [Point, Point] => {
+      onStart: (e): [Position, Position] => {
         return [this.src.pos, this.dst.pos];
       },
       onUpdate: (e, [src, dst]) => {
-        const delta = e.delta.get('model');
+        const delta = e.delta;
         const srcLocked = this.src.entity.get(FixedConstraint).some(f => f.enabled);
         const dstLocked = this.dst.entity.get(FixedConstraint).some(f => f.enabled);
         if (srcLocked && !dstLocked) {
-          const start = e.start.get('model');
-          const point = e.point.get('model');
-          const initial = Vec.between(src, start);
-          const current = Vec.between(src, point);
-          const angle = current.angle() - initial.angle();
-          this.dst.pos = src.plus(Vec.between(src, dst).rotate(angle));
+          const initial = Vector.between(src, e.start);
+          const current = Vector.between(src, e.point);
+          const angle = Angle.between(Angle.fromVector(initial), Angle.fromVector(current));
+          this.dst.pos = Spaces.calc(
+            Position,
+            (src: Point, dst: Point, angle: Radians) => src.plus(Vec.between(src, dst).rotate(angle)),
+            src, dst, angle,
+          );
         } else if (!srcLocked && dstLocked) {
-          const start = e.start.get('model');
-          const point = e.point.get('model');
-          const initial = Vec.between(dst, start);
-          const current = Vec.between(dst, point);
-          const angle = current.angle() - initial.angle();
-          this.src.pos = dst.plus(Vec.between(dst, src).rotate(angle));
+          const initial = Vector.between(dst, e.start);
+          const current = Vector.between(dst, e.point);
+          const angle = Angle.between(Angle.fromVector(initial), Angle.fromVector(current));
+          this.src.pos = Spaces.calc(
+            Position,
+            (src: Point, dst: Point, angle: Radians) => dst.plus(Vec.between(dst, src).rotate(angle)),
+            src, dst, angle
+          );
         } else {
-          this.src.pos = src.plus(delta);
-          this.dst.pos = dst.plus(delta);
+          this.src.pos = src.apply((s: Point, d: Vec) => s.plus(d), delta);
+          this.dst.pos = dst.apply((s: Point, d: Vec) => s.plus(d), delta);
         }
       },
       onEnd: (e, [src, dst]) => {
@@ -133,7 +138,7 @@ class Wall extends Component implements Solo {
   }
 
   getLength(): Distance {
-    return Distance(Vec.between(this.src.pos, this.dst.pos).mag(), 'model');
+    return Distance.between(this.src.pos, this.dst.pos);
   }
 
   showPopup(openAt: Position) {
@@ -172,7 +177,7 @@ class Wall extends Component implements Solo {
         {
           value: App.project.displayUnit.format(
             App.project.modelUnit.newAmount(
-              length.enabled ? length.length : Vec.between(this.src.pos, this.dst.pos).mag())
+              length.enabled ? length.length : Distance.between(this.src.pos, this.dst.pos).get('model'))
           ),
           size: 8,
         },
@@ -233,7 +238,7 @@ class Wall extends Component implements Solo {
 }
 
 class WallJoint extends Component {
-  public pos: Point = Point.ZERO;
+  public pos: Position = Position(Point.ZERO, 'model');
   private _outgoing: Wall | null = null;
   private _incoming: Wall | null = null;
 
@@ -243,13 +248,13 @@ class WallJoint extends Component {
     const position = entity.add(
       PhysNode,
       () => this.pos,
-      (pos: Point) => { this.pos = pos; },
+      (pos: Position) => { this.pos = pos; },
     );
 
     const handle = entity.add(Handle, {
-      getPos: () => Position(this.pos, 'model'),
+      getPos: () => this.pos,
       setPos: p => {
-        this.pos = p.get('model');
+        this.pos = p;
         entity.get(FixedConstraint).forEach(c => c.updateTargets([this.pos]));
       },
       priority: 1,
@@ -262,12 +267,12 @@ class WallJoint extends Component {
         left: this.outgoing ? this.outgoing.dst.entity.only(PhysNode) : position,
         right: this.incoming ? this.incoming.src.entity.only(PhysNode) : position,
       }),
-      Math.PI/2.,
+      Angle(Radians(Math.PI/2.), 'model'),
     );
 
     entity.add(FixedConstraint,
       () => [ this.pos ],
-      ([p]: Point[]) => { this.pos = p; },
+      ([p]: Position[]) => { this.pos = p; },
     );
   }
 
@@ -335,15 +340,17 @@ class WallJoint extends Component {
       return;
     }
     const angleConstraint = this.entity.only(AngleConstraint);
+    const angle = Spaces.getCalc('model', (t: Radians, c: Radians) => {
+      return toDegrees(angleConstraint.enabled ? t : c);
+    }, angleConstraint.targetAngle, angleConstraint.currentAngle);
+
     ui
       .addCheckbox('lock angle', angleConstraint?.enabled)
       .addLabel('angle', 'lock angle')
       .addNumberInput('angle', {
         min: 0,
         max: 360,
-        value: Math.round(toDegrees(angleConstraint.enabled
-          ? angleConstraint.targetAngle
-          : angleConstraint.currentAngle) * 10)/10.,
+        value: unwrap(angle),
         size: 4,
       })
       .addRadioGroup('units', [{ name: 'radians' }, { name: 'degrees', isDefault: true }])
@@ -353,9 +360,10 @@ class WallJoint extends Component {
       .newRow();
     ui.onChange((name: string, value: string) => {
       if (name === 'angle') {
-        const scale = ui.getValue('units') === 'degrees' ? Math.PI / 180 : 1;
         const prev = angleConstraint.targetAngle;
-        angleConstraint.targetAngle = parseFloat(value) * scale;
+        angleConstraint.targetAngle = Angle(ui.getValue('units') === 'degrees'
+          ? toRadians(Degrees(parseFloat(value)))
+          : Radians(parseFloat(value)), 'model');
         if (angleConstraint.targetAngle !== prev) {
           angleConstraint.enabled = true;
           ui.setValue('lock angle', true);
@@ -364,7 +372,9 @@ class WallJoint extends Component {
         angleConstraint.hardness = parseFloat(value);
       } else if (name === 'units') {
         const scale = ui.getValue('units') === 'degrees' ? 180 / Math.PI : 1;
-        ui.setValue('angle', angleConstraint.targetAngle * scale);
+        ui.setValue('angle', (ui.getValue('units') === 'degrees'
+          ? toDegrees(angleConstraint.targetAngle.get('model'))
+          : angleConstraint.targetAngle.get('model')).toString());
       } else if (name === 'lock angle') {
         angleConstraint.enabled = value === 'true';
         ui.fireChange('angle');
@@ -424,12 +434,12 @@ class Constraint extends Component {
 }
 
 class FixedConstraint extends Constraint {
-  private targets: Point[] = [];
+  private targets: Position[] = [];
 
   constructor(
     entity: Entity,
-    private readonly getPoints: () => Point[],
-    private readonly setPoints: (pts: Point[]) => void,
+    private readonly getPoints: () => Position[],
+    private readonly setPoints: (pts: Position[]) => void,
   ) {
     super(entity);
     this.hardness = 1.0;
@@ -437,7 +447,7 @@ class FixedConstraint extends Constraint {
     this.enabled = false;
   }
 
-  updateTargets(pts: Point[]) {
+  updateTargets(pts: Position[]) {
     this.targets = pts; 
   }
 
@@ -445,7 +455,11 @@ class FixedConstraint extends Constraint {
     const influence = this.influence;
     const points = [...this.getPoints()];
     for (let i = 0; i < points.length && i < this.targets.length; i++) {
-      points[i] = points[i].lerp(influence, this.targets[i]);
+      points[i] = Spaces.calc(
+        Position,
+        (a: Point, b: Point) => a.lerp(influence, b),
+        points[i], this.targets[i],
+      );
     }
     this.setPoints(points);
   }
@@ -472,7 +486,11 @@ class MinLengthConstraint extends Constraint {
   }
 
   private getEdge(): Edge {
-    return new Edge(this.getSrc().pos, this.getDst().pos);
+    return Spaces.getCalc(
+      'model',
+      (a: Point, b: Point) => new Edge(a, b),
+      this.getSrc().pos, this.getDst().pos,
+    );
   }
 
   enforce() {
@@ -487,8 +505,8 @@ class MinLengthConstraint extends Constraint {
       return;
     }
     const correction = edge.vector().unit().scale(delta/2 * this.springConstant);
-    this.getSrc().addForce(correction.neg());
-    this.getDst().addForce(correction);
+    this.getSrc().addForce(Vector(correction.neg(), 'model'));
+    this.getDst().addForce(Vector(correction, 'model'));
   }
 }
 
@@ -510,7 +528,11 @@ class LengthConstraint extends Constraint {
   }
 
   private getEdge(): Edge {
-    return new Edge(this.getSrc().pos, this.getDst().pos);
+    return Spaces.getCalc(
+      'model',
+      (a: Point, b: Point) => new Edge(a, b),
+      this.getSrc().pos, this.getDst().pos,
+    );
   }
 
   enforce() {
@@ -522,8 +544,8 @@ class LengthConstraint extends Constraint {
     if (edge === null) return;
     const delta = this.length - edge.vector().mag();
     const correction = edge.vector().unit().scale(delta/2 * this.springConstant);
-    this.getSrc().addForce(correction.neg());
-    this.getDst().addForce(correction);
+    this.getSrc().addForce(Vector(correction.neg(), 'model'));
+    this.getDst().addForce(Vector(correction, 'model'));
   }
 
   onEnable() {
@@ -544,31 +566,28 @@ class AngleConstraint extends Constraint {
   constructor(
     entity: Entity,
     public readonly getCorner: () => Corner,
-    public targetAngle: number = Math.PI/2,
+    public targetAngle: Angle = Angle(Radians(Math.PI/2), 'model'),
   ) {
     super(entity);
   }
 
-  private getLeft(): Vec {
+  private getLeft(): Vector {
     const c = this.getCorner();
-    return Vec.between(c.center.pos, c.left.pos);
+    return Vector.between(c.center.pos, c.left.pos);
   }
 
-  private getRight(): Vec {
+  private getRight(): Vector {
     const c = this.getCorner();
-    return Vec.between(c.center.pos, c.right.pos);
+    return Vector.between(c.center.pos, c.right.pos);
   }
 
-  get currentAngle(): number {
-    const left = this.getLeft();
-    if (left === null || left.mag2() === 0) return 0;
-
-    const right = this.getRight();
-    if (right === null || right.mag2() === 0) return 0;
-
-    const lu = left.unit();
-    const ru = right.unit();
-    return normalizeRadians(lu.angle() - ru.angle());
+  get currentAngle(): Angle {
+    return Spaces.calc(Angle, (left: Vec, right: Vec): Radians => {
+      if (left.mag2() === 0 || right.mag2() === 0) return Radians(0);
+      return normalizeRadians(Radians(
+        unwrap(left.angle()) - unwrap(right.angle())
+      ));
+    }, this.getLeft(), this.getRight());
   }
 
   get springConstant(): number {
@@ -578,31 +597,39 @@ class AngleConstraint extends Constraint {
   enforce() {
     const left = this.getLeft();
     const right = this.getRight();
-    if (left === null || right === null
-      || left.mag2() === 0 || right.mag2() === 0) {
+    if (left.get('model').mag2() === 0 || right.get('model').mag2() === 0) {
       return;
     }
-    const delta = normalizeRadians(this.targetAngle) - this.currentAngle;
+    const delta = Angle.between(this.currentAngle, this.targetAngle.apply(normalizeRadians));
     const corner = this.getCorner();
-    const targetLeft = corner.center.pos.plus(left.rotate(delta/2 * this.springConstant));
-    const targetRight = corner.center.pos.plus(right.rotate(-delta/2 * this.springConstant));
-    const deltaL = Vec.between(corner.left.pos, targetLeft);
-    const deltaR = Vec.between(corner.right.pos, targetRight);
-    corner.left.addForce(deltaL.scale(this.hardness));
-    corner.right.addForce(deltaR.scale(this.hardness));
+
+    const [targetLeft, targetRight] = Spaces.calcN(
+      Position,
+      (c: Point, left: Vec, right: Vec, delta: Radians) => {
+        const l = c.plus(left.rotate(mapAngle(delta, d => d/2 * this.springConstant)));
+        const r = c.plus(right.rotate(mapAngle(delta, d => -d/2 * this.springConstant)));
+        return [l, r];
+      },
+      corner.center.pos, left, right, delta
+    );
+
+    const deltaL = Vector.between(corner.left.pos, targetLeft);
+    const deltaR = Vector.between(corner.right.pos, targetRight);
+    corner.left.addForce(deltaL.apply(v => v.scale(this.hardness)));
+    corner.right.addForce(deltaR.apply(v => v.scale(this.hardness)));
 
     if (!App.debug) return;
     App.canvas.lineWidth = 1;
 
     App.canvas.strokeStyle = 'green';
-    App.canvas.strokeLine(Position(corner.center.pos, 'model'), Position(targetLeft, 'model'));
+    App.canvas.strokeLine(corner.center.pos, targetLeft);
     App.canvas.strokeStyle = 'blue';
-    App.canvas.strokeLine(Position(corner.left.pos, 'model'), Position(targetLeft, 'model'));
+    App.canvas.strokeLine(corner.left.pos, targetLeft);
 
     App.canvas.strokeStyle = 'red';
-    App.canvas.strokeLine(Position(corner.center.pos, 'model'), Position(targetRight, 'model'));
+    App.canvas.strokeLine(corner.center.pos, targetRight);
     App.canvas.strokeStyle = 'blue';
-    App.canvas.strokeLine(Position(corner.left.pos, 'model'), Position(targetRight, 'model'));
+    App.canvas.strokeLine(corner.left.pos, targetRight);
   }
 
   onEnable() {
@@ -631,32 +658,30 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const active = hovered || wall.entity.get(PopupWindow).some(p => p.isVisible);
     canvas.strokeStyle = 'black';
     canvas.lineWidth = active ? 2 : 1;
-    canvas.strokeLine(
-      Position(wall.src.pos, 'model'),
-      Position(wall.dst.pos, 'model'),
-    );
+    canvas.strokeLine(wall.src.pos, wall.dst.pos);
     canvas.lineWidth = 1;
-    const ray = new Edge(wall.src.pos, wall.dst.pos).ray();
+
+    const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
     const tickSpacing = Distance(10, 'screen');
     const tickSize = Distance(10, 'screen');
     const ticks = Math.floor(
-      Distance(ray.direction.mag(), 'model').get('screen') 
-      / tickSpacing.get('screen')
+     edge.length.get('screen') / tickSpacing.get('screen')
     );
     for (let i = 0; i < ticks; i++) {
       const s = 1.0 * i / ticks;
-      const p = ray.at(s);
-      const v = ray.direction.unit()
-        .scale(tickSize.get('model'))
-        .rotate(30 * Math.PI / 180);
-      canvas.strokeLine(Position(p, 'model'), Position(p.plus(v), 'model'));
+      const p = edge.lerp(s);
+      const v = Spaces.calc(Vector, (edge: Vec, tickSize: number) => edge
+        .scale(tickSize)
+        .rotate(toRadians(Degrees(30))),
+        edge.vector.apply(v => v.unit()), tickSize,
+      );
+      canvas.strokeLine(p, p.apply((p: Point, v: Vec) => p.plus(v), v));
     }
 
     const constraint = wall.entity.only(LengthConstraint);
-    const length = Vec.between(wall.src.pos, wall.dst.pos).mag();
-    const error = constraint?.enabled ? length - constraint.length : 0;
+    const error = constraint?.enabled ? edge.length.get('model') - constraint.length : 0;
     const dispLength = App.project.displayUnit.from(
-      App.project.modelUnit.newAmount(Math.round(length))
+      App.project.modelUnit.newAmount(edge.length.get('model'))
     );
     const dispError = App.project.modelUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
@@ -668,13 +693,14 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const textOffset = Distance(10, 'screen');
     const textPosition = Spaces.calc(
       Position,
-      (ray: Ray, offset: number) => ray.at(0.5).splus(-offset, ray.direction.r90().unit()),
-      Line(ray, 'model'),
+      (midpoint: Point, tangent: Vec, offset: number) => midpoint.splus(-offset, tangent.r90().unit()),
+      edge.lerp(0.5),
+      edge.vector,
       textOffset,
     );
     canvas.text({
       point: textPosition,
-      axis: Vector(ray.direction, 'model'),
+      axis: edge.vector,
       keepUpright: true,
       text: label,
       fill: 'black',
@@ -688,9 +714,9 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
         point: textPosition.apply(
           (o: Point, s: number, v: Vec) => o.splus(s, v),
           Distance(-15, 'screen'),
-          Vector(ray.direction.r90().unit(), 'model'),
+          edge.vector.apply(v => v.r90().unit()),
         ),
-        axis: Vector(ray.direction, 'model'),
+        axis: edge.vector,
         keepUpright: true,
         text: wall.name,
         fill: 'black',
@@ -712,7 +738,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
     canvas.fillStyle = 'black';
     canvas.strokeStyle = 'black';
 
-    const pos = Position(joint.pos, 'model');
+    const pos = joint.pos;
     const radius = Distance(5, 'screen');
     if (locked) {
       canvas.fillStyle = 'black';
@@ -740,58 +766,60 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
   for (const constraint of constraints) {
     const corner = constraint.getCorner();
     const center = corner.center.pos;
-    const leftVec = Vec.between(center, corner.left.pos);
-    const rightVec = Vec.between(center, corner.right.pos);
+    const leftVec = Vector.between(center, corner.left.pos);
+    const rightVec = Vector.between(center, corner.right.pos);
 
-    if (leftVec.mag2() === 0 || rightVec.mag2() === 0) {
+    if (leftVec.get('model').mag2() === 0 || rightVec.get('model').mag2() === 0) {
       continue;
     }
 
-    const leftAngle = Angle.fromVec(leftVec, 'model');
-    const rightAngle = Angle.fromVec(rightVec, 'model');
+    const leftAngle = Angle.fromVector(leftVec);
+    const rightAngle = Angle.fromVector(rightVec);
 
     const arcRadius = Distance(15, 'screen');
     const textDistance = arcRadius.apply(r => r + 20);
 
-    const angle = Math.round(toDegrees(constraint.currentAngle));
-    const error = constraint.enabled
-      ? Math.round(toDegrees(constraint.currentAngle - constraint.targetAngle))
-      : 0;
+    const angle = Degrees(Math.round(unwrap(toDegrees(constraint.currentAngle.get('screen')))));
+    const error = Spaces.getCalc('model', (current: Radians, target: Radians) => {
+      if (!constraint.enabled) return Degrees(0);
+      const delta = Radians(unwrap(current) - unwrap(target));
+      return Degrees(Math.round(unwrap(toDegrees(delta))));
+    }, constraint.currentAngle, constraint.targetAngle);
+    
+    const middle = Spaces.calc(Vector, (vec: Vec, a: Radians) => {
+      return vec.rotate(mapAngle(a, a => a / 2));
+    }, rightVec, constraint.currentAngle);
 
-    const middle = rightVec.rotate(constraint.currentAngle / 2).unit();
-
-    const formatAngle = (a: number) => `${a}°`;
-
-    let label = formatAngle(angle);
-    if (error > 0) {
-      label = `${label} (+${formatAngle(error)})`;
-    } else if (error < 0) {
-      label = `${label} (${formatAngle(error)})`;
+    let label = formatDegrees(angle);
+    if (unwrap(error) > 0) {
+      label = `${label} (+${formatDegrees(error)})`;
+    } else if (unwrap(error) < 0) {
+      label = `${label} (${formatDegrees(error)})`;
     }
 
     canvas.text({
       text: label,
       align: 'center',
       baseline: 'middle',
-      point: Position(center, 'model').apply(
+      point: center.apply(
         (p: Point, s: number, v: Vec) => p.splus(s, v),
-        textDistance, Vector(middle, 'model')
+        textDistance, middle
       ),
       fill: 'black',
-      shadow: error === 0 ? undefined
-        : error > 0 ? PINK
+      shadow: error === Degrees(0) ? undefined
+        : error > Degrees(0) ? PINK
         : BLUE,
     });
 
     canvas.beginPath();
-    canvas.moveTo(Position(center, 'model'));
-    canvas.lineTo(Position(center, 'model').apply(
+    canvas.moveTo(center);
+    canvas.lineTo(center.apply(
       (c: Point, s: number, v: Vec) => c.splus(s, v),
       arcRadius,
-      Vector(rightVec.unit(), 'model'),
+      rightVec.apply(r => r.unit()),
     ));
     canvas.arc(
-      Position(center, 'model'),
+      center,
       arcRadius,
       rightAngle,
       leftAngle,
@@ -827,17 +855,17 @@ const Kinematics = (ecs: EntityComponentSystem) => {
     let dx = 0.;
     let dy = 0.;
     for (let i = 0; i < positions.length; i++) {
-      const a = points[i];
-      const b = positions[i].pos;
+      const a = points[i].get('model');
+      const b = positions[i].pos.get('model');
       dx += b.x - a.x;
       dy += b.y - a.y;
     }
     dx /= positions.length;
     dy /= positions.length;
-    const drift = new Vec(dx, dy);
-    if (drift.mag2() > 0) {
+    const drift = Vector(new Vec(dx, dy), 'model');
+    if (drift.get('model').mag2() > 0) {
       positions.forEach(p => {
-        p.pos = p.pos.minus(drift);
+        p.pos = p.pos.apply((a: Point, v: Vec) => a.minus(v), drift);
       });
     }
   }

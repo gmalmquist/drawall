@@ -160,11 +160,12 @@ class Canvas2d {
   text(props: TextDrawProps) {
     const p = props.point.get('screen');
     const fillStyle = props.fill || this.g.fillStyle;
-    const axisAngle = typeof props.axis === 'undefined' ? 0
+    const axisAngle = typeof props.axis === 'undefined'
+      ? Radians(0)
       : props.axis.get('screen').angle();
     const angle = props.keepUpright ? uprightAngle(axisAngle) : axisAngle;
     this.g.translate(p.x, p.y);
-    this.g.rotate(angle);
+    this.g.rotate(unwrap(angle));
     if (typeof props.align !== 'undefined') {
       this.g.textAlign = props.align;
     }
@@ -182,7 +183,7 @@ class Canvas2d {
       this.g.strokeStyle = props.stroke;
       this.g.strokeText(props.text, 0, 0);
     }
-    this.g.rotate(-angle);
+    this.g.rotate(-unwrap(angle));
     this.g.translate(-p.x, -p.y);
   }
 

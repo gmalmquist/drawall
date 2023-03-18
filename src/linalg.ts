@@ -6,35 +6,47 @@ const clamp = (s: number, min: number, max: number) => Math.min(max, Math.max(mi
 
 const clamp01 = (s: number) => clamp(s, 0.0, 1.0);
 
-const normalizeRadians = (a: number) => {
-  let r = a;
+type Radians = Newtype<number, { readonly _: unique symbol; }>;
+const Radians = newtype<Radians>();
+const mapAngle = (r: Radians, f: (a: number) => number) => Radians(f(unwrap(r)));
+
+type Degrees = Newtype<number, { readonly _: unique symbol; }>;
+const Degrees = newtype<Degrees>();
+
+const normalizeRadians = (a: Radians) => {
+  let r = unwrap(a);
   while (r < 0) r += TAU;
-  return r % TAU;
+  return Radians(r % TAU);
 };
 
-const radianDelta = (a: number, b: number) => {
-  const src = normalizeRadians(a);
-  const dst = normalizeRadians(b);
+const radianDelta = (a: Radians, b: Radians) => {
+  const src = unwrap(normalizeRadians(a));
+  const dst = unwrap(normalizeRadians(b));
 
-  const forward = b - a;
-  const backward = (b - TAU) - a;
+  const forward = dst - src;
+  const backward = (dst - TAU) - src;
 
-  return Math.abs(forward) < Math.abs(backward) ? forward : backward;
+  return Radians(Math.abs(forward) < Math.abs(backward) ? forward : backward);
 };
 
-const toDegrees = (r: number): number => r * 180 / Math.PI;
-const toRadians = (d: number): number => d * Math.PI / 180;
+const toDegrees = (r: Radians): Degrees => Degrees(unwrap(r) * 180 / Math.PI);
+const toRadians = (d: Degrees): Radians => Radians(unwrap(d) * Math.PI / 180);
 
-const degreeDelta = (a: number, b: number): number => {
+const formatDegrees = (d: Degrees, decimals: number = 0): string => {
+  const s = Math.pow(10.0, decimals);
+  return `${Math.round(unwrap(d) * s)/s}°`;
+};
+
+const degreeDelta = (a: Degrees, b: Degrees): Degrees => {
   return toDegrees(radianDelta(toRadians(a), toRadians(b)));
 };
 
-const uprightAngle = (a: number): number => {
-  const angle = normalizeRadians(a);
+const uprightAngle = (a: Radians): Radians => {
+  const angle = unwrap(normalizeRadians(a));
   if (Math.abs(Math.PI - angle) < Math.PI/2) {
-    return angle + Math.PI;
+    return Radians(angle + Math.PI);
   }
-  return angle;
+  return Radians(angle);
 };
 
 class Point {
@@ -101,15 +113,16 @@ class Axis {
 class Vec {
   constructor(public readonly x: number, public readonly y: number) {}
 
-  angle(): number {
-    return Math.atan2(this.y, this.x);
+  angle(): Radians {
+    return Radians(Math.atan2(this.y, this.x));
   }
 
   r90(): Vec {
     return new Vec(-this.y, this.x);
   }
 
-  rotate(angle: number): Vec {
+  rotate(radians: Radians): Vec {
+    const angle = unwrap(radians);
     return new Vec(
       Math.cos(angle) * this.x - Math.sin(angle) * this.y,
       Math.sin(angle) * this.x + Math.cos(angle) * this.y,
