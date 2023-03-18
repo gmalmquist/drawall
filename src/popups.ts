@@ -157,6 +157,11 @@ interface RadioOption {
   isDefault?: boolean;
 }
 
+interface DropdownOption {
+  name: string;
+  label?: string;
+}
+
 class UiBuilder {
   private readonly changeListeners: ((name: string, value: string) => void)[] = [];
   private readonly inputs = new Map<string, InputState>();
@@ -272,6 +277,41 @@ class UiBuilder {
     attrs: { min?: number, max?: number, size?: number, value?: number },
   ): UiBuilder {
     return this.addInput(name, 'number', attrs);
+  }
+
+  addDropdown(
+    name: string,
+    attrs: {
+      options: DropdownOption[],
+      placeholder?: string,
+      selected?: string,
+    },
+  ): UiBuilder {
+    const select = this.create('select', { name, id: name }) as HTMLSelectElement;
+    if (attrs.placeholder) {
+      const el = this.create('option', { value: '' }, attrs.placeholder);
+      select.appendChild(el);
+    }
+    for (const option of attrs.options) {
+      const el = this.create('option', { value: option.name }, option.label || option.name);
+      select.appendChild(el);
+    }
+    if (typeof attrs.selected !== 'undefined') {
+      select.value = attrs.selected;
+    }
+    select.addEventListener('change', () => this.fireChange(name));
+    this.inputs.set(name, {
+      value: () => select.value,
+      reset: () => {
+        select.value = attrs.placeholder ? '' : attrs.options[0].name;
+        this.fireChange(name);
+      },
+      set: (v: string) => {
+        select.value = attrs.placeholder ? '' : attrs.options[0].name;
+        this.fireChange(name);
+      },
+    });
+    return this.add(select);
   }
 
   addSlider(
@@ -436,6 +476,9 @@ class UiBuilder {
   ): Element {
     const salty = new Set(['id', 'name', 'for']);
     const e = document.createElement(tagName);
+    if (tagName === 'input' && atts['type'] === 'text') {
+      e.setAttribute('class', 'textbox');
+    }
     for (const key of Object.keys(atts)) {
       let value = `${atts[key]}`;
       if (salty.has(key)) {

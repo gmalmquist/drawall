@@ -45,7 +45,12 @@
   align-items: center;
 }
 
-.row > input {
+.row > .textbox {
+  flex-grow: 1;
+}
+
+.row > select {
+  flex-grow: 1;
 }
 
 .row > * + * {

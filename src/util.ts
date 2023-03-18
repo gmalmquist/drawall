@@ -13,3 +13,29 @@ const createUuid = () => {
   return letters.join('');
 };
 
+class Counter<K> {
+  private readonly counts = new Map<K, number>();
+
+  public get(name: K): number {
+    if (!this.counts.has(name)) return 0;
+    return this.counts.get(name)!;
+  }
+
+  public inc(name: K): number {
+    return this.add(name, 1);
+  }
+
+  public add(name: K, amount: number): number {
+    const count = this.get(name) + amount;
+    this.counts.set(name, count);
+    return count;
+  }
+
+  public clear(name: K) {
+    this.counts.delete(name);
+  }
+
+  public clearAll() {
+    this.counts.clear();
+  }
+}

@@ -11,9 +11,15 @@ interface Solo {
 }
 
 abstract class Component {
+  private static readonly counter = new Counter<string>();
   private readonly kinds = new Set<ComponentType<Component>>();
+  private _name: string = `${this.constructor.name} ${Component.counter.inc(this.constructor.name)}`;
 
   constructor(public readonly entity: Entity) {
+  }
+
+  get name(): string {
+    return this._name;
   }
 
   addKind<C extends Component>(c: ComponentType<C>) {

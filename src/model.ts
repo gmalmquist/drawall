@@ -132,13 +132,26 @@ class Wall extends Component implements Solo {
     j.attachIncoming(this);
   }
 
+  getLength(): Distance {
+    return Distance(Vec.between(this.src.pos, this.dst.pos).mag(), 'model');
+  }
+
   showPopup(openAt: Position) {
     this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
     p.setPosition(openAt);
-    p.title = 'Wall';
+    p.title = this.name;
 
-    const length = this.entity.get(LengthConstraint)[0]!;
+    const length = this.entity.only(LengthConstraint);
+
+    const lengthRefMap = new Map<string, LengthReference>();
+    for (const wall of this.entity.ecs.getComponents(Wall)) {
+      if (wall === this) continue;
+      lengthRefMap.set(wall.name, {
+        name: wall.name,
+        getLength: () => wall.getLength(),
+      });
+    }
 
     const ui = p.getUiBuilder()
       .addCheckbox('enable', length.enabled)
@@ -165,6 +178,15 @@ class Wall extends Component implements Solo {
         },
       )
       .newRow()
+      .addDropdown('lengthRef', {
+        options: Array.from(lengthRefMap.keys()).sort().map(name => ({
+          name,
+          label: `length = ${name}`,
+        })),
+        placeholder: '-- set length equal to --',
+        selected: length.lengthReference ? length.lengthReference.name : undefined,
+      })
+      .newRow()
       .addLabel('tension', 'tension')
       .addSlider('tension', { min: 0, max: 1, initial: length.hardness })
       .newRow();
@@ -177,7 +199,9 @@ class Wall extends Component implements Solo {
           length.length = App.project.worldUnit.from(amount).value;
           if (original !== length.length) {
             length.enabled = true;
+            length.lengthReference = null;
             ui.setValue('enable', 'true');
+            ui.setValue('lengthRef', '');
           }
         } catch (e) {
           console.error(`could not parse distance '${value}'`);
@@ -185,9 +209,16 @@ class Wall extends Component implements Solo {
       } else if (name === 'tension') {
         length.hardness = parseFloat(value);
       } else if (name === 'enable') {
-        console.log(`enable = '${value}'`);
         length.enabled = value === 'true';
         ui.fireChange('length');
+      } else if (name === 'lengthRef') {
+        const lr = lengthRefMap.get(value);
+        if (lr) {
+          length.lengthReference = lr;
+          length.enabled = true;
+        } else {
+          length.lengthReference = null;
+        }
       }
     });
 
@@ -278,7 +309,7 @@ class WallJoint extends Component {
     this.entity.removeAll(PopupWindow);
     const p = this.entity.add(PopupWindow);
     p.setPosition(openAt);
-    p.title = 'Corner';
+    p.title = this.name;
     const ui = p.getUiBuilder()
     this.createAnchorUi(ui);
     this.createAngleUi(ui);
@@ -462,6 +493,8 @@ class MinLengthConstraint extends Constraint {
 }
 
 class LengthConstraint extends Constraint {
+  public lengthReference: LengthReference | null = null;
+
   constructor(
     entity: Entity,
     private readonly getSrc: () => PhysNode,
@@ -481,6 +514,10 @@ class LengthConstraint extends Constraint {
   }
 
   enforce() {
+    if (this.lengthReference !== null) {
+      this.length = this.lengthReference.getLength().get('model');
+    }
+
     const edge = this.getEdge();
     if (edge === null) return;
     const delta = this.length - edge.vector().mag();
@@ -573,6 +610,17 @@ class AngleConstraint extends Constraint {
   }
 }
 
+// reference the length of something else
+interface LengthReference {
+  name: string;
+  getLength: () => Distance;
+}
+
+interface AngleReference {
+  name: string;
+  getAngle: () => Angle;
+}
+
 const WallRenderer = (ecs: EntityComponentSystem) => {
   const canvas = App.canvas;
 
@@ -604,11 +652,11 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       canvas.strokeLine(Position(p, 'model'), Position(p.plus(v), 'model'));
     }
 
-    const constraint = wall.entity.get(LengthConstraint)[0];
+    const constraint = wall.entity.only(LengthConstraint);
     const length = Vec.between(wall.src.pos, wall.dst.pos).mag();
     const error = constraint?.enabled ? length - constraint.length : 0;
     const dispLength = App.project.displayUnit.from(
-      App.project.worldUnit.newAmount(length)
+      App.project.worldUnit.newAmount(Math.round(length))
     );
     const dispError = App.project.worldUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
@@ -618,12 +666,13 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = Distance(10, 'screen');
+    const textPosition = Position(ray.at(0.5), 'model').apply(
+      (o: Point, s: number, v: Vec) => o.splus(s, v),
+      textOffset.apply(t => -t),
+      Vector(ray.direction.r90().unit(), 'model'),
+    );
     canvas.text({
-      point: Position(ray.at(0.5), 'model').apply(
-        (o: Point, s: number, v: Vec) => o.splus(s, v),
-        textOffset.apply(t => -t),
-        Vector(ray.direction.r90().unit(), 'model'),
-      ),
+      point: textPosition,
       axis: Vector(ray.direction, 'model'),
       keepUpright: true,
       text: label,
@@ -632,6 +681,22 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       align: 'center',
       baseline: 'middle',
     });
+
+    if (App.ecs.getComponents(Popup).some(p => p.isVisible)) {
+      canvas.text({
+        point: textPosition.apply(
+          (o: Point, s: number, v: Vec) => o.splus(s, v),
+          Distance(-15, 'screen'),
+          Vector(ray.direction.r90().unit(), 'model'),
+        ),
+        axis: Vector(ray.direction, 'model'),
+        keepUpright: true,
+        text: wall.name,
+        fill: 'black',
+        align: 'center',
+        baseline: 'middle',
+      });
+    }
   }
 };
 

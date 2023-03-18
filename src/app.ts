@@ -46,7 +46,7 @@ class App {
     wall3.dst.entity.name = 'joint4';
 
     // enable length and angle constraints
-    App.ecs.getComponents(AngleConstraint).forEach(a => { a.enabled = true; });
+    App.ecs.getComponents(AngleConstraint).forEach(a => { a.enabled = true; a.targetAngle = Math.PI/2; });
     //App.ecs.getComponents(LengthConstraint).forEach(a => { a.enabled = true; });
   }
 
