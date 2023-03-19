@@ -1,12 +1,44 @@
+html, body {
   margin: 0;
   padding: 0;
 }
 
-.canvas-wrap {
-  width: 100vw;
-  height: 100vh;
+body {
+  display: grid;
 
+  grid-template-columns: min-content 1fr;
+  grid-template-rows: min-content 1fr;
+
+  grid-template-areas:
+    "top top"
+    "tool main"
+  ;
+
+  align-items: stretch;
+  align-content: stretch;
+  justify-items: stretch;
+  justify-content: stretch;
+
+  width: 100vw;
+  height: 100vh; 
+}
+
+.topbar {
+  grid-area: top;
+  height: 2em;
+  border-bottom: thin solid gray;
+}
+
+.toolbar {
+  grid-area: tool;
+  width: 2em;
+  border-right: thin solid gray;
+}
+
+.canvas-wrap {
+  grid-area: main;
   position: relative;
+  flex-grow: 1;
 }
 
 .canvas-wrap > * {
@@ -16,3 +48,4 @@
   width: 100%;
   height: 100%;
 }
+
