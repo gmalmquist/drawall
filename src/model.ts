@@ -82,23 +82,19 @@ class Wall extends Component implements Solo {
         const srcLocked = this.src.entity.get(FixedConstraint).some(f => f.enabled);
         const dstLocked = this.dst.entity.get(FixedConstraint).some(f => f.enabled);
         if (srcLocked && !dstLocked) {
-          const initial = Vector.between(src, e.start);
-          const current = Vector.between(src, e.point);
-          const angle = Angle.between(Angle.fromVector(initial), Angle.fromVector(current));
+          const initial = Vectors.between(src, e.start);
+          const current = Vectors.between(src, e.point);
+          const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
           this.dst.pos = Spaces.calc(
             Position,
             (src: Point, dst: Point, angle: Radians) => src.plus(Vec.between(src, dst).rotate(angle)),
             src, dst, angle,
           );
         } else if (!srcLocked && dstLocked) {
-          const initial = Vector.between(dst, e.start);
-          const current = Vector.between(dst, e.point);
-          const angle = Angle.between(Angle.fromVector(initial), Angle.fromVector(current));
-          this.src.pos = Spaces.calc(
-            Position,
-            (src: Point, dst: Point, angle: Radians) => dst.plus(Vec.between(dst, src).rotate(angle)),
-            src, dst, angle
-          );
+          const initial = Vectors.between(dst, e.start);
+          const current = Vectors.between(dst, e.point);
+          const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
+          this.src.pos = dst.plus(Vectors.between(dst, src).rotate(angle));
         } else {
           this.src.pos = src.plus(delta);
           this.dst.pos = dst.plus(delta);
@@ -138,7 +134,7 @@ class Wall extends Component implements Solo {
   }
 
   getLength(): Distance {
-    return Distance.between(this.src.pos, this.dst.pos);
+    return Distances.between(this.src.pos, this.dst.pos);
   }
 
   showPopup(openAt: Position) {
@@ -177,7 +173,7 @@ class Wall extends Component implements Solo {
         {
           value: App.project.displayUnit.format(
             App.project.modelUnit.newAmount(
-              length.enabled ? length.length : Distance.between(this.src.pos, this.dst.pos).get('model'))
+              length.enabled ? length.length : Distances.between(this.src.pos, this.dst.pos).get('model'))
           ),
           size: 8,
         },
@@ -377,7 +373,6 @@ class WallJoint extends Component {
           : angleConstraint.targetAngle.get('model')).toString());
       } else if (name === 'lock angle') {
         angleConstraint.enabled = value === 'true';
-        ui.fireChange('angle');
       }
     });
   }
@@ -573,21 +568,21 @@ class AngleConstraint extends Constraint {
 
   private getLeft(): Vector {
     const c = this.getCorner();
-    return Vector.between(c.center.pos, c.left.pos);
+    return Vectors.between(c.center.pos, c.left.pos);
   }
 
   private getRight(): Vector {
     const c = this.getCorner();
-    return Vector.between(c.center.pos, c.right.pos);
+    return Vectors.between(c.center.pos, c.right.pos);
   }
 
   get currentAngle(): Angle {
-    return Spaces.calc(Angle, (left: Vec, right: Vec): Radians => {
-      if (left.mag2() === 0 || right.mag2() === 0) return Radians(0);
-      return normalizeRadians(Radians(
-        unwrap(left.angle()) - unwrap(right.angle())
-      ));
-    }, this.getLeft(), this.getRight());
+    const left = this.getLeft();
+    const right = this.getRight();
+    if (left.mag2().get('model') === 0 || right.mag2().get('model') === 0) {
+      return Angles.zero('model');
+    }
+    return left.angle().minus(right.angle()).normalize();
   }
 
   get springConstant(): number {
@@ -600,23 +595,16 @@ class AngleConstraint extends Constraint {
     if (left.get('model').mag2() === 0 || right.get('model').mag2() === 0) {
       return;
     }
-    const delta = Angle.between(this.currentAngle, this.targetAngle.apply(normalizeRadians));
+    const delta = this.targetAngle.normalize().minus(this.currentAngle);
     const corner = this.getCorner();
 
-    const [targetLeft, targetRight] = Spaces.calcN(
-      Position,
-      (c: Point, left: Vec, right: Vec, delta: Radians) => {
-        const l = c.plus(left.rotate(mapAngle(delta, d => d/2 * this.springConstant)));
-        const r = c.plus(right.rotate(mapAngle(delta, d => -d/2 * this.springConstant)));
-        return [l, r];
-      },
-      corner.center.pos, left, right, delta
-    );
+    const targetLeft = corner.center.pos.plus(left.rotate(delta.scale(this.springConstant / 2)));
+    const targetRight = corner.center.pos.plus(right.rotate(delta.scale(-this.springConstant / 2)));
 
-    const deltaL = Vector.between(corner.left.pos, targetLeft);
-    const deltaR = Vector.between(corner.right.pos, targetRight);
-    corner.left.addForce(deltaL.apply(v => v.scale(this.hardness)));
-    corner.right.addForce(deltaR.apply(v => v.scale(this.hardness)));
+    const deltaL = Vectors.between(corner.left.pos, targetLeft);
+    const deltaR = Vectors.between(corner.right.pos, targetRight);
+    corner.left.addForce(deltaL.scale(this.hardness));
+    corner.right.addForce(deltaR.scale(this.hardness));
 
     if (!App.debug) return;
     App.canvas.lineWidth = 1;
@@ -624,12 +612,16 @@ class AngleConstraint extends Constraint {
     App.canvas.strokeStyle = 'green';
     App.canvas.strokeLine(corner.center.pos, targetLeft);
     App.canvas.strokeStyle = 'blue';
+    App.canvas.setLineDash([2, 2]);
     App.canvas.strokeLine(corner.left.pos, targetLeft);
+    App.canvas.setLineDash([]);
 
     App.canvas.strokeStyle = 'red';
     App.canvas.strokeLine(corner.center.pos, targetRight);
     App.canvas.strokeStyle = 'blue';
-    App.canvas.strokeLine(corner.left.pos, targetRight);
+    App.canvas.setLineDash([2, 2]);
+    App.canvas.strokeLine(corner.right.pos, targetRight);
+    App.canvas.setLineDash([]);
   }
 
   onEnable() {
@@ -673,7 +665,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       const v = Spaces.calc(Vector, (edge: Vec, tickSize: number) => edge
         .scale(tickSize)
         .rotate(toRadians(Degrees(30))),
-        edge.vector.apply(v => v.unit()), tickSize,
+        edge.vector.unit(), tickSize,
       );
       canvas.strokeLine(p, p.plus(v));
     }
@@ -691,13 +683,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = Distance(10, 'screen');
-    const textPosition = Spaces.calc(
-      Position,
-      (midpoint: Point, tangent: Vec, offset: number) => midpoint.splus(-offset, tangent.r90().unit()),
-      edge.lerp(0.5),
-      edge.vector,
-      textOffset,
-    );
+    const textPosition = edge.lerp(0.5).dplus(textOffset.scale(-1), edge.vector.r90().unit());
     canvas.text({
       point: textPosition,
       axis: edge.vector,
@@ -711,7 +697,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.ecs.getComponents(Popup).some(p => p.isVisible)) {
       canvas.text({
-        point: textPosition.dplus(Distance(-15, 'screen'), edge.vector.apply(v => v.r90().unit())),
+        point: textPosition.dplus(Distance(-15, 'screen'), edge.vector.r90().unit()),
         axis: edge.vector,
         keepUpright: true,
         text: wall.name,
@@ -748,7 +734,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
     if (active) {
       canvas.lineWidth = 2;
-      canvas.strokeCircle(pos, radius.apply(r => r * 2));
+      canvas.strokeCircle(pos, radius.scale(2));
     }
   }
 
@@ -762,29 +748,27 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
   for (const constraint of constraints) {
     const corner = constraint.getCorner();
     const center = corner.center.pos;
-    const leftVec = Vector.between(center, corner.left.pos);
-    const rightVec = Vector.between(center, corner.right.pos);
+    const leftVec = Vectors.between(center, corner.left.pos);
+    const rightVec = Vectors.between(center, corner.right.pos);
 
     if (leftVec.get('model').mag2() === 0 || rightVec.get('model').mag2() === 0) {
       continue;
     }
 
-    const leftAngle = Angle.fromVector(leftVec);
-    const rightAngle = Angle.fromVector(rightVec);
+    const leftAngle = leftVec.angle(); 
+    const rightAngle = rightVec.angle();
 
     const arcRadius = Distance(15, 'screen');
-    const textDistance = arcRadius.apply(r => r + 20);
+    const textDistance = arcRadius.map(r => r + 20);
 
-    const angle = Degrees(Math.round(unwrap(toDegrees(constraint.currentAngle.get('screen')))));
+    const angle = Degrees(Math.round(unwrap(toDegrees(constraint.currentAngle.get('model')))));
     const error = Spaces.getCalc('model', (current: Radians, target: Radians) => {
       if (!constraint.enabled) return Degrees(0);
       const delta = Radians(unwrap(current) - unwrap(target));
       return Degrees(Math.round(unwrap(toDegrees(delta))));
     }, constraint.currentAngle, constraint.targetAngle);
     
-    const middle = Spaces.calc(Vector, (vec: Vec, a: Radians) => {
-      return vec.rotate(mapAngle(a, a => a / 2));
-    }, rightVec, constraint.currentAngle);
+    const middle = rightVec.rotate(constraint.currentAngle.scale(0.5)).unit();
 
     let label = formatDegrees(angle);
     if (unwrap(error) > 0) {
@@ -806,7 +790,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
 
     canvas.beginPath();
     canvas.moveTo(center);
-    canvas.lineTo(center.dplus(arcRadius, rightVec.apply(r => r.unit())));
+    canvas.lineTo(center.dplus(arcRadius, rightVec.unit()));
     canvas.arc(
       center,
       arcRadius,

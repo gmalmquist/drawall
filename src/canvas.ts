@@ -73,6 +73,10 @@ class Canvas2d {
     this.g.fillStyle = style;
   }
 
+  setLineDash(segments: number[]) {
+    this.g.setLineDash(segments);
+  }
+
   set lineWidth(w: number) {
     this.g.lineWidth = w;
   }

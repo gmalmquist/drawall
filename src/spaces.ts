@@ -153,21 +153,143 @@ class SpaceValue<V> implements Spaced<V> {
   }
 }
 
-type Distance = SpaceValue<number>;
-const Distance = (val: number, space: SpaceName): Distance => new SpaceValue(
-  val,
-  space,
-  (s, d) => s.project.distance(d),
-  (s, d) => s.unproject.distance(d),
-);
+class SpaceDistance extends BaseSpaceValue<number> {
+  constructor(private readonly pos: Spaced<number>) {
+    super(pos.space);
+  }
 
-type Vector = SpaceValue<Vec>;
-const Vector = (val: Vec, space: SpaceName): Vector => new SpaceValue(
-  val,
-  space,
-  (s, v) => s.project.vec(v),
-  (s, v) => s.unproject.vec(v),
-);
+  plus(d: Spaced<number>): Distance {
+    return this.map((a: number, b: number) => a + b, d);
+  }
+
+  minus(d: Spaced<number>): Distance {
+    return this.map((a: number, b: number) => a + b, d);
+  }
+
+  scale(f: number): Distance {
+    return this.map(d => d * f);
+  }
+
+  mul(d: Spaced<number>): Distance {
+    return this.map((a: number, b: number) => a * b, d);
+  }
+
+  get(space: SpaceName): number {
+    return this.pos.get(space);
+  }
+
+  get create() { return SpaceDistance.of; }
+
+  public static between(a: Spaced<Point>, b: Spaced<Point>): Distance {
+    return Spaces.calc(Distance, (a: Point, b: Point) => Vec.between(a, b).mag(), a, b);
+  }
+
+  public static of(distance: number, space: SpaceName): SpaceDistance {
+    return new SpaceDistance(new SpaceValue(
+      distance,
+      space,
+      (s, d) => s.project.distance(d),
+      (s, d) => s.unproject.distance(d),
+    ));
+  }
+}
+type Distance = SpaceDistance;
+const Distance = SpaceDistance.of;
+const Distances = {
+  between: SpaceDistance.between,
+};
+
+class SpaceAngle extends BaseSpaceValue<Radians> {
+  constructor(private readonly pos: Spaced<Radians>) {
+    super(pos.space);
+  }
+
+  get(space: SpaceName): Radians {
+    return this.pos.get(space);
+  }
+
+  getDegrees(space: SpaceName): Degrees {
+    return toDegrees(this.get(space));
+  }
+
+  scale(factor: number): SpaceAngle {
+    return this.map(a => mapAngle(a, a => a * factor));
+  }
+
+  plus(angle: Spaced<Radians>): SpaceAngle {
+    return Spaces.calc(Angle, (a: Radians, b: Radians) => (
+      normalizeRadians(Radians(unwrap(a) + unwrap(b)))
+    ), this, angle);
+  }
+
+  minus(angle: Spaced<Radians>): SpaceAngle {
+    return Spaces.calc(Angle, (a: Radians, b: Radians) => (
+      Radians(unwrap(a) - unwrap(b))
+    ), this, angle);
+  }
+
+  normalize(): SpaceAngle {
+    return this.map(a => normalizeRadians(a));
+  }
+
+  toString(): string {
+    return `Angle(${formatDegrees(toDegrees(this.get(this.space)))}, ${this.space})`;
+  }
+
+  get create() {
+    return SpaceAngle.of;
+  }
+
+  public static counterClockwiseDelta(a: Spaced<Radians>, b: Spaced<Radians>): Angle {
+    return Spaces.calc(Angle, (a: Radians, b: Radians) => {
+      const src = unwrap(normalizeRadians(a));
+      const dst = unwrap(normalizeRadians(b));
+      return normalizeRadians(Radians(dst - src));
+    }, a, b);
+  }
+
+  public static clockwiseDelta(a: Spaced<Radians>, b: Spaced<Radians>): Angle {
+    return SpaceAngle.counterClockwiseDelta(a, b)
+      .map((a: Radians) => mapAngle(a, a => TAU - a));
+  }
+
+  public static shortestDelta(a: Spaced<Radians>, b: Spaced<Radians>): Angle {
+    return Spaces.calc(Angle, (a: Radians, b: Radians) => {
+      const src = unwrap(normalizeRadians(a));
+      const dst = unwrap(normalizeRadians(b));
+      const forward = dst - src;
+      const backward = (dst - TAU) - src;
+      if (Math.abs(forward) < Math.abs(backward)) {
+        return Radians(forward);
+      }
+      return Radians(backward);
+    }, a, b);
+  }
+
+  public static fromVector(v: Spaced<Vec>): Angle {
+    return Spaces.calc(Angle, (v: Vec) => v.angle(), v);
+  }
+
+  public static of(radians: Radians, space: SpaceName): SpaceAngle {
+    return new SpaceAngle(new SpaceValue(
+      radians,
+      space,
+      (s, angle) => s.project.vec(Axis.X.rotate(angle)).angle(),
+      (s, angle) => s.unproject.vec(Axis.X.rotate(angle)).angle(),
+    ));
+  }
+}
+
+type Angle = SpaceAngle;
+const Angle = SpaceAngle.of;
+const Angles = {
+  zero: (space: SpaceName) => Angle(Radians(0), space),
+  fromVector: SpaceAngle.fromVector,
+  counterClockwiseDelta: SpaceAngle.counterClockwiseDelta,
+  clockwiseDelta: SpaceAngle.clockwiseDelta,
+  shortestDelta: SpaceAngle.shortestDelta,
+};
+
 
 class SpaceVec extends BaseSpaceValue<Vec> {
   constructor(private readonly pos: Spaced<Vec>) {
@@ -184,6 +306,10 @@ class SpaceVec extends BaseSpaceValue<Vec> {
 
   rotate(angle: Spaced<Radians>): Vector {
     return Spaces.calc(Vector, (a: Radians, v: Vec) => v.rotate(a), angle, this);
+  }
+
+  r90(): SpaceVec {
+    return this.map(v => v.r90());
   }
 
   scale(factor: number): SpaceVec {
@@ -242,6 +368,10 @@ class SpaceVec extends BaseSpaceValue<Vec> {
     return SpaceVec.of(Vec.ZERO, space);
   }
 
+  static fromAngle(a: Angle): Vector {
+    return Spaces.calc(Vector, (a: Radians) => Axis.X.rotate(a), a);
+  }
+
   get create() { return SpaceVec.of; }
 
   public static of(vec: Vec, space: SpaceName) {
@@ -253,93 +383,13 @@ class SpaceVec extends BaseSpaceValue<Vec> {
     ));
   }
 }
-
-type Angle = SpaceValue<Radians>;
-const Angle = (val: Radians, space: SpaceName): Angle => new SpaceValue(
-  val,
-  space,
-  (s, angle) => s.project.vec(Axis.X.rotate(angle)).angle(),
-  (s, angle) => s.unproject.vec(Axis.X.rotate(angle)).angle(),
-);
-
-type Line = SpaceValue<Ray>;
-const Line = (val: Ray, space: SpaceName): Line => new SpaceValue(
-  val,
-  space,
-  (s, ray) => new Ray(s.project.point(ray.origin), s.project.vec(ray.direction)),
-  (s, ray) => new Ray(s.unproject.point(ray.origin), s.unproject.vec(ray.direction)),
-);
-
-Distance.between = (a: Position, b: Position): Distance => 
-  Spaces.calc(Distance, (a: Point, b: Point) => Vec.between(a, b).mag(), a, b);
-
-Vector.fromAngle = (a: Angle): Vector =>
-  Spaces.calc(Vector, (a: Radians) => Axis.X.rotate(a), a);
-
-Vector.between = (a: Position, b: Position): Vector => 
-  Spaces.calc(Vector, (a: Point, b: Point) => Vec.between(a, b), a, b);
-
-Angle.fromVector = (v: Vector): Angle => v.applyInto(Angle, (v: Vec) => v.angle());
-
-Angle.fromVec = (v: Vec, space: SpaceName): Angle => Angle.fromVector(Vector(v, space));
-
-Angle.between = (src: Angle, dst: Angle): Angle =>
-  src.apply((a: Radians, b: Radians) => Radians(unwrap(b) - unwrap(a)), dst); 
-
-Angle.sum = (src: Angle, dst: Angle): Angle =>
-  src.apply((a: Radians, b: Radians) => Radians(unwrap(a) + unwrap(b)), dst); 
-
-Line.from = (origin: Position, direction: Vector): Line => Spaces.calc(
-  Line,
-  (o: Point, d: Vec) => new Ray(o, d),
-  origin, direction
-);
-
-Line.fromEdge = (a: Position, b: Position): Line => Spaces.calc(
-  Line,
-  (a: Point, b: Point) => new Edge(a, b).ray(),
-  a, b
-);
-
-Line.at = (line: Line, at: number) => Spaces.calc(Position, (r: Ray) => r.at(at), line);
-
-class SpaceEdge {
-  constructor(
-    public readonly src: Position,
-    public readonly dst: Position) {
-  }
-
-  get origin(): Position {
-    return this.src;
-  }
-
-  get vector(): Vector {
-    return Vector.between(this.src, this.dst);
-  }
-
-  get length(): Distance {
-    return Distance.between(this.src, this.dst);
-  }
-
-  public lerp(s: number): Position {
-    return Spaces.calc(Position, (a: Point, b: Point) => (
-      a.lerp(s, b)
-    ), this.src, this.dst);
-  }
-
-  public distance(point: Position): Distance {
-    return Spaces.calc(Distance, (a: Point, b: Point, p: Point) => {
-      return new Edge(a, b).distance(p);
-    }, this.src, this.dst, point);
-  }
-
-  static fromRay(origin: Position, direction: Vector): SpaceEdge {
-    return new SpaceEdge(
-      origin,
-      origin.map((a: Point, b: Vec) => a.plus(b), direction),
-    );
-  }
-}
+type Vector = SpaceVec;
+const Vector = SpaceVec.of;
+const Vectors = {
+  between: SpaceVec.between,
+  zero: SpaceVec.between,
+  fromAngle: SpaceVec.fromAngle,
+};
 
 class SpacePos extends BaseSpaceValue<Point> {
   constructor(private readonly pos: Spaced<Point>) {
@@ -384,6 +434,10 @@ class SpacePos extends BaseSpaceValue<Point> {
 
   get create() { return SpacePos.of; }
 
+  public static zero(space: SpaceName): SpacePos {
+    return SpacePos.of(Point.ZERO, space);
+  }
+
   public static of(point: Point, space: SpaceName): SpacePos {
     return new SpacePos(new SpaceValue(
       point,
@@ -393,10 +447,47 @@ class SpacePos extends BaseSpaceValue<Point> {
     ));
   }
 }
-
 type Position = SpacePos;
 const Position = SpacePos.of;
+const Positions = {
+  zero: SpacePos.zero,
+};
 
-const test = Position(new Point(1, 5), 'screen');
-const pos: SpacePos = test.as(SpacePos);
+class SpaceEdge {
+  constructor(
+    public readonly src: Position,
+    public readonly dst: Position) {
+  }
+
+  get origin(): Position {
+    return this.src;
+  }
+
+  get vector(): Vector {
+    return SpaceVec.between(this.src, this.dst);
+  }
+
+  get length(): Distance {
+    return SpaceDistance.between(this.src, this.dst);
+  }
+
+  public lerp(s: number): Position {
+    return Spaces.calc(Position, (a: Point, b: Point) => (
+      a.lerp(s, b)
+    ), this.src, this.dst);
+  }
+
+  public distance(point: Position): Distance {
+    return Spaces.calc(Distance, (a: Point, b: Point, p: Point) => {
+      return new Edge(a, b).distance(p);
+    }, this.src, this.dst, point);
+  }
+
+  static fromRay(origin: Position, direction: Vector): SpaceEdge {
+    return new SpaceEdge(
+      origin,
+      origin.map((a: Point, b: Vec) => a.plus(b), direction),
+    );
+  }
+}
 

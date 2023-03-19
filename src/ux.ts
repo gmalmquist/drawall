@@ -27,7 +27,7 @@ interface HandleDragListener<C> {
 
 interface NamedLine {
   name: string;
-  line: Line;
+  line: SpaceEdge;
 }
 
 class StatefulHandleDragListener<C> {
@@ -83,7 +83,7 @@ class Handle extends Component {
     this.clickable = typeof props.clickable === 'undefined' ? true : props.clickable;
     this.hoverable = typeof props.hoverable === 'undefined' ? true : props.hoverable;
 
-    const defaultDistanceFunc = (p: Position) => Distance.between(props.getPos(), p);
+    const defaultDistanceFunc = (p: Position) => Distances.between(props.getPos(), p);
     this.distanceFunc = typeof props.distance === 'undefined'
       ? defaultDistanceFunc : props.distance;
 
@@ -257,7 +257,7 @@ class DragUi {
     canvas.addEventListener('mousemove', (e) => {
       const pos = this.getPoint(e);
       this.mousePos = pos;
-      const delta = Vector.between(this.dragStart, pos);
+      const delta = Vectors.between(this.dragStart, pos);
       if (this.clicking && delta.get('screen').mag() > this.clickRadius) {
         this.clicking = false;
       }
@@ -291,7 +291,7 @@ class DragUi {
     });
     canvas.addEventListener('mouseup', (e) => {
       const point = this.getPoint(e);
-      const delta = Vector.between(this.dragStart, point);
+      const delta = Vectors.between(this.dragStart, point);
       if (this.dragging !== null) {
         const event = {
           point,
@@ -319,7 +319,7 @@ class DragUi {
       this.dragging.fireDragUpdate({
         point: this.mousePos,
         start: this.dragStart,
-        delta: Vector.between(this.dragStart, this.mousePos),
+        delta: Vectors.between(this.dragStart, this.mousePos),
       });
     }
   }
