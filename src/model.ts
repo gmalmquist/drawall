@@ -465,6 +465,10 @@ class FixedConstraint extends Constraint {
     this.enabled = false;
   }
 
+  getTargets(): Position[] {
+    return this.targets.map(x => x);
+  }
+
   updateTargets(pts: Position[]) {
     this.targets = pts; 
   }
@@ -685,10 +689,12 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       canvas.strokeLine(p, p.plus(v));
     }
 
+    const roundAmount = (a: Amount): Amount => ({ value: Math.round(a.value), unit: a.unit });
+
     const constraint = wall.entity.only(LengthConstraint);
     const error = constraint?.enabled ? edge.length.get('model') - constraint.length : 0;
     const dispLength = App.project.displayUnit.from(
-      App.project.modelUnit.newAmount(edge.length.get('model'))
+      roundAmount(App.project.modelUnit.newAmount(edge.length.get('model')))
     );
     const dispError = App.project.modelUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
