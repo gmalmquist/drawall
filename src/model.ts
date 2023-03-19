@@ -65,11 +65,7 @@ class Wall extends Component implements Solo {
       getPos: () => this.src.pos,
       setPos: p => {
       },
-      distance: (pt: Position) => Spaces.calc(
-        Distance,
-        (src: Point, pos: Point, pt: Point) => new Edge(src, pos).distance(pt),
-        this.src.pos, this.dst.pos, pt
-      ),
+      distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
     });
     handle.onClick(({ point }) => this.showPopup(point));
@@ -85,11 +81,7 @@ class Wall extends Component implements Solo {
           const initial = Vectors.between(src, e.start);
           const current = Vectors.between(src, e.point);
           const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
-          this.dst.pos = Spaces.calc(
-            Position,
-            (src: Point, dst: Point, angle: Radians) => src.plus(Vec.between(src, dst).rotate(angle)),
-            src, dst, angle,
-          );
+          this.dst.pos = src.plus(Vectors.between(src, dst).rotate(angle));
         } else if (!srcLocked && dstLocked) {
           const initial = Vectors.between(dst, e.start);
           const current = Vectors.between(dst, e.point);
@@ -450,11 +442,7 @@ class FixedConstraint extends Constraint {
     const influence = this.influence;
     const points = [...this.getPoints()];
     for (let i = 0; i < points.length && i < this.targets.length; i++) {
-      points[i] = Spaces.calc(
-        Position,
-        (a: Point, b: Point) => a.lerp(influence, b),
-        points[i], this.targets[i],
-      );
+      points[i] = points[i].lerp(influence, this.targets[i]);
     }
     this.setPoints(points);
   }
@@ -662,11 +650,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     for (let i = 0; i < ticks; i++) {
       const s = 1.0 * i / ticks;
       const p = edge.lerp(s);
-      const v = Spaces.calc(Vector, (edge: Vec, tickSize: number) => edge
-        .scale(tickSize)
-        .rotate(toRadians(Degrees(30))),
-        edge.vector.unit(), tickSize,
-      );
+      const v = edge.vector.unit().scale(tickSize).rotate(Angles.fromDegrees(Degrees(30), 'model'));
       canvas.strokeLine(p, p.plus(v));
     }
 

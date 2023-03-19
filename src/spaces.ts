@@ -166,12 +166,9 @@ class SpaceDistance extends BaseSpaceValue<number> {
     return this.map((a: number, b: number) => a + b, d);
   }
 
-  scale(f: number): Distance {
-    return this.map(d => d * f);
-  }
-
-  mul(d: Spaced<number>): Distance {
-    return this.map((a: number, b: number) => a * b, d);
+  scale(f: number | Spaced<number>): Distance {
+    if (typeof f === 'number') return this.map(d => d * f);
+    return this.map((a: number, b: number) => a * b, f);
   }
 
   get(space: SpaceName): number {
@@ -285,6 +282,7 @@ const Angle = SpaceAngle.of;
 const Angles = {
   zero: (space: SpaceName) => Angle(Radians(0), space),
   fromVector: SpaceAngle.fromVector,
+  fromDegrees: (deg: Degrees, space: SpaceName) => Angle(toRadians(deg), space),
   counterClockwiseDelta: SpaceAngle.counterClockwiseDelta,
   clockwiseDelta: SpaceAngle.clockwiseDelta,
   shortestDelta: SpaceAngle.shortestDelta,
@@ -312,8 +310,11 @@ class SpaceVec extends BaseSpaceValue<Vec> {
     return this.map(v => v.r90());
   }
 
-  scale(factor: number): SpaceVec {
-    return this.map(v => v.scale(factor));
+  scale(factor: number | Spaced<number>): SpaceVec {
+    if (typeof factor === 'number') {
+      return this.map(v => v.scale(factor));
+    }
+    return this.map((v: Vec, factor: number) => v.scale(factor), factor);
   }
 
   unit(): SpaceVec {
