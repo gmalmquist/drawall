@@ -492,7 +492,6 @@ class MinLengthConstraint extends Constraint {
     entity: Entity,
     private readonly getSrc: () => PhysNode,
     private readonly getDst: () => PhysNode,
-    public length: number = App.project.modelUnit.from(App.project.gridSpacing).value,
   ) {
     super(entity);
     this.enabled = true;
@@ -516,9 +515,10 @@ class MinLengthConstraint extends Constraint {
       // only apply this constraint in the absense of another length constraint.
       return;
     }
+    const length = App.project.modelUnit.from(App.project.gridSpacing).value;
     const edge = this.getEdge();
     if (edge === null) return;
-    const delta = this.length - edge.vector().mag();
+    const delta = length - edge.vector().mag();
     if (delta < 0) {
       return;
     }
