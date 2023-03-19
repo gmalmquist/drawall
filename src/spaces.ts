@@ -472,10 +472,26 @@ class SpaceEdge {
     return SpaceDistance.between(this.src, this.dst);
   }
 
+  get normal(): Vector {
+    return this.vector.unit().r90();
+  }
+
+  get line(): Line {
+    return new Line(this.origin, this.vector);
+  }
+
   public lerp(s: number): Position {
     return Spaces.calc(Position, (a: Point, b: Point) => (
       a.lerp(s, b)
     ), this.src, this.dst);
+  }
+
+  public closestPoint(p: Position) {
+    const projected = p.minus(Vectors.between(this.origin, p).onAxis(this.normal));
+    const s = Vectors.between(this.origin, p).dot(this.vector) / this.vector.mag2().get(this.origin.space);
+    if (s < 0) return this.src;
+    if (s > 1) return this.dst;
+    return projected;
   }
 
   public distance(point: Position): Distance {
@@ -483,12 +499,79 @@ class SpaceEdge {
       return new Edge(a, b).distance(p);
     }, this.src, this.dst, point);
   }
+}
 
-  static fromRay(origin: Position, direction: Vector): SpaceEdge {
-    return new SpaceEdge(
-      origin,
-      origin.map((a: Point, b: Vec) => a.plus(b), direction),
-    );
+interface SpaceRayHit {
+  time: number;
+  point: Position;
+  distance: Distance;
+}
+
+// pew pew
+class SpaceRay {
+  constructor(
+    public readonly origin: Position,
+    public readonly direction: Vector) {
+  }
+
+  get normal(): Vector {
+    return this.direction.r90().unit();
+  }
+
+  at(t: number): Position {
+    return this.origin.splus(t, this.direction);
+  }
+
+  intersection(line: Line | SpaceRay| SpaceEdge): SpaceRayHit | null {
+    // (o + d * t - q) * N = 0
+    // (o-q)N + t(d*N) = 0
+    // t = (q-o)N / (d*N)
+    const denominator = this.direction.dot(line.normal);
+    if (denominator === 0) return null;
+    const time = Vectors.between(this.origin, line.origin).dot(line.normal) / denominator;
+    return {
+      time,
+      point: this.at(time),
+      // rate * time = distance
+      distance: this.direction.mag().scale(time),
+    };
+  }
+
+  get edge(): SpaceEdge {
+    return new SpaceEdge(this.origin, this.origin.plus(this.direction));
+  }
+
+  get line(): Line {
+    return new Line(this.origin, this.direction);
+  }
+}
+
+class Line {
+  public readonly origin: Position;
+  public readonly tangent: Vector;
+
+  constructor(
+    origin: Position,
+    tangent: Vector,
+  ) {
+    this.origin = origin;
+    this.tangent = tangent.unit();
+  }
+
+  get normal() {
+    return this.tangent.r90();
+  }
+
+  distance(point: Position): Distance {
+    return Distance(Math.abs(this.sdist(point)), point.space);
+  }
+
+  project(point: Position): Position {
+    return point.splus(-this.sdist(point), this.normal);
+  }
+
+  private sdist(point: Position): number {
+    return Vectors.between(this.origin, point).dot(this.normal);
   }
 }
 

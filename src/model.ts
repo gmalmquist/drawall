@@ -41,11 +41,15 @@ class PhysNode extends Component implements Solo {
     this.velocity = this.velocity.splus(dt, this.acceleration);
     this.velocity = this.velocity.splus(dt / this.mass, this.forceAccum);
     this.pos = this.pos.splus(dt, Vector(this.velocity, 'model'));
-    this.forceAccum = Vec.ZERO;
+    this.clearForces();
   }
 
   addForce(f: Vector) {
     this.forceAccum = this.forceAccum.plus(f.get('model'));
+  }
+
+  clearForces() {
+    this.forceAccum = Vec.ZERO;
   }
 }
 
@@ -67,6 +71,13 @@ class Wall extends Component implements Solo {
       },
       distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
+      axes: () => {
+        const edge = this.getEdge();
+        return [
+          { name: 'normal', line: new Line(edge.lerp(0.5), edge.normal), },
+          { name: 'tangent', line: new Line(edge.lerp(0.5), edge.vector), },
+        ];
+      },
     });
     handle.onClick(({ point }) => this.showPopup(point));
     handle.onDrag({
@@ -90,6 +101,8 @@ class Wall extends Component implements Solo {
         } else {
           this.src.pos = src.plus(delta);
           this.dst.pos = dst.plus(delta);
+        }
+        if (srcLocked && dstLocked) {
           this.src.entity.get(FixedConstraint).forEach(c => c.updateTargets([src.plus(delta)]));
           this.dst.entity.get(FixedConstraint).forEach(c => c.updateTargets([dst.plus(delta)]));
         }
@@ -127,8 +140,12 @@ class Wall extends Component implements Solo {
     j.attachIncoming(this);
   }
 
+  getEdge(): SpaceEdge {
+    return new SpaceEdge(this.src.pos, this.dst.pos);
+  }
+
   getLength(): Distance {
-    return Distances.between(this.src.pos, this.dst.pos);
+    return this.getEdge().length;
   }
 
   showPopup(openAt: Position) {
@@ -248,6 +265,18 @@ class WallJoint extends Component {
         entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
       },
       priority: 1,
+      axes: () => {
+        const incoming = this.incoming;
+        const outgoing = this.outgoing;
+        const axes: NamedAxis[] = [];
+        if (incoming !== null) {
+          axes.push({ name: 'right wall', line: new SpaceEdge(this.pos, incoming.src.pos).line });
+        }
+        if (outgoing !== null) {
+          axes.push({ name: 'left wall', line: new SpaceEdge(this.pos, outgoing.dst.pos).line });
+        }
+        return axes;
+      },
     });
     handle.onClick(({ point }) => this.showPopup(point));
 
@@ -763,15 +792,18 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       label = `${label} (${formatDegrees(error)})`;
     }
 
+    const color = constraint.enabled ? 'black' : 'hsl(0, 0%, 50%)';
+    const highlight = error === Degrees(0) ? undefined
+        : error > Degrees(0) ? PINK
+        : BLUE;
+
     canvas.text({
       text: label,
       align: 'center',
       baseline: 'middle',
       point: center.dplus(textDistance, middle),
-      fill: 'black',
-      shadow: error === Degrees(0) ? undefined
-        : error > Degrees(0) ? PINK
-        : BLUE,
+      fill: color,
+      shadow: highlight,
     });
 
     canvas.beginPath();
@@ -786,9 +818,11 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
     );
     canvas.closePath();
 
-    canvas.strokeStyle = 'black';
+    canvas.strokeStyle = color;
+    canvas.setLineDash(constraint.enabled ? [] : [2, 2]);
     canvas.lineWidth = 1;
     canvas.stroke();
+    canvas.setLineDash([]);
   }
 };
 
@@ -805,6 +839,12 @@ const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
 
 const Kinematics = (ecs: EntityComponentSystem) => {
   const positions = ecs.getComponents(PhysNode);
+  if (App.dragUi.isDragging) {
+    // don't move everything around while we're dragging stuff
+    positions.forEach(p => p.clearForces());
+    return; 
+  }
+
   const points = positions.map(p => p.pos);
 
   positions.forEach(p => p.update());
