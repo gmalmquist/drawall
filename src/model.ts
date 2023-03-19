@@ -90,6 +90,8 @@ class Wall extends Component implements Solo {
         } else {
           this.src.pos = src.plus(delta);
           this.dst.pos = dst.plus(delta);
+          this.src.entity.get(FixedConstraint).forEach(c => c.updateTargets([src.plus(delta)]));
+          this.dst.entity.get(FixedConstraint).forEach(c => c.updateTargets([dst.plus(delta)]));
         }
       },
       onEnd: (e, [src, dst]) => {
@@ -243,7 +245,7 @@ class WallJoint extends Component {
       getPos: () => this.pos,
       setPos: p => {
         this.pos = p;
-        entity.get(FixedConstraint).forEach(c => c.updateTargets([this.pos]));
+        entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
       },
       priority: 1,
     });
@@ -311,7 +313,7 @@ class WallJoint extends Component {
   }
 
   private createAnchorUi(ui: UiBuilder) {
-    const fixed = this.entity.get(FixedConstraint)[0]!;
+    const fixed = this.entity.only(FixedConstraint);
     ui.addCheckbox('fix', fixed.enabled)
       .addLabel('lock position', 'fix')
       .addSpacer()
