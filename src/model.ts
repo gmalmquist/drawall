@@ -53,10 +53,65 @@ class PhysNode extends Component implements Solo {
   }
 }
 
+class Room extends Component implements Solo {
+  public readonly [SOLO] = true;
+
+  private _wallSet = new Set<Wall>();
+  private _walls: Wall[] = [];
+
+  constructor(entity: Entity) {
+    super(entity);
+  }
+
+  get walls(): Wall[] {
+    return this._walls.map(x => x);
+  }
+
+  addWall(wall: Wall) {
+    if (!this._wallSet.has(wall)) {
+      this._walls.push(wall);
+      this._wallSet.add(wall);
+    }
+    wall.room = this;
+  }
+
+  removeWall(wall: Wall) {
+    if (this._wallSet.has(wall)) {
+      this._wallSet.delete(wall);
+      this._walls = this._walls.filter(w => w.name !== wall.name);
+    }
+    if (wall.room === this) {
+      wall.room = null;
+    }
+  }
+
+  containsConvex(position: Position): boolean {
+    // checks if the given point is in this room, assuming
+    // this room's walls form a convex polygon.
+    for (const wall of this.walls) {
+      const vec = Vectors.between(wall.midpoint, position);
+      if (vec.dot(wall.insideNormal) < 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  tearDown() {
+    for (const wall of this.walls) {
+      if (wall.room === this) {
+        wall.room = null;
+        wall.entity.destroy();
+      }
+    }
+  }
+}
+
 class Wall extends Component implements Solo {
   public readonly [SOLO] = true;
   private _src: WallJoint;
   private _dst: WallJoint;
+  private _room: Room | null = null;
 
   constructor(entity: Entity) {
     super(entity);
@@ -123,21 +178,112 @@ class Wall extends Component implements Solo {
     );
   }
 
+  getConnectedLoop(direction: 'forward' | 'backward' | 'both' = 'both'): Wall[] {
+    const results: Wall[] = [ this ];
+    const seen: Set<Wall> = new Set(results);
+
+    if (direction === 'backward' || direction === 'both') {
+      for (let wall = this.src.incoming;
+           wall !== null && !seen.has(wall);
+           wall = wall.src.incoming) {
+        seen.add(wall);
+        results.push(wall);
+      }
+      reverseInPlace(results);
+    }
+
+    if (direction === 'forward' || direction === 'both') {
+      for (let wall = this.dst.outgoing;
+           wall !== null && !seen.has(wall);
+           wall = wall.dst.outgoing) {
+        seen.add(wall);
+        results.push(wall);
+      }
+    }
+
+    return results;
+  }
+
+  get room(): Room | null {
+    return this._room;
+  }
+
+  set room(room: Room | null) {
+    if (room === this._room) return;
+    const old = this._room;
+    this._room = room;
+    if (old !== null) {
+      old.removeWall(this);
+    }
+    if (room !== null) {
+      room.addWall(this);
+    }
+  }
+
   get src() { return this._src; }
   get dst() { return this._dst; }
 
   set src(j: WallJoint) {
     if (j === this._src) return;
-    this._src.detachOutgoing();
+    const old = this._src;
     this._src = j;
+    if (old.outgoing === this) {
+      old.detachOutgoing();
+    }
     j.attachOutgoing(this);
   }
 
   set dst(j: WallJoint) {
     if (j === this._dst) return;
-    this._dst.detachIncoming();
+    const old = this._dst;
     this._dst = j;
+    if (old.incoming === this) {
+      old.detachIncoming();
+    }
     j.attachIncoming(this);
+  }
+
+  get outsideNormal(): Vector {
+    return this.tangent.r90();
+  }
+
+  get insideNormal(): Vector {
+    return this.outsideNormal.scale(-1);
+  }
+
+  get tangent(): Vector {
+    return Vectors.between(this.src.pos, this.dst.pos);
+  }
+
+  get midpoint(): Position {
+    return this.src.pos.lerp(0.5, this.dst.pos);
+  }
+
+  // split this wall into two walls, creating a new
+  // wall joint between them.
+  splitWall(at: Position): readonly [Wall, Wall] | null {
+    const edge = this.getEdge();
+    const s = Vectors.between(edge.src, at).get('model')
+      .dot(edge.vector.get('model')) / edge.vector.get('model').mag2();
+
+    if (s >= 1) {
+      return null;
+    }
+
+    if (s <= 0) {
+      // same as above case but on the other side.
+      return null;
+    }
+
+    const rest = this.entity.ecs.createEntity().add(Wall);
+    if (this.room !== null) {
+      this.room.addWall(rest);
+    }
+    rest.src.pos = edge.lerp(s);
+    rest.dst = this.dst;
+    this.dst = rest.src;
+
+    return [this, rest];
   }
 
   getEdge(): SpaceEdge {
@@ -241,11 +387,12 @@ class Wall extends Component implements Solo {
   tearDown() {
     this.src.detachOutgoing();
     this.dst.detachIncoming();
+    this.room = null;
   }
 }
 
 class WallJoint extends Component {
-  public pos: Position = Position(Point.ZERO, 'model');
+  private _pos: Position = Position(Point.ZERO, 'model');
   private _outgoing: Wall | null = null;
   private _incoming: Wall | null = null;
 
@@ -295,6 +442,22 @@ class WallJoint extends Component {
     );
   }
 
+  shallowDup(): WallJoint {
+    // create a wall joint in the same place,
+    // but with no connectivity info
+    const joint = this.entity.ecs.createEntity().add(WallJoint);
+    joint.pos = this.pos;
+    return joint;
+  }
+
+  get pos(): Position {
+    return this._pos;
+  }
+
+  set pos(p: Position) {
+    this._pos = p.to('model');
+  }
+
   get isCorner(): boolean {
     return this.incoming !== null && this.outgoing !== null;
   }
@@ -316,15 +479,21 @@ class WallJoint extends Component {
   }
 
   detachIncoming() {
+    if (this._incoming?.dst === this) {
+      this._incoming.entity.destroy();
+    }
     this._incoming = null;
-    if (this._outgoing === null) {
+    if (this._outgoing === null || this._outgoing.entity.isDestroyed) {
       this.entity.destroy();
     }
   }
 
   detachOutgoing() {
+    if (this._outgoing?.src === this) {
+      this._outgoing.entity.destroy();
+    }
     this._outgoing = null;
-    if (this._incoming === null) {
+    if (this._incoming === null || this._incoming.entity.isDestroyed) {
       this.entity.destroy();
     }
   }
@@ -339,6 +508,13 @@ class WallJoint extends Component {
     this.createAngleUi(ui);
     ui.addResetButton();
     p.show();
+  }
+
+  override tearDown() {
+    const out = this._outgoing;
+    const inc = this._incoming;
+    if (out !== null && out.src === this) out.entity.destroy();
+    if (inc !== null && inc.dst === this) inc.entity.destroy();
   }
 
   private createAnchorUi(ui: UiBuilder) {
@@ -377,12 +553,30 @@ class WallJoint extends Component {
       .addLabel('tension', 'strength')
       .addSlider('strength', { min: 0, max: 1, initial: angleConstraint.hardness })
       .newRow();
+
+    const resetAngle = () => {
+      const scale = ui.getValue('units') === 'degrees' ? 180 / Math.PI : 1;
+      ui.setValue('angle', (ui.getValue('units') === 'degrees'
+        ? toDegrees(angleConstraint.targetAngle.get('model'))
+        : angleConstraint.targetAngle.get('model')).toString());
+    };
+
+    const parseAngle = (value: string) => {
+      const prev = angleConstraint.targetAngle;
+      const angle = parseFloat(value);
+      if (isNaN(angle)) {
+        resetAngle();
+        return prev;
+      }
+      return Angle(ui.getValue('units') === 'degrees'
+        ? toRadians(Degrees(angle))
+        : Radians(angle), 'model');
+    };
+
     ui.onChange((name: string, value: string) => {
       if (name === 'angle') {
         const prev = angleConstraint.targetAngle;
-        angleConstraint.targetAngle = Angle(ui.getValue('units') === 'degrees'
-          ? toRadians(Degrees(parseFloat(value)))
-          : Radians(parseFloat(value)), 'model');
+        angleConstraint.targetAngle = parseAngle(value.trim());
         if (angleConstraint.targetAngle !== prev) {
           angleConstraint.enabled = true;
           ui.setValue('lock angle', true);
@@ -390,10 +584,7 @@ class WallJoint extends Component {
       } else if (name === 'strength') {
         angleConstraint.hardness = parseFloat(value);
       } else if (name === 'units') {
-        const scale = ui.getValue('units') === 'degrees' ? 180 / Math.PI : 1;
-        ui.setValue('angle', (ui.getValue('units') === 'degrees'
-          ? toDegrees(angleConstraint.targetAngle.get('model'))
-          : angleConstraint.targetAngle.get('model')).toString());
+        resetAngle();
       } else if (name === 'lock angle') {
         angleConstraint.enabled = value === 'true';
       }
@@ -663,6 +854,25 @@ interface AngleReference {
   getAngle: () => Angle;
 }
 
+// cleanup broken geometry
+const Recycler = (ecs: EntityComponentSystem) => {
+  for (const wall of ecs.getComponents(Wall)) {
+    if (wall.dst.entity.isDestroyed || wall.src.entity.isDestroyed) {
+      wall.entity.destroy();
+    }
+  }
+  for (const joint of ecs.getComponents(WallJoint)) {
+    const incoming = joint.incoming;
+    const outgoing = joint.outgoing;
+    if (incoming !== null && incoming.entity.isDestroyed) {
+      joint.detachIncoming();
+    }
+    if (outgoing !== null && outgoing.entity.isDestroyed) {
+      joint.detachOutgoing();
+    }
+  }
+};
+
 const WallRenderer = (ecs: EntityComponentSystem) => {
   const canvas = App.canvas;
 
@@ -758,7 +968,6 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
       canvas.strokeCircle(pos, radius.scale(2));
     }
   }
-
 };
 
 const AngleRenderer = (ecs: EntityComponentSystem) => {

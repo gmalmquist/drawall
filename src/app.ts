@@ -2,10 +2,10 @@ class App {
   public static readonly ecs = new EntityComponentSystem();
   public static readonly pane: HTMLElement =
     document.getElementsByClassName('canvas-wrap')[0]! as HTMLElement;
+  public static readonly tools = new Tools();
   public static readonly actions = new UserActions();
   public static readonly keybindings = Keybindings.defaults();
   public static readonly ui = new UiState();
-  public static readonly tools = new Tools();
   public static readonly canvas = new Canvas2d(
       document.getElementById('main-canvas') as HTMLCanvasElement)
   public static project = new Project();
@@ -36,8 +36,9 @@ class App {
   }
 
   static init() {
-    App.ecs.registerSystem(AngleRenderer);
+    App.ecs.registerSystem(Recycler);
 
+    App.ecs.registerSystem(AngleRenderer);
     App.ecs.registerSystem(WallRenderer);
     App.ecs.registerSystem(WallJointRenderer);
 

@@ -105,6 +105,7 @@ interface UiDragEvent {
   position: Position;
   start: Position;
   delta: Vector;
+  primary: boolean;
 }
 
 interface UiKeyEvent {
@@ -235,6 +236,7 @@ class UiState {
   private _snapAxes: NamedAxis[] = [];
   private _selection: Set<Handle> = new Set();
   private keysPressed = new DefaultMap<string, boolean>(() => false);
+  private swappedTool: ToolName | null = null;
 
   constructor() {
     this.events.forward({
@@ -511,6 +513,7 @@ class UiState {
       start: this.mouse.start,
       position: e.position,
       delta: this.snap(Vectors.between(this.mouse.start, e.position)),
+      primary: e.primary,
     });
 
     const ignoreKeyEventsFrom = new Set([
@@ -520,7 +523,7 @@ class UiState {
 
     const shouldIgnoreKeyEvent = (e: Event): boolean => {
       if (e.target && e.target instanceof HTMLElement) {
-        ignoreKeyEventsFrom.has(e.target.tagName.toLocaleLowerCase())
+        return ignoreKeyEventsFrom.has(e.target.tagName.toLocaleLowerCase())
       }
       return false;
     };
@@ -535,10 +538,19 @@ class UiState {
       this.events.handleKey(makeKeyEvent('keyup', e));
     });
 
+    App.pane.addEventListener('contextmenu', e => e.preventDefault());
+
     App.pane.addEventListener('mousedown', e => {
       this.mouse.buttons = e.buttons;
 
       const event = makeMouseEvent('down', e);
+      if (!event.primary) {
+        const tool = App.tools.current;
+        if (tool.name !== 'pan tool') {
+          App.tools.set('pan tool');
+          this.swappedTool = tool.name;
+        }
+      }
 
       this.mouse.start = event.position;
       this.mouse.distanceDragged = Distance(0, 'screen');
@@ -582,6 +594,11 @@ class UiState {
 
     App.pane.addEventListener('mouseup', e => {
       const event = makeMouseEvent('up', e);
+      if (!event.primary && this.swappedTool !== null) {
+        App.tools.set(this.swappedTool);
+        this.swappedTool = null;
+      }
+
       this.events.handleMouse(event);
 
       if (this.mouse.dragging) {

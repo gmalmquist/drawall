@@ -7,7 +7,10 @@ type Cursor = 'default' | 'none' | 'help' | 'context-menu'
   | 'ew-resize' | 'ns-resize' | 'nesw-resize' | 'nwse-resize'
   | 'zoom-in' | 'zoom-out';
 
-type ToolName = 'none' | 'pointer' | 'draw-room';
+type ToolName = 'none' 
+  | 'pointer tool'
+  | 'room tool'
+  | 'pan tool';
 
 abstract class Tool {
   public readonly events = new UiEventDispatcher(
@@ -87,8 +90,9 @@ class Tools {
   private _current: Tool = new NoopTool();
 
   public readonly chain = new ToolChain()
-    .addSingle('pointer')
-    .addSingle('draw-room')
+    .addSingle('pointer tool')
+    .addSingle('pan tool')
+    .addSingle('room tool')
   ;
 
   public get current(): Tool {
@@ -102,7 +106,10 @@ class Tools {
       throw new Error(`Cannot register ${tool.name} to ${kind.name}, because it would overwrwite ${existing.constructor.name}.`);
     }
     this.registry.set(tool.name, tool);
-   
+
+    // register action to switch to this tool (can be used by hotkeys)
+    App.actions.register({ name: tool.name, apply: () => this.set(tool.name) });
+
     App.log('registered tool', tool.name, tool);
 
     if (this.allToolsRegistered()) {
@@ -113,6 +120,10 @@ class Tools {
 
   public getTools(): Tool[] {
     return Array.from(this.registry.values());
+  }
+
+  public getTool(name: ToolName): Tool {
+    return this.registry.get(name)!;
   }
 
   public set(name: ToolName) {
@@ -146,7 +157,7 @@ class Tools {
   private setup() {
     const toolbar = document.getElementsByClassName('toolbar')[0]! as HTMLElement;
     this.chain.groups.forEach(group => this.setupToolGroup(toolbar, group));
-    this.set('pointer');
+    this.set('pointer tool');
   }
 
   private setupToolGroup(toolbar: HTMLElement, group: ToolGroup) {

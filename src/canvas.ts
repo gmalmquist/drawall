@@ -233,33 +233,6 @@ setTimeout(() => {
 
   window.addEventListener('resize', () => App.canvas.handleResize());
 
-  const canvasHandle = App.ecs.createEntity().add(Handle, {
-    getPos: () => Position(c.viewport.origin, 'model'),
-    distance: (_) => Distance(0, 'screen'),
-    draggable: true,
-    clickable: false,
-    hoverable: false,
-    priority: -1,
-  });
-  canvasHandle.ignoreNonPrimary = false;
-
-  canvasHandle.events.addDragListener({
-    onStart: (e) => ({
-      // have to save original transformations
-      origin: c.viewport.origin,
-      project: c.viewport.project,
-      unproject: c.viewport.unproject,
-    }),
-    onUpdate: (e, context) => {
-      const { origin, project, unproject } = context;
-      c.viewport.origin = origin.minus(unproject.vec(e.delta.get('screen')));
-      c.updateTransforms();
-      return context;
-    },
-    onEnd: (e, context) => {
-    },
-  });
-
   App.pane.addEventListener('wheel', event => {
     const wheel = event as WheelEvent;
     c.viewport.radius = Math.max(10, c.viewport.radius + Math.sign(wheel.deltaY) * 10);

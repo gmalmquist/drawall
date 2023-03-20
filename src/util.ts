@@ -13,6 +13,15 @@ const createUuid = () => {
   return letters.join('');
 };
 
+const reverseInPlace = <T>(arr: Array<T>): void => {
+  for (let i = 0; i < Math.floor(arr.length / 2); i++) {
+    const j = arr.length - i - 1;
+    const tmp = arr[i];
+    arr[i] = arr[j];
+    arr[j] = tmp;
+  }
+};
+
 class DefaultMap<K, V> {
   private readonly map = new Map<K, V>();
 
@@ -40,6 +49,10 @@ class DefaultMap<K, V> {
 
   keys(): Set<K> {
     return new Set(this.map.keys());
+  }
+
+  values(): V[] {
+    return Array.from(this.map.values());
   }
 
   clear() {

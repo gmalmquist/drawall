@@ -20,11 +20,11 @@ class Keybindings {
     const kb = new Keybindings();
     // bind common "default tool" hotkeys from various
     // other cad and graphical apps
-    kb.bind('p').to('pointer tool');
     kb.bind('s').to('pointer tool');
     kb.bind('a').to('pointer tool');
-    kb.bind('Space').to('pointer tool');
+    kb.bind(' ').to('pointer tool');
     kb.bind('r').to('room tool');
+    kb.bind('p').to('pan tool');
     return kb;
   }
 

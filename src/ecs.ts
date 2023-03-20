@@ -128,6 +128,7 @@ class ComponentMap {
 
 class Entity {
   private readonly components = new ComponentMap(true);
+  private destroyed = false;
   public name: string = '';
 
   constructor(
@@ -140,6 +141,14 @@ class Entity {
     ...args: A): C {
     const c = new kind(this, ...args);
     return this._add(c);
+  }
+
+  get isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
+  get isAlive(): boolean {
+    return !this.destroyed;
   }
 
   private _add<C extends Component>(c: C): C {
@@ -173,6 +182,8 @@ class Entity {
   }
 
   destroy() {
+    if (this.destroyed) return;
+    this.destroyed = true;
     const kinds = this.components.keys();
     kinds.forEach(c => this.removeAll(c));
     this.ecs.deleteEntity(this.id);
@@ -226,7 +237,7 @@ class EntityComponentSystem {
   }
 
   getComponents<C extends Component>(kind: ComponentType<C>): C[] {
-    return this.components.get(kind);
+    return this.components.get(kind).filter(c => !c.entity.isDestroyed);
   }
 
   registerComponent<C extends Component>(c: C) {

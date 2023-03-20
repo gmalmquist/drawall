@@ -1,6 +1,5 @@
-type UserActionId =
-  'pointer tool'
-  | 'room tool'
+type UserActionId = ToolName
+  | 'noop'
 ;
 
 interface UserAction {
@@ -12,14 +11,13 @@ class UserActions {
   private readonly map = new Map<UserActionId, UserAction>();
 
   constructor() {
-    const add = (name: UserActionId, apply: () => void) => this.set({
+    const add = (name: UserActionId, apply: () => void) => this.register({
       name, apply
     });
-    add('pointer tool', () => App.tools.set('pointer')); 
-    add('room tool', () => App.tools.set('draw-room')); 
+    // add('foo', () => doFoo());
   }
 
-  set(action: UserAction) {
+  register(action: UserAction) {
     if (this.map.has(action.name)) {
       throw new Error(`Already bound action ${action}.`);
     }

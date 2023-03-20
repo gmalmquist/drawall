@@ -2,7 +2,7 @@ class PointerTool extends Tool {
   private readonly hovered: Set<Handle> = new Set();
 
   constructor() {
-    super('pointer');
+    super('pointer tool');
 
     this.events.onMouse('click', e => {
       const clickable = App.ui.getHandleAt(e.position, h => h.clickable);
@@ -31,26 +31,24 @@ class PointerTool extends Tool {
       this.clearHovered();
     });
 
-    this.events.addDragListener<Handle | null>({
+    const panTool = App.tools.getTool('pan tool');
+
+    this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
+        App.pane.style.cursor = 'grabbed';
         const handle = App.ui.getHandleAt(e.start, h => h.draggable);
         if (handle !== null) {
           App.ui.setSelection(handle);
           handle.events.handleDrag(e);
-          App.pane.style.cursor = 'grabbed';
+          return handle.events;
         }
-        return handle;
+        panTool.events.handleDrag(e);
+        return panTool.events;
       },
-      onUpdate: (e, handle) => {
-        if (handle !== null) {
-          handle.events.handleDrag(e);
-        }
-      },
-      onEnd: (e, handle) => {
-        if (handle !== null) {
-          handle.events.handleDrag(e);
-          App.pane.style.cursor = 'default';
-        }
+      onUpdate: (e, dispatcher) => dispatcher.handleDrag(e),
+      onEnd: (e, dispatcher) => {
+        dispatcher.handleDrag(e);
+        App.pane.style.cursor = 'default';
       },
     });
   }

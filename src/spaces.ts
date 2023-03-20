@@ -89,6 +89,10 @@ abstract class BaseSpaceValue<V> implements Spaced<V> {
 
   abstract get create(): (v: V, space: SpaceName) => BaseSpaceValue<V>;
 
+  to(space: SpaceName): typeof this {
+    return this.create(this.get(space), space) as typeof this;
+  }
+
   as<W extends Spaced<V>>(wrap: new (s: Spaced<V>) => W) {
     if (wrap === this.constructor) {
       return this as unknown as W;
@@ -486,6 +490,12 @@ class SpaceEdge {
     ), this.src, this.dst);
   }
 
+  public unlerp(p: Position): number {
+    const displacement = Vectors.between(this.src, p).get(this.src.space);
+    const tangent = this.vector.get(this.src.space);
+    return displacement.dot(tangent) / tangent.mag2();
+  }
+
   public closestPoint(p: Position) {
     const projected = p.minus(Vectors.between(this.origin, p).onAxis(this.normal));
     const s = Vectors.between(this.origin, p).dot(this.vector) / this.vector.mag2().get(this.origin.space);
@@ -498,6 +508,20 @@ class SpaceEdge {
     return Spaces.calc(Distance, (a: Point, b: Point, p: Point) => {
       return new Edge(a, b).distance(p);
     }, this.src, this.dst, point);
+  }
+
+  public intersection(other: SpaceEdge): Position | null {
+    const ray = new SpaceRay(this.origin, this.vector);
+    const hit = ray.intersection(other);
+    if (hit === null) return null;
+    if (hit.time < 0 || hit.time > 1) return null;
+    if (Vectors.between(other.src, hit.point).dot(other.vector) < 0) {
+      return null;
+    }
+    if (Vectors.between(other.dst, hit.point).dot(other.vector.scale(-1)) < 0) {
+      return null;
+    }
+    return hit.point;
   }
 }
 
