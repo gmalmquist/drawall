@@ -13,12 +13,47 @@ const createUuid = () => {
   return letters.join('');
 };
 
-class Counter<K> {
-  private readonly counts = new Map<K, number>();
+class DefaultMap<K, V> {
+  private readonly map = new Map<K, V>();
 
-  public get(name: K): number {
-    if (!this.counts.has(name)) return 0;
-    return this.counts.get(name)!;
+  constructor(private readonly defaultValue: () => V) {
+  }
+
+  set(key: K, value: V) {
+    this.map.set(key, value);
+  }
+
+  get(key: K): V {
+    if (!this.map.has(key)) {
+      this.map.set(key, this.defaultValue());
+    }
+    return this.map.get(key)!;
+  }
+
+  has(key: K): boolean {
+    return this.map.has(key);
+  }
+
+  delete(key: K): boolean {
+    return this.map.delete(key);
+  }
+
+  keys(): Set<K> {
+    return new Set(this.map.keys());
+  }
+
+  clear() {
+    this.map.clear();
+  }
+
+  get size(): number {
+    return this.map.size;
+  }
+}
+
+class Counter<K> extends DefaultMap<K, number> {
+  constructor() {
+    super(() => 0);
   }
 
   public inc(name: K): number {
@@ -27,15 +62,18 @@ class Counter<K> {
 
   public add(name: K, amount: number): number {
     const count = this.get(name) + amount;
-    this.counts.set(name, count);
+    this.set(name, count);
     return count;
   }
+}
 
-  public clear(name: K) {
-    this.counts.delete(name);
+class MultiMap<K, V> extends DefaultMap<K, Array<V>> {
+  constructor() {
+    super(() => []);
   }
 
-  public clearAll() {
-    this.counts.clear();
+  add(key: K, value: V) {
+    this.get(key).push(value);
   }
 }
+

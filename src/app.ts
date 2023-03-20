@@ -2,13 +2,37 @@ class App {
   public static readonly ecs = new EntityComponentSystem();
   public static readonly pane: HTMLElement =
     document.getElementsByClassName('canvas-wrap')[0]! as HTMLElement;
-  public static readonly dragUi = new DragUi(App.pane);
+  public static readonly actions = new UserActions();
+  public static readonly keybindings = Keybindings.defaults();
+  public static readonly ui = new UiState();
+  public static readonly tools = new Tools();
   public static readonly canvas = new Canvas2d(
       document.getElementById('main-canvas') as HTMLCanvasElement)
   public static project = new Project();
   public static debug: boolean = false;
 
   constructor() {
+  }
+
+  static ifDebug<T>(f: () => T | undefined): T | undefined {
+    if (App.debug) return f();
+  }
+
+  static log(...args: any[]) {
+    if (!App.debug) return;
+    const text = args.map(a => {
+      if (typeof a === 'undefined' || a === null) {
+        return '∅';
+      }
+      if (typeof a === 'string' || typeof a === 'number') {
+        return `${a}`;
+      }
+      if (typeof a === 'object' && a.toString() !== '[object Object]') {
+        return a.toString();
+      }
+      return JSON.stringify(a);
+    }).join(' ');
+    console.log(text);
   }
 
   static init() {
@@ -57,7 +81,7 @@ class App {
 
   static update() {
     App.ecs.update();
-    App.dragUi.update();
+    App.ui.update();
   }
 }
 

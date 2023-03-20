@@ -243,7 +243,7 @@ setTimeout(() => {
   });
   canvasHandle.ignoreNonPrimary = false;
 
-  canvasHandle.onDrag({
+  canvasHandle.events.addDragListener({
     onStart: (e) => ({
       // have to save original transformations
       origin: c.viewport.origin,

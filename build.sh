@@ -47,7 +47,10 @@ function compile() {
   tsc --strict --lib esnext,dom -t es6 --outDir build/ build/*.ts
 }
 
-cp src/{*.ts,*.js} build/
+for item in $(find src -name '*.ts' -o -name '*.js'); do 
+  cp "${item}" "build/$(basename ${item})"
+done
+
 compile
 
 mkdir -p www/
@@ -62,6 +65,9 @@ units.js
 ecs.js
 mouse.js
 canvas.js
+tools.js
+actions.js
+hotkeys.js
 ux.js
 model.js
 popups.js

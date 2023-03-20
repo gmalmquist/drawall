@@ -49,3 +49,66 @@ body {
   height: 100%;
 }
 
+.toolbar {
+  display: flex;
+  flex-direction: column;
+}
+
+.icon-button {
+  display: flex;
+  align-content: center;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+
+  margin: 2px;
+  aspect-ratio: 1 / 1;
+
+  border-top: 2px solid hsl(0, 0%, 90%);
+  border-left: 2px solid hsl(0, 0%, 90%);
+  border-right: 2px solid hsl(0, 0%, 50%);
+  border-bottom: 2px solid hsl(0, 0%, 50%);
+  border-radius: 6px;
+
+  background-color: hsl(0, 0%, 80%);
+
+  font-size: 1.5em;
+  font-weight: bold;
+
+  font-family: monospace;
+  text-decoration: none;
+  color: black;
+
+  cursor: pointer;
+
+  user-select: none;
+}
+
+.icon-button:hover {
+  background-color: hsl(0, 0%, 85%);
+}
+
+.icon-button:active {
+  background-color: hsl(0, 0%, 70%);
+  border-top-color: hsl(0, 0%, 50%);
+  border-left-color: hsl(0, 0%, 50%);
+  border-right-color: hsl(0, 0%, 90%);
+  border-bottom-color: hsl(0, 0%, 90%);
+}
+
+.icon-button.selected {
+  background-color: hsl(197, 94%, 67%);
+  border-bottom-color: hsl(197, 94%, 50%);
+  border-left-color: hsl(197, 94%, 80%);
+  border-right-color: hsl(197, 94%, 50%);
+  border-top-color: hsl(197, 94%, 80%);
+}
+
+.icon-button.selected:active {
+  background-color: hsl(348, 79%, 81%);
+  border-bottom-color: hsl(348, 79%, 95%);
+  border-left-color: hsl(348, 79%, 70%);
+  border-right-color: hsl(348, 79%, 95%);
+  border-top-color: hsl(348, 79%, 70%);
+}
+

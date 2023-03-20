@@ -79,8 +79,8 @@ class Wall extends Component implements Solo {
         ];
       },
     });
-    handle.onClick(({ point }) => this.showPopup(point));
-    handle.onDrag({
+    handle.events.onMouse('click', ({ position }) => this.showPopup(position));
+    handle.events.addDragListener({
       onStart: (e): [Position, Position] => {
         return [this.src.pos, this.dst.pos];
       },
@@ -90,12 +90,12 @@ class Wall extends Component implements Solo {
         const dstLocked = this.dst.entity.get(FixedConstraint).some(f => f.enabled);
         if (srcLocked && !dstLocked) {
           const initial = Vectors.between(src, e.start);
-          const current = Vectors.between(src, e.point);
+          const current = Vectors.between(src, e.position);
           const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
           this.dst.pos = src.plus(Vectors.between(src, dst).rotate(angle));
         } else if (!srcLocked && dstLocked) {
           const initial = Vectors.between(dst, e.start);
-          const current = Vectors.between(dst, e.point);
+          const current = Vectors.between(dst, e.position);
           const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
           this.src.pos = dst.plus(Vectors.between(dst, src).rotate(angle));
         } else {
@@ -278,7 +278,7 @@ class WallJoint extends Component {
         return axes;
       },
     });
-    handle.onClick(({ point }) => this.showPopup(point));
+    handle.events.onMouse('click', ({ position }) => this.showPopup(position));
 
     entity.add(AngleConstraint,
       () => ({
@@ -845,7 +845,7 @@ const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
 
 const Kinematics = (ecs: EntityComponentSystem) => {
   const positions = ecs.getComponents(PhysNode);
-  if (App.dragUi.isDragging) {
+  if (App.ui.dragging) {
     // don't move everything around while we're dragging stuff
     positions.forEach(p => p.clearForces());
     return; 
