@@ -4,6 +4,9 @@ type Kinds<T> = T extends { kind: infer K } ? K : never;
 type KindOf<T> = [T] extends [{ kind: infer K }] ? K : never;
 type OfKind<A, K> = [A] extends [{ kind: K }] ? A : never;
 type HomogenousKinds<A extends readonly unknown[]> = A extends readonly [{ kind: infer K }] ? A : never;
+type Not<A, V> = [A] extends [V] ? never : A;
+type MapF<A, B> = (a: A) => B;
+type PredicateN<T extends readonly unknown[]> = (...args: T) => boolean;
 
 const impossible = (x: never): never => {
   throw new Error('impossible');
@@ -29,6 +32,84 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
     arr[j] = tmp;
   }
 };
+
+interface RefMapF<A, B> {
+  from: MapF<B, A>;
+  to: MapF<A, B>;
+  compareValues: RefCompareFunc<B>;
+}
+
+interface RefDef<V> {
+  readonly get: () => V;
+  readonly set: (value: V) => void;
+  readonly compareValues: RefCompareFunc<V>;
+}
+
+type RefCompareFunc<T> = T extends number | string
+  ? PredicateN<readonly [T, T]> | undefined
+  : PredicateN<readonly [T, T]>;
+
+const Refs = {
+  mapDef: <A, B>(ref: RefDef<A>, f: RefMapF<A, B>): RefDef<B> => ({
+    get: (): B => f.to(ref.get()),
+    set: (value: B): void => ref.set(f.from(value)),
+    compareValues: f.compareValues,
+  }),
+  of: <V extends Not<any, RefDef<any>>>(
+    value: V,
+    compareValues: RefCompareFunc<V>,
+  ): Ref<V> => {
+    const state = { value };
+    return Ref({
+      get: (): V => state.value,
+      set: (value: V): void => {
+        state.value = value;
+      },
+      compareValues,
+    });
+  },
+};
+
+class RefImpl<V> implements RefDef<V> {
+  private readonly listeners = new Set<(value: V) => void>();
+  private readonly _get: () => V;
+  private readonly _set: (value: V) => void;
+  public readonly compareValues: RefCompareFunc<V>;
+
+  constructor(def: RefDef<V>) {
+    this._get = def.get;
+    this._set = def.set;
+    this.compareValues = def.compareValues;
+  }
+
+  public get(): V {
+    return this._get();
+  }
+
+  public set(value: V): void {
+    if (this.eq(value)) return;
+    this._set(value);
+    for (const listener of this.listeners) {
+      listener(value);
+    }
+  }
+
+  public map<W>(f: RefMapF<V, W>): Ref<W> {
+    return Ref(Refs.mapDef(this, f));
+  }
+
+  public eq(value: V): boolean {
+    const cmp = this.compareValues;
+    return typeof cmp !== 'undefined' ? cmp(this.get(), value) : this.get() === value; 
+  }
+
+  public onChange(listener: (value: V) => void) {
+    this.listeners.add(listener);
+  }
+}
+
+type Ref<V> = RefImpl<V>;
+const Ref = <V>(def: RefDef<V>): Ref<V> => new RefImpl(def);
 
 class DefaultMap<K, V> {
   private readonly map = new Map<K, V>();
