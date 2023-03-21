@@ -175,6 +175,30 @@ class SpaceDistance extends BaseSpaceValue<number> {
     return this.map((a: number, b: number) => a * b, f);
   }
 
+  lt(other: Distance): boolean {
+    return this.get(this.space) < other.get(this.space);
+  }
+
+  le(other: Distance): boolean {
+    return this.get(this.space) <= other.get(this.space);
+  }
+
+  gt(other: Distance): boolean {
+    return this.get(this.space) > other.get(this.space);
+  }
+
+  ge(other: Distance): boolean {
+    return this.get(this.space) >= other.get(this.space);
+  }
+
+  eq(other: Distance): boolean {
+    return this.get(this.space) === other.get(this.space);
+  }
+
+  ne(other: Distance): boolean {
+    return this.get(this.space) === other.get(this.space);
+  }
+
   get(space: SpaceName): number {
     return this.pos.get(space);
   }
@@ -232,6 +256,31 @@ class SpaceAngle extends BaseSpaceValue<Radians> {
   normalize(): SpaceAngle {
     return this.map(a => normalizeRadians(a));
   }
+
+  lt(other: Angle): boolean {
+    return unwrap(this.get(this.space)) < unwrap(other.get(this.space));
+  }
+
+  le(other: Angle): boolean {
+    return unwrap(this.get(this.space)) <= unwrap(other.get(this.space));
+  }
+
+  gt(other: Angle): boolean {
+    return unwrap(this.get(this.space)) > unwrap(other.get(this.space));
+  }
+
+  ge(other: Angle): boolean {
+    return unwrap(this.get(this.space)) >= unwrap(other.get(this.space));
+  }
+
+  eq(other: Angle): boolean {
+    return unwrap(this.get(this.space)) === unwrap(other.get(this.space));
+  }
+
+  ne(other: Angle): boolean {
+    return unwrap(this.get(this.space)) === unwrap(other.get(this.space));
+  }
+
 
   toString(): string {
     return `Angle(${formatDegrees(toDegrees(this.get(this.space)))}, ${this.space})`;

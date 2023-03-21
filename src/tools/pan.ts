@@ -4,6 +4,12 @@ class PanTool extends Tool {
 
     this.events.addDragListener({
       onStart: (e) => {
+        e.setSnapping({
+          snapByDefault: false,
+          allowLocal: false,
+          allowGlobal: true,
+          allowGeometry: false,
+        });
         // have to save original transformations
         return ({
           origin: App.canvas.viewport.origin,

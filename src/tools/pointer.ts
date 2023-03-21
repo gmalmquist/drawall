@@ -4,6 +4,16 @@ class PointerTool extends Tool {
   constructor() {
     super('pointer tool');
 
+    this.events.onMouse('down', e => {
+      const handle = App.ui.getHandleAt(e.position, h => h.clickable || h.draggable);
+      if (!App.ui.multiSelecting) {
+        App.ui.clearSelection();
+      }
+      if (handle !== null) {
+        App.ui.addSelection(handle);
+      }
+    });
+
     this.events.onMouse('click', e => {
       const clickable = App.ui.getHandleAt(e.position, h => h.clickable);
       if (clickable !== null) {
@@ -16,17 +26,19 @@ class PointerTool extends Tool {
 
       const clickable = App.ui.getHandleAt(e.position, h => h.clickable);
       if (clickable !== null) {
-        App.pane.style.cursor = 'pointer';
+        App.pane.style.cursor = clickable.cursor || 'pointer';
         this.setHovered(clickable);
         return;
       }
 
       const draggable = App.ui.getHandleAt(e.position, h => h.draggable);
       if (draggable !== null) {
-        App.pane.style.cursor = 'grab';
+        App.pane.style.cursor = draggable.cursor || 'grab';
         this.setHovered(draggable);
         return;
       }
+
+      App.pane.style.cursor = this.cursor;
 
       this.clearHovered();
     });
@@ -35,13 +47,15 @@ class PointerTool extends Tool {
 
     this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
-        App.pane.style.cursor = 'grabbed';
         const handle = App.ui.getHandleAt(e.start, h => h.draggable);
         if (handle !== null) {
+          App.pane.style.cursor = handle.cursor || 'grabbed';
           App.ui.setSelection(handle);
+          e.setSnapping(handle.snapping);
           handle.events.handleDrag(e);
           return handle.events;
         }
+        App.pane.style.cursor = 'grabbed';
         panTool.events.handleDrag(e);
         return panTool.events;
       },

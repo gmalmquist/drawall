@@ -6,18 +6,29 @@ const BLUE = '#5BCEFA';
 
 interface NamedAxis {
   name: string;
-  line: Line;
+  direction: Vector;
+  points?: Position[];
+}
+
+interface Snapping {
+  snapByDefault: boolean;
+  localAxes?: () => NamedAxis[];
+  preferredAxis?: () => NamedAxis;
+  allowLocal?: boolean;
+  allowGlobal?: boolean;
+  allowGeometry?: boolean;
 }
 
 interface HandleProps {
   getPos: () => Position;
   setPos?: (p: Position) => void;
   distance?: (p: Position) => Distance;
-  axes?: () => NamedAxis[],
   draggable?: boolean;
   clickable?: boolean;
   hoverable?: boolean;
   priority?: number;
+  cursor?: () => Cursor;
+  snapping?: Snapping;
 }
 
 class Handle extends Component {
@@ -26,13 +37,14 @@ class Handle extends Component {
   private readonly distanceFunc: (p: Position) => Distance;
   private _dragging: boolean = false;
   private _hovered: boolean = false;
+  private _cursor: () => Cursor | null;
 
   public draggable: boolean = true;
   public clickable: boolean = true;
   public hoverable: boolean = true;
   public ignoreNonPrimary: boolean = true;
   public priority: number = 0;
-  public readonly axes: () => NamedAxis[];
+  public readonly snapping: Snapping | undefined;
 
   constructor(entity: Entity, private readonly props: HandleProps) {
     super(entity);
@@ -41,8 +53,9 @@ class Handle extends Component {
     this.draggable = typeof props.draggable === 'undefined' ? true : props.draggable;
     this.clickable = typeof props.clickable === 'undefined' ? true : props.clickable;
     this.hoverable = typeof props.hoverable === 'undefined' ? true : props.hoverable;
+    this._cursor = typeof props.cursor === 'undefined' ? () => null : props.cursor;
 
-    this.axes = typeof props.axes === 'undefined' ? () => [] : props.axes;
+    this.snapping = props.snapping;
 
     const defaultDistanceFunc = (p: Position) => Distances.between(props.getPos(), p);
     this.distanceFunc = typeof props.distance === 'undefined'
@@ -63,6 +76,10 @@ class Handle extends Component {
         },
       });
     }
+  }
+
+  get cursor(): Cursor | null {
+    return this._cursor();
   }
 
   get isDragging(): boolean {
@@ -106,6 +123,7 @@ interface UiDragEvent {
   start: Position;
   delta: Vector;
   primary: boolean;
+  setSnapping: (snapping?: Snapping) => void;
 }
 
 interface UiKeyEvent {
@@ -219,7 +237,31 @@ interface MouseState {
   distanceDragged: Distance; 
 }
 
+interface SnapAxes {
+  local: NamedAxis[],
+  global: NamedAxis[],
+  geometry: NamedAxis[],
+  preferred: NamedAxis | null,
+}
+
+interface SnapState {
+  enabled: boolean,
+  snapToLocal: boolean,
+  snapToGlobal: boolean,
+  snapToGeometry: boolean,
+}
+
 class UiState {
+  private static readonly GLOBAL_X: NamedAxis = {
+    name: 'X-Axis',
+    direction: Vector(Axis.X, 'screen'),
+  };
+
+  private static readonly GLOBAL_Y: NamedAxis = {
+    name: 'Y-Axis',
+    direction: Vector(Axis.Y, 'screen'),
+  };
+
   public readonly events = new UiEventDispatcher(UiState);
   public axisSnap: boolean = false;
   public grabRadius: Distance = Distance(10, 'screen');
@@ -233,10 +275,16 @@ class UiState {
     distanceDragged: Distance(0, 'screen'),
   };
 
-  private _snapAxes: NamedAxis[] = [];
   private _selection: Set<Handle> = new Set();
   private keysPressed = new DefaultMap<string, boolean>(() => false);
   private swappedTool: ToolName | null = null;
+  private snapAxes: SnapAxes | null = null;
+  public readonly snapping: SnapState = {
+    enabled: false,
+    snapToLocal: true,
+    snapToGlobal: true,
+    snapToGeometry: false,
+  };
 
   constructor() {
     this.events.forward({
@@ -247,20 +295,39 @@ class UiState {
 
     this.events.onKey('keydown', e => {
       this.keysPressed.set(e.key, true);
-      if (e.key === 'Shift') {
-        this.axisSnap = true;
-      }
       this.evaluateKeybindings();
+      if (e.key === 'Shift') {
+        this.snapping.enabled = !this.snapping.enabled;
+      } else if (e.key === 'x') {
+        if (this.dragging) {
+          this.updateSnapping({
+            snapByDefault: true,
+            preferredAxis: () => UiState.GLOBAL_X,
+          });
+        }
+      } else if (e.key === 'y') {
+        if (this.dragging) {
+          this.updateSnapping({
+            snapByDefault: true,
+            preferredAxis: () => UiState.GLOBAL_Y,
+          });
+        }
+      }
     });
 
     this.events.onKey('keyup', e => {
       this.keysPressed.delete(e.key);
-      if (e.key === 'Shift') {
-        this.axisSnap = false;
-      }
     });
 
     this.setup();
+  }
+
+  get multiSelecting(): boolean {
+    return this.keysPressed.get('Control');
+  }
+
+  get useAlternateSnap(): boolean {
+    return this.keysPressed.get('Shift');
   }
 
   update() {
@@ -277,10 +344,6 @@ class UiState {
 
   get dragging(): boolean {
     return this.mouse.dragging;
-  }
-
-  get snapAxes(): NamedAxis[] {
-    return Array.from(this._snapAxes);
   }
 
   get selection(): Handle[] {
@@ -349,36 +412,42 @@ class UiState {
     }
   }
 
-  private getSnapAxis(pos: Position, delta: Vector): NamedAxis | null {
-    if (!this.axisSnap) return null;
-    const alignments = this.snapAxes.map(axis => Spaces.getCalc(
-      'screen',
-      (a: Vec, b: Vec) => Math.abs(a.unit().dot(b.unit())),
-      delta, axis.line.tangent
-    ));
-    let best = -1;
-    for (let i = 0; i < alignments.length; i++) {
-      if (best < 0 || alignments[i] > alignments[best]) {
-        best = i;
-      }
-    }
-    return best >= 0 ? this.snapAxes[best] : null;
-  }
-
   private getAxisColor(axis: NamedAxis): string {
-    if (axis.name === 'X-Axis') return 'red';
-    if (axis.name === 'Y-Axis') return 'blue';
-    const colors = [
-      'purple',
-      'cyan',
-      'pink',
-      'green',
-    ];
-    for (let i = 0; i < this.snapAxes.length; i++) {
-      if (axis.name === this.snapAxes[i].name) {
-        return colors[i % colors.length];
-      }
+    if (axis.name === 'X-Axis') return BLUE;
+    if (axis.name === 'Y-Axis') return PINK;
+    const axes = this.snapAxes;
+    if (axes === null) {
+      return 'gray';
     }
+    if (axis.name === axes.preferred?.name) {
+      return BLUE;
+    }
+    
+    const indexIn = (arr: NamedAxis[]): number => {
+      for (let i = 0; i < arr.length; i++) {
+        if (arr[i].name === axis.name) {
+          return i; 
+        }
+      }
+      return -1;
+    };
+
+    const colors = [
+      BLUE,
+      PINK,
+      'purple',
+      'orange',
+      'green',
+      'brown',
+      'cyan',
+    ];
+
+    const li = indexIn(axes.local);
+    if (li >= 0) return colors[li % colors.length];
+
+    const gi = indexIn(axes.geometry);
+    if (gi >= 0) return colors[(gi + axes.local.length) % colors.length];
+
     return 'gray';
   }
 
@@ -391,82 +460,101 @@ class UiState {
       return;
     }
 
-    const renderLine = new SpaceEdge(
-      axis.line.origin.minus(axis.line.tangent.scale(Distance(2000, 'screen'))),
-      axis.line.origin.plus(axis.line.tangent.scale(Distance(2000, 'screen'))),
-    );
-    const labelPoint = renderLine.closestPoint(this.mouse.position);
+    const points = axis.points || [ this.mouse.start ];
 
-    App.canvas.strokeStyle = this.getAxisColor(axis);
-    App.canvas.lineWidth = 1;
-    App.canvas.strokeLine(renderLine.src, renderLine.dst);
+    for (let i = 0; i < points.length; i++) {
+      const origin = points[i];
+      const renderLine = new SpaceEdge(
+        origin.minus(axis.direction.scale(Distance(2000, 'screen'))),
+        origin.plus(axis.direction.scale(Distance(2000, 'screen'))),
+      );
+      const labelPoint = renderLine.closestPoint(this.mouse.position);
 
-    App.canvas.strokeLine(this.mouse.start, this.mouse.position);
+      App.canvas.strokeStyle = this.getAxisColor(axis);
+      App.canvas.lineWidth = 1;
+      App.canvas.strokeLine(renderLine.src, renderLine.dst);
 
-    App.canvas.text({
-      text: `${axis.name}`,
-      point: labelPoint.plus(axis.line.normal
-        .map((n: Vec, d: number) => n.unit().scale(d), Distance(15, 'screen'))),
-      fill: this.getAxisColor(axis),
-      shadow: 'black',
-      axis: axis.line.tangent,
-      keepUpright: true,
-      align: 'center',
-      baseline: 'bottom',
-    });
+      if (i === 0) {
+        App.canvas.text({
+          text: `${axis.name}`,
+          point: labelPoint.plus(axis.direction.r90()
+            .to('screen').unit().scale(15)),
+          fill: this.getAxisColor(axis),
+          shadow: 'black',
+          axis: axis.direction,
+          keepUpright: true,
+          align: 'center',
+          baseline: 'bottom',
+        });
+      }
+    }
+
+    if (axis.points) {
+      App.canvas.strokeLine(this.mouse.start, this.mouse.position);
+    }
   }
 
   private snap(delta: Vector): Vector {
     const axis = this.getSnapAxis(this.mouse.position, delta);
     if (axis === null) return delta;
 
-    return delta.onAxis(axis.line.tangent);
+    return delta.onAxis(axis.direction);
   }
 
-  private updateSnapAxes() {
-    // don't add tons of axes that are right next to each other.
-    const epsilon = Degrees(30);
+  private updateSnapping(snapping?: Snapping) {
+    this.snapAxes = this.getSnapAxes(snapping);
+    this.snapping.enabled = !!snapping?.snapByDefault;
+  }
 
-    const local = this.selection.map(h => h.axes())
-      .reduce((a, b) => [...a, ...b], []);
+  private getSnapAxes(snapping?: Snapping): SnapAxes {
+    const snapAxes: SnapAxes = {
+      local: [],
+      global: [],
+      geometry: [],
+      preferred: null,
+    };
 
-    const global: NamedAxis[] = [
-      {
-        name: 'X-Axis',
-        line: new Line(this.mouse.start, Vector(Axis.X, 'screen')),
-      },
-      {
-        name: 'Y-Axis',
-        line: new Line(this.mouse.start, Vector(Axis.Y, 'screen')),
-      },
-    ];
-
-    const geometry: NamedAxis[] = [];
-    // we can probably add an axis-defining component
-    // to do this less ad-hoc.
-    for (const wall of App.ecs.getComponents(Wall)) {
-      if (wall.entity.get(Handle)
-        .some(handle => this.selection.some(s => handle === s))) {
-        continue;
-      }
-      const edge = wall.getEdge();
-      geometry.push({
-        name: wall.name,
-        line: new Line(edge.lerp(0.5), edge.vector),
-      });
+    if (snapping?.preferredAxis) {
+      snapAxes.preferred = snapping!.preferredAxis();
     }
 
-    // todo: make it configurable which of these are included
-    const all: NamedAxis[] = [
-      ...global,
-      ...local,
-      ...geometry
-    ];
+    if (snapping?.allowLocal !== false) {
+      // don't add tons of axes that are right next to each other.
+      snapAxes.local = this.selection
+        .map(h => h.snapping?.localAxes || (() => []))
+        .map(axes => axes())
+        .reduce((a, b) => [...a, ...b], []);
+    }
 
+    if (snapping?.allowGlobal !== false) {
+      snapAxes.global = [UiState.GLOBAL_X, UiState.GLOBAL_Y];
+    }
+
+    if (snapping?.allowGeometry !== false) {
+      // we can probably add an axis-defining component
+      // to do this less ad-hoc.
+      for (const wall of App.ecs.getComponents(Wall)) {
+        if (wall.entity.get(Handle)
+          .some(handle => this.selection.some(s => handle === s))) {
+          continue;
+        }
+        snapAxes.geometry.push({
+          name: wall.name,
+          direction: wall.tangent,
+          points: [ wall.midpoint ],
+        });
+      }
+    }
+
+    return snapAxes;
+  }
+
+  private elideAxes(axes: NamedAxis[]): NamedAxis[] {
+    const epsilon = Degrees(30);
     const angles = new Set<Degrees>();
     const results: NamedAxis[] = [];
-    for (const axis of all) {
-      const angle = normalizeRadians(axis.line.tangent.angle().get('screen'));
+    for (const axis of axes) {
+      const angle = normalizeRadians(axis.direction.angle().get('screen'));
       const degrees = unwrap(toDegrees(angle));
       // we only care about the axial alignment, not the sign.
       const halved = degrees >= 180 ? degrees - 180 : degrees;
@@ -476,8 +564,39 @@ class UiState {
       angles.add(rounded);
       results.push(axis);
     }
+    return axes;
+  }
 
-    this._snapAxes = results;
+  private getSnapAxis(pos: Position, delta: Vector): NamedAxis | null {
+    if (!this.snapping.enabled || this.snapAxes === null) return null;
+    if (this.snapAxes.preferred) {
+      return this.snapAxes.preferred;
+    }
+    const options = new Array<NamedAxis>();
+    if (this.snapping.snapToLocal) {
+      this.snapAxes.local.forEach(a => options.push(a));
+    }
+    if (this.snapping.snapToGlobal) {
+      this.snapAxes.global.forEach(a => options.push(a));
+    }
+    if (this.snapping.snapToGeometry) {
+      this.snapAxes.geometry.forEach(a => options.push(a));
+    }
+    const elided = this.elideAxes(options);
+
+    if (elided.length === 0) return null;
+    const alignments = elided.map(axis => Spaces.getCalc(
+      'screen',
+      (a: Vec, b: Vec) => Math.abs(a.unit().dot(b.unit())),
+      delta, axis.direction
+    ));
+    let best = -1;
+    for (let i = 0; i < alignments.length; i++) {
+      if (best < 0 || alignments[i] > alignments[best]) {
+        best = i;
+      }
+    }
+    return best >= 0 ? elided[best] : null;
   }
 
   setup() {
@@ -514,6 +633,9 @@ class UiState {
       position: e.position,
       delta: this.snap(Vectors.between(this.mouse.start, e.position)),
       primary: e.primary,
+      setSnapping: (snapping?: Snapping) => {
+        this.updateSnapping(snapping);
+      },
     });
 
     const ignoreKeyEventsFrom = new Set([
@@ -582,7 +704,6 @@ class UiState {
           );
           if (this.mouse.distanceDragged.get('screen') >= dragThreshold.get('screen')) {
             this.mouse.dragging = true;
-            this.updateSnapAxes();
             this.events.handleDrag(makeDragEvent(event, 'start'));
           }
         }
@@ -609,6 +730,7 @@ class UiState {
 
       this.mouse.dragging = false;
       this.mouse.pressed = false;
+      this.updateSnapping();
     });
   }
 }

@@ -23,6 +23,7 @@ class Keybindings {
     kb.bind('s').to('pointer tool');
     kb.bind('a').to('pointer tool');
     kb.bind(' ').to('pointer tool');
+    kb.bind('Escape').to('pointer tool');
     kb.bind('r').to('room tool');
     kb.bind('p').to('pan tool');
     return kb;

@@ -5,7 +5,16 @@ class Project {
   // defines what unit is used to render UI labels.
   public displayUnit: Unit = Units.distance.get('ft')!;
 
-  public gridSpacing: Amount = { unit: 'feet', value: 1 };
+  private _gridSpacing: Amount = { unit: 'feet', value: 1 };
+
+  public get gridSpacing() {
+    return this._gridSpacing;
+  }
+
+  public set gridSpacing(amount: Amount) {
+    this._gridSpacing = amount;
+    App.gui.project.reset();
+  }
 
   public get modelUnit(): Unit {
     return this._modelUnit;

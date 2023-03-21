@@ -126,13 +126,24 @@ class Wall extends Component implements Solo {
       },
       distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
-      axes: () => {
-        const edge = this.getEdge();
-        return [
-          { name: 'normal', line: new Line(edge.lerp(0.5), edge.normal), },
-          { name: 'tangent', line: new Line(edge.lerp(0.5), edge.vector), },
-        ];
+      snapping: {
+        snapByDefault: true,
+        preferredAxis: () => ({
+          name: 'wall normal',
+          direction: this.outsideNormal,
+          points: [
+            this.src.pos,
+            this.dst.pos,
+          ],
+        }),
+        localAxes: () => {
+          return [
+            { name: 'wall normal', direction: this.outsideNormal, points: [ this.midpoint ], },
+            { name: 'wall tangent', direction: this.tangent, points: [ this.midpoint ], },
+          ];
+        },
       },
+      cursor: () => getResizeCursor(this.outsideNormal),
     });
     handle.events.onMouse('click', ({ position }) => this.showPopup(position));
     handle.events.addDragListener({
@@ -412,17 +423,31 @@ class WallJoint extends Component {
         entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
       },
       priority: 1,
-      axes: () => {
-        const incoming = this.incoming;
-        const outgoing = this.outgoing;
-        const axes: NamedAxis[] = [];
-        if (incoming !== null) {
-          axes.push({ name: 'right wall', line: new SpaceEdge(this.pos, incoming.src.pos).line });
-        }
-        if (outgoing !== null) {
-          axes.push({ name: 'left wall', line: new SpaceEdge(this.pos, outgoing.dst.pos).line });
-        }
-        return axes;
+      snapping: {
+        snapByDefault: false,
+        allowLocal: true,
+        allowGlobal: true,
+        allowGeometry: true,
+        localAxes: () => {
+          const incoming = this.incoming;
+          const outgoing = this.outgoing;
+          const axes: NamedAxis[] = [];
+          if (incoming !== null) {
+            axes.push({
+              name: 'right wall',
+              direction: Vectors.between(this.pos, incoming.src.pos),
+              points: [ this.pos ],
+            });
+          }
+          if (outgoing !== null) {
+            axes.push({
+              name: 'left wall',
+              direction: Vectors.between(this.pos, outgoing.dst.pos),
+              points: [ this.pos ],
+            });
+          }
+          return axes;
+        },
       },
     });
     handle.events.onMouse('click', ({ position }) => this.showPopup(position));
@@ -706,7 +731,7 @@ class MinLengthConstraint extends Constraint {
       // only apply this constraint in the absense of another length constraint.
       return;
     }
-    const length = App.project.modelUnit.from(App.project.gridSpacing).value;
+    const length = App.project.modelUnit.from({ value: 3, unit: 'inch' }).value;
     const edge = this.getEdge();
     if (edge === null) return;
     const delta = length - edge.vector().mag();

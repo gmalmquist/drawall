@@ -141,6 +141,8 @@ class UnitPattern {
   }
 }
 
+type UnitFamily = 'metric' | 'imperial' | 'esoteric';
+
 class Unit {
   private readonly aliases = new Set<string>();
   private readonly parsers: UnitParser[] = [];
@@ -150,6 +152,7 @@ class Unit {
   constructor(
     public readonly name: string,
     public readonly abbrev: string,
+    public readonly family: UnitFamily,
   ) {
     for (const alias of [this.abbrev, this.name, `${this.name}s`]) {
       this.addAlias(alias);
@@ -282,7 +285,7 @@ class Units {
   private readonly aliases: Map<string, string> = new Map();
 
   constructor() {
-    this.add(new Unit(UNITLESS, ''));
+    this.add(new Unit(UNITLESS, '', 'esoteric'));
   }
 
   add(x: Unit | UnitConversion): Units {
@@ -411,21 +414,21 @@ class Units {
 }
 
 Units.distance
-  .add(new Unit('kilometer', 'km'))
-  .add(new Unit('hectometer', 'hm'))
-  .add(new Unit('dekameter', 'dam'))
-  .add(new Unit('meter', 'm'))
-  .add(new Unit('decimeter', 'dm'))
-  .add(new Unit('centimeter', 'cm'))
-  .add(new Unit('millimeter', 'mm'))
-  .add(new Unit('micrometer', 'μm')
+  .add(new Unit('kilometer', 'km', 'metric'))
+  .add(new Unit('hectometer', 'hm', 'metric'))
+  .add(new Unit('dekameter', 'dam', 'metric'))
+  .add(new Unit('meter', 'm', 'metric'))
+  .add(new Unit('decimeter', 'dm', 'metric'))
+  .add(new Unit('centimeter', 'cm', 'metric'))
+  .add(new Unit('millimeter', 'mm', 'metric'))
+  .add(new Unit('micrometer', 'μm', 'metric')
     .addAlias('micron')
     .addAlias('microns'))
-  .add(new Unit('nanometer', 'nm'))
-  .add(new Unit('femtometer', 'fm'))
-  .add(new Unit('zeptometer', 'zm'))
-  .add(new Unit('thou', 'mil'))
-  .add(new Unit('feet', 'ft')
+  .add(new Unit('nanometer', 'nm', 'metric'))
+  .add(new Unit('femtometer', 'fm', 'metric'))
+  .add(new Unit('zeptometer', 'zm', 'metric'))
+  .add(new Unit('thou', 'mil', 'imperial'))
+  .add(new Unit('feet', 'ft', 'imperial')
     .addAlias('foot')
     .addParser('0\'', x => new Amount(x, 'feet'))
     .addParser('0\'0\"', (feet, inches) => new Amount(feet + inches / 12.0, 'feet'))
@@ -437,31 +440,31 @@ Units.distance
       }
       return `${prettyNum(feet)}'${Math.round(inches*10)/10.0}"`;
     }))
-  .add(new Unit('inch', 'in')
+  .add(new Unit('inch', 'in', 'imperial')
     .addParser('0\"', x => new Amount(x, 'inch'))
     .setFormat(amount => `${prettyNum(amount.value)}"`))
-  .add(new Unit('yard', 'y'))
-  .add(new Unit('mile', 'mi'))
-  .add(new Unit('light-year', 'ly'))
-  .add(new Unit('light-hour', 'lh'))
-  .add(new Unit('light-minute', 'lm'))
-  .add(new Unit('light-second', 'ls'))
-  .add(new Unit('light-millisecond', 'lms'))
-  .add(new Unit('light-microsecond', 'lμs'))
-  .add(new Unit('light-nanosecond', 'lns'))
-  .add(new Unit('light-femtosecond', 'lfs'))
-  .add(new Unit('furlong', 'fur'))
-  .add(new Unit('pixel', 'px'))
-  .add(new Unit('league', 'lg'))
-  .add(new Unit('fathom', 'ftm'))
-  .add(new Unit('nautical mile', 'nmi'))
-  .add(new Unit('chain', 'chains'))
-  .add(new Unit('rod', 'rods'))
-  .add(new Unit('parsec', 'pc'))
-  .add(new Unit('astronomical unit', 'au'))
-  .add(new Unit('smoot', 'smoot')
+  .add(new Unit('yard', 'y', 'imperial'))
+  .add(new Unit('mile', 'mi', 'imperial'))
+  .add(new Unit('light-year', 'ly', 'esoteric'))
+  .add(new Unit('light-hour', 'lh', 'esoteric'))
+  .add(new Unit('light-minute', 'lm', 'esoteric'))
+  .add(new Unit('light-second', 'ls', 'esoteric'))
+  .add(new Unit('light-millisecond', 'lms', 'esoteric'))
+  .add(new Unit('light-microsecond', 'lμs', 'esoteric'))
+  .add(new Unit('light-nanosecond', 'lns', 'esoteric'))
+  .add(new Unit('light-femtosecond', 'lfs', 'esoteric'))
+  .add(new Unit('furlong', 'fur', 'esoteric'))
+  .add(new Unit('pixel', 'px', 'esoteric'))
+  .add(new Unit('league', 'lg', 'esoteric'))
+  .add(new Unit('fathom', 'ftm', 'esoteric'))
+  .add(new Unit('nautical mile', 'nmi', 'esoteric'))
+  .add(new Unit('chain', 'chains', 'esoteric'))
+  .add(new Unit('rod', 'rods', 'esoteric'))
+  .add(new Unit('parsec', 'pc', 'esoteric'))
+  .add(new Unit('astronomical unit', 'au', 'esoteric'))
+  .add(new Unit('smoot', 'smoot', 'esoteric')
      .setFormat(a => a.value === 1 ? '1 smoot' : `${prettyNum(a.value)} smoots`))
-  .add(new Unit('gwen', 'gwen')
+  .add(new Unit('gwen', 'gwen', 'esoteric')
      .setFormat(a => a.value === 1 ? '1 gwen' : `${prettyNum(a.value)} gwens`))
   .add(UnitConversions.scaling('km', 'm', 1e3))
   .add(UnitConversions.scaling('hm', 'm', 1e2))
