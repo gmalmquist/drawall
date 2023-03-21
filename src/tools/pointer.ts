@@ -26,7 +26,7 @@ class PointerTool extends Tool {
 
       const clickable = App.ui.getHandleAt(e.position, h => h.clickable);
       if (clickable !== null) {
-        App.pane.style.cursor = clickable.cursor || 'pointer';
+        App.pane.style.cursor = 'pointer';
         this.setHovered(clickable);
         return;
       }

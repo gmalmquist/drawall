@@ -1,5 +1,10 @@
 type Transform<T> = (t: T) => T;
 type Consume<T> = (t: T) => void;
+type Kinds<T> = T extends { kind: infer K } ? K : never;
+
+const impossible = (x: never): never => {
+  throw new Error('impossible');
+}
 
 const createUuid = () => {
   const letters: string[] = [];

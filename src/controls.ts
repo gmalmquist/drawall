@@ -1,5 +1,4 @@
 // ui controls like buttons n stuff
-
 class ElementWrap<E extends HTMLElement> {
   constructor(readonly element: E) {
   }
@@ -80,6 +79,290 @@ class IconButton extends ElementWrap<HTMLElement> {
   }
 }
 
+type AutoFieldListener = (field: AutoField) => void;
+
+interface AutoFieldUi<T> {
+  element: ElementWrap<HTMLElement>,
+  setValue: (value: T) => void;
+}
+
+interface AutoFieldHandle<V> {
+  getValue: () => V;
+  setValue: (v: V) => void;
+}
+
+type AutoFieldValue<A extends AutoField> = A extends { value: infer V } ? V : never;
+
+class AutoForm {
+  private static rulerCount: number = 0;
+  private readonly listeners = new Set<AutoFieldListener>();
+  private readonly fields = new Array<AutoField>();
+  private readonly byId = new Map<string, AutoField>();
+  private readonly uiMap = new Map<string, AutoFieldUi<any>>();
+  private parent: AutoForm | null = null;
+
+  constructor() {
+  }
+
+  addFieldListener(listener: AutoFieldListener) {
+    this.listeners.add(listener);
+  }
+
+  has(field: { name: string, kind: Kinds<AutoField> }): boolean {
+    return this.byId.has(AutoForm.fieldId(field));
+  }
+
+  addSeparator() {
+    this.add({ name: `${AutoForm.rulerCount++}`, kind: 'separator', value: 'separator' });
+  }
+
+  add<A extends AutoField>(field: A): AutoFieldHandle<AutoFieldValue<A>> {
+    if (field.kind === 'separator'
+      && this.fields.length > 0
+      && this.fields[this.fields.length - 1].kind === 'separator') {
+      return { getValue: () => 'separator', setValue: (_) => {} } as AutoFieldHandle<AutoFieldValue<A>>;
+    }
+    const id = AutoForm.fieldId(field);
+    const handle: AutoFieldHandle<AutoFieldValue<A>> = {
+      setValue: (value: AutoFieldValue<A>) => this.setField({ ...field, value } as A),
+      getValue: () => this.byId.get(id)!.value as AutoFieldValue<A>,
+    };
+    if (this.byId.has(id)) {
+      return handle; 
+    }
+    this.byId.set(id, field);
+    this.fields.push(field);
+    return handle;
+  }
+
+  setField(field: AutoField): boolean {
+    if (!this.has(field)) {
+      return false;
+    }
+    if (!this.updateField(field)) {
+      return false;
+    }
+    const input = this.uiMap.get(AutoForm.fieldId(field));
+    if (typeof input !== 'undefined') {
+      input.setValue(field.value);
+    }
+    if (this.parent !== null) {
+      this.parent.setField(field);
+    }
+    return true;
+  }
+
+  public inflate(into?: MiniForm): MiniForm {
+    const form = into || new MiniForm();
+    form.verticalAlign = 'stretch';
+    for (const field of this.fields) {
+      const inflated = this.inflateField(field);
+      this.uiMap.set(AutoForm.fieldId(field), inflated);
+      if (field.label) {
+        form.appendLabeled(field.label, inflated.element);
+      } else {
+        form.append(inflated.element);
+      }
+    }
+    return form;
+  }
+
+  private updateField(field: AutoField): boolean {
+    const id = AutoForm.fieldId(field);
+    if (!this.byId.has(id)) return false;
+    const previous = this.byId.get(id)!;
+    if (AutoForm.compareValues(field, previous)) {
+      return false;
+    }
+    this.byId.set(id, field);
+    for (let i = 0; i < this.fields.length; i++) {
+      if (AutoForm.fieldId(this.fields[i]) === id) {
+        this.fields[i] = field;
+        break;
+      }
+    }
+    this.fireValueChange(field);
+    return true;
+  }
+
+  private fireValueChange(field: AutoField) {
+    this.listeners.forEach(listener => listener(field));
+  }
+
+  private forward(other: AutoForm) {
+    this.addFieldListener(f => other.setField(f));
+    other.parent = this;
+  }
+
+  private inflateField(field: AutoField): AutoFieldUi<any> {
+    if (field.kind === 'amount') {
+      const input = new AmountInput(() => field.value);
+      input.minValue = typeof field.min !== 'undefined' ? field.min : null;
+      input.maxValue = typeof field.max !== 'undefined' ? field.max : null;
+      input.onChange(value => {
+        const f = { ...field, value };
+        this.setField(f);
+      });
+      return {
+        element: input,
+        setValue: v => input.setValue(v),
+      };
+    }
+    if (field.kind === 'toggle') {
+      const input = new ToggleButton(field.name);
+      input.setToggled(field.value);
+      input.onToggle(value => {
+        const f = { ...field, value };
+        this.setField(f);
+      });
+      return {
+        element: input,
+        setValue: v => input.setToggled(v),
+      };
+    }
+    if (field.kind === 'slider') {
+      const input = new SliderInput(() => field.value, field.min, field.max);
+      input.onChange(value => {
+        const f = { ...field, value };
+        this.setField(f);
+      });
+      return {
+        element: input,
+        setValue: v => input.setValue(v),
+      };
+    }
+    if (field.kind === 'angle') {
+      const input = new AngleInput(() => field.value);
+      input.onChange(value => {
+        const f = { ...field, value };
+        this.setField(f);
+      });
+      return {
+        element: input,
+        setValue: v => input.setValue(v),
+      };
+    }
+    if (field.kind === 'separator') {
+      return {
+        element: new Separator(true),
+        setValue: (_) => {},
+      };
+    }
+    throw new Error(`TODO: implement inflating ${field.kind} auto fields`);
+  }
+
+  public static compareValues(one: AutoField, two: AutoField): boolean {
+    if (one.kind !== two.kind) return false;
+    if (one.kind === 'number' || one.kind === 'toggle' || one.kind === 'slider') {
+      return one.value === two.value;
+    }
+    if (one.kind === 'amount') {
+      const a = one.value;
+      const b = two.value as Amount;
+      return a.value === b.value && a.unit === b.unit;
+    }
+    if (one.kind === 'angle') {
+      return one.value.get('model') === (two.value as Angle).get('model');
+    }
+    if (one.kind === 'separator') {
+      return true;
+    }
+    return impossible(one);
+  }
+
+  public static intersection(forms: AutoForm[]): AutoForm {
+    if (forms.length === 0) return new AutoForm();
+    if (forms.length === 1) return forms[0];
+    const [first, ...remainder] = forms;
+    const included = new Set<string>(first.fields.map(AutoForm.fieldId));
+    for (const form of remainder) {
+      const check = Array.from(included);
+      for (const field of check) {
+        if (!form.byId.has(field)) {
+          included.delete(field);
+        }
+      }
+      if (included.size === 0) break;
+    }
+    const result = new AutoForm();
+    for (const field of first.fields) {
+      if (included.has(AutoForm.fieldId(field))) {
+        result.add(field);
+      }
+    }
+    for (const form of forms) {
+      result.forward(form);
+    }
+    return result;
+  }
+
+  public static union(forms: AutoForm[]): AutoForm {
+    const result = new AutoForm();
+    for (const form of forms) {
+      if (result.fields.length > 0) {
+        result.addSeparator();
+      }
+      for (const field of form.fields) {
+        result.add(field);
+      }
+      result.forward(form);
+    }
+    return result;
+  }
+
+  public static fieldId(field: { name: string, kind: Kinds<AutoField> }): string {
+    return `${field.kind}:${field.name}`;
+  }
+}
+
+type AutoField = AutoFieldNumber 
+  | AutoFieldAmount 
+  | AutoFieldToggle
+  | AutoFieldSlider
+  | AutoFieldAngle
+  | AutoFieldSeparator
+;
+
+interface AutoFieldBase<V> {
+  name: string;
+  label?: string;
+  value: V;
+}
+
+interface AutoFieldSeparator extends AutoFieldBase<'separator'> {
+  kind: 'separator',
+}
+
+interface AutoFieldNumber extends AutoFieldBase<number> {
+  kind: 'number';
+  min?: number;
+  max?: number;
+}
+
+interface AutoFieldSlider extends AutoFieldBase<number> {
+  kind: 'slider';
+  min: number;
+  max: number;
+}
+
+interface AutoFieldAngle extends AutoFieldBase<Angle> {
+  kind: 'angle';
+  value: Angle;
+}
+
+interface AutoFieldAmount extends AutoFieldBase<Amount> {
+  kind: 'amount';
+  unit: Units;
+  min?: Amount;
+  max?: Amount;
+}
+
+interface AutoFieldToggle extends AutoFieldBase<boolean> {
+  kind: 'toggle';
+  value: boolean;
+}
+
+
 type FlowOrientation = 'row' | 'column';
 type FlexAlign = 'flex-start' | 'center' | 'flex-end' | 'stretch';
 
@@ -155,7 +438,7 @@ class MiniForm extends ElementWrap<HTMLElement> implements Resetable {
     this.element.appendChild(ruler);
   }
 
-  appendLabeled(text: string, e: MiniFormInput<any, any>) {
+  appendLabeled(text: string, e: ElementWrap<HTMLElement> | Resetable) {
     const label = new MiniLabel(text.toLocaleUpperCase());
     label.addClass('over-label');
 
@@ -166,6 +449,13 @@ class MiniForm extends ElementWrap<HTMLElement> implements Resetable {
     column.append(e);
 
     this.append(column);
+  }
+}
+
+class Separator extends ElementWrap<HTMLElement> {
+  constructor(horizontal: boolean) {
+    super(document.createElement('div'));
+    this.addClass(horizontal ? 'h-ruler' : 'v-ruler');
   }
 }
 
@@ -248,15 +538,19 @@ abstract class MiniFormInput<V, E extends HTMLElement> extends ElementWrap<E> im
   protected abstract parse(input: string): InputParse<V>;
 }
 
-class DistanceInput extends MiniFormInput<Distance, HTMLInputElement> {
-  public minValue: Distance | null = Distance(0, 'model');
-  public maxValue: Distance | null = null;
+class SliderInput extends MiniFormInput<number, HTMLInputElement> {
+  private static readonly RESOLUTION = 10000;
 
-  constructor(defaultValue: () => Distance = () => Distance(0, 'model')) {
+  constructor(
+    defaultValue: () => number,
+    public minValue: number,
+    public maxValue: number) {
     super(document.createElement('input') as HTMLInputElement, defaultValue);
-    this.addClass('distance');
-    this.element.setAttribute('type', 'text');
-    this.element.setAttribute('size', '8');
+    this.addClass('mini-slider');
+    this.element.setAttribute('type', 'range');
+    this.element.setAttribute('min', '0');
+    this.element.setAttribute('max', `${SliderInput.RESOLUTION}`);
+    this.setValue(defaultValue());
   }
 
   protected override getRawValue(): string {
@@ -267,22 +561,19 @@ class DistanceInput extends MiniFormInput<Distance, HTMLInputElement> {
     this.element.value = value;
   }
 
-  protected override format(value: Distance): string {
-    const mu = App.project.modelUnit;
-    return mu.format(mu.newAmount(value.get('model')));
+  protected override format(value: number): string {
+    const min = this.minValue;
+    const max = this.maxValue;
+    const v = lerp((1.0 * value - min) / (max - min), 0, SliderInput.RESOLUTION);
+    return `${v}`;
   }
 
-  protected override parse(input: string): InputParse<Distance> {
-    const amount = Units.distance.parse(input.trim());
+  protected override parse(input: string): InputParse<number> {
+    const amount = parseFloat(input); 
     if (amount === null) {
       return { error: `Could not parse '${input}'` };
     }
-    const distance = Distance(App.project.modelUnit.from(amount).value, 'model');
-    const min = this.minValue;
-    const max = this.maxValue;
-    if (min !== null && distance.lt(min)) return { value: min };
-    if (max !== null && distance.gt(max)) return { value: max };
-    return { value: distance };
+    return { value: lerp(amount / SliderInput.RESOLUTION, this.minValue, this.maxValue) };
   }
 }
 
@@ -333,7 +624,7 @@ class AngleInput extends MiniFormInput<Angle, HTMLInputElement> {
 
   constructor(defaultValue: () => Angle = () => Angle(Radians(0), 'model')) {
     super(document.createElement('input') as HTMLInputElement, defaultValue);
-    this.element.setAttribute('type', 'number');
+    this.element.setAttribute('type', 'text');
     this.element.setAttribute('size', '6');
   }
 
@@ -348,11 +639,11 @@ class AngleInput extends MiniFormInput<Angle, HTMLInputElement> {
   protected override format(value: Angle): string {
     const radians = value.get('model');
     const degrees = toDegrees(radians);
-    return `${unwrap(degrees)}`;
+    return `${Math.round(unwrap(degrees)*10)/10.}°`;
   }
 
   protected override parse(input: string): InputParse<Angle> {
-    const degrees = parseFloat(input.trim());
+    const degrees = parseFloat(input.trim().replace(/°/g, ''));
     if (isNaN(degrees)) {
       return { 'error': `cannot parse '${input}' as a number.` };
     }

@@ -193,6 +193,10 @@ class Entity {
     return this.components.get(kind);
   }
 
+  getRef<C extends Component>(kind: ComponentType<C>): EntityRef<C[]> {
+    return this.ref(e => e.get(kind));
+  }
+
   only<C extends Component, Solo>(kind: ComponentType<C>): C {
     const arr = this.get(kind);
     if (arr.length !== 1) {
@@ -201,14 +205,66 @@ class Entity {
     return arr[0];
   }
 
+  onlyRef<C extends Component, Solo>(kind: ComponentType<C>): EntityRef<C> {
+    return this.ref(e => e.only(kind));
+  }
+
   getOrCreate<C extends Component>(kind: ComponentType<C>): C {
     return this.components.getOrCreate(kind, this);
+  }
+
+  ref<T>(f: (e: Entity) => T): EntityRef<T> {
+    return EntityRef(f, this);
   }
 
   toString() {
     return `Entity(id=${this.id}, name=${this.name})`;
   }
 }
+
+class EntityRefImpl<T> {
+  constructor(
+    private readonly getter: () => T,
+    private readonly entities: readonly Entity[],
+  ) {
+  }
+
+  get isAlive(): boolean {
+    return this.entities.every(e => e.isAlive);
+  }
+
+  or<X>(x: X): T | X {
+    if (this.isAlive) {
+      return this.getter();
+    }
+    return x;
+  }
+
+  unwrap(): T | null {
+    if (!this.isAlive) return null;
+    return this.getter();
+  }
+
+  map<U>(f: (x: T) => U): EntityRefImpl<U> {
+    return new EntityRefImpl(
+      () => f(this.getter()),
+      this.entities,
+    );
+  }
+
+  intersection<U>(e: EntityRefImpl<U>): EntityRefImpl<readonly [T, U]> {
+    return new EntityRefImpl(
+      () => [this.getter(), e.getter()],
+      [...this.entities, ...e.entities],
+    );
+  }
+}
+
+type EntityRef<T> = EntityRefImpl<T>;
+const EntityRef = <T, E extends readonly Entity[]>(
+  getter: (...entities: E) => T, ...entities: E): EntityRefImpl<T> => {
+  return new EntityRefImpl(() => getter(...entities), entities);
+};
 
 class EntityComponentSystem {
   private readonly entities = new Map<Eid, Entity>();

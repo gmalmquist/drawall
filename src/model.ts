@@ -145,7 +145,6 @@ class Wall extends Component implements Solo {
       },
       cursor: () => getResizeCursor(this.outsideNormal),
     });
-    handle.events.onMouse('click', ({ position }) => this.showPopup(position));
     handle.events.addDragListener({
       onStart: (e): [Position, Position] => {
         return [this.src.pos, this.dst.pos];
@@ -450,14 +449,15 @@ class WallJoint extends Component {
         },
       },
     });
-    handle.events.onMouse('click', ({ position }) => this.showPopup(position));
 
     entity.add(AngleConstraint,
-      () => ({
-        center: position,
-        left: this.outgoing ? this.outgoing.dst.entity.only(PhysNode) : position,
-        right: this.incoming ? this.incoming.src.entity.only(PhysNode) : position,
-      }),
+      () => {
+        return {
+          center: position,
+          left: this.outgoing ? this.outgoing.dst.entity.onlyRef(PhysNode).or(position) : position,
+          right: this.incoming ? this.incoming.src.entity.onlyRef(PhysNode).or(position) : position,
+        };
+      },
       Angle(Radians(Math.PI/2.), 'model'),
     );
 
@@ -679,6 +679,21 @@ class FixedConstraint extends Constraint {
     this.hardness = 1.0;
     this.priority = 5;
     this.enabled = false;
+
+    this.entity.add(Form).setFactory(() => {
+      const form = new AutoForm();
+      const lockField = form.add({
+        name: 'lock position',
+        kind: 'toggle',
+        value: this.enabled as boolean,
+      });
+      form.addFieldListener(({ name, kind, value }) => {
+        if (name === 'lock position' && kind === 'toggle') {
+          this.enabled = value;
+        }
+      });
+      return form;
+    });
   }
 
   getTargets(): Position[] {
@@ -755,6 +770,42 @@ class LengthConstraint extends Constraint {
   ) {
     super(entity);
     this.enabled = false;
+
+    this.entity.add(Form).setFactory(() => {
+      const form = new AutoForm();
+      const lockField = form.add({
+        name: 'lock length',
+        kind: 'toggle',
+        value: this.enabled as boolean,
+      });
+      const lengthField = form.add({
+        name: 'length',
+        label: 'length',
+        kind: 'amount',
+        value: App.project.displayUnit.from(App.project.modelUnit.newAmount(length)),
+        min: App.project.modelUnit.newAmount(0),
+        unit: Units.distance,
+      });
+      const hardnessField = form.add({
+        name: 'tension',
+        label: 'tension',
+        kind: 'slider',
+        value: this.hardness,
+        min: 0,
+        max: 1,
+      });
+      form.addFieldListener(({ name, kind, value }) => {
+        if (name === 'length' && kind === 'amount') {
+          lockField.setValue(true);
+          this.length = App.project.modelUnit.from(value).value;
+        } else if (name === 'lock length' && kind === 'toggle') {
+          this.enabled = value;
+        } else if (name === 'tension' && kind === 'slider') {
+          this.hardness = value;
+        }
+      });
+      return form;
+    });
   }
 
   private get springConstant(): number {
@@ -803,6 +854,40 @@ class AngleConstraint extends Constraint {
     public targetAngle: Angle = Angle(Radians(Math.PI/2), 'model'),
   ) {
     super(entity);
+
+    this.entity.add(Form).setFactory(() => {
+      const form = new AutoForm();
+      const lockField = form.add({
+        name: 'lock angle',
+        kind: 'toggle',
+        value: this.enabled as boolean,
+      });
+      const angleField = form.add({
+        name: 'angle',
+        label: 'angle',
+        kind: 'angle',
+        value: this.enabled ? this.targetAngle : this.currentAngle,
+      });
+      const tensionField = form.add({
+        name: 'tension',
+        label: 'tension',
+        kind: 'slider',
+        value: this.hardness,
+        min: 0,
+        max: 1,
+      });
+      form.addFieldListener(({ name, kind, value }) => {
+        if (name === 'angle' && kind === 'angle') {
+          lockField.setValue(true);
+          this.targetAngle = value;
+        } else if (name === 'lock angle' && kind === 'toggle') {
+          this.enabled = value;
+        } else if (name === 'tension' && kind === 'slider') {
+          this.hardness = value;
+        }
+      });
+      return form;
+    });
   }
 
   private getLeft(): Vector {

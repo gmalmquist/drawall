@@ -31,6 +31,22 @@ interface HandleProps {
   snapping?: Snapping;
 }
 
+class Form extends Component {
+  private factory: (() => AutoForm) | null = null;
+
+  constructor(entity: Entity) {
+    super(entity);
+  }
+
+  setFactory(f: () => AutoForm) {
+    this.factory = f;
+  }
+
+  public get form(): AutoForm {
+    return this.factory === null ? new AutoForm() : this.factory();
+  }
+}
+
 class Handle extends Component {
   public readonly events = new UiEventDispatcher(Handle);
 
@@ -160,9 +176,6 @@ class StatefulUiDragListener<C> {
 }
 
 type UiEventListener<E> = (event: E) => void;
-
-type Kinds<Event> = Event extends { kind: infer K }
-  ? K : never;
 
 type UiEventListenerMap<Event> = MultiMap<Kinds<Event>, UiEventListener<Event>>;
 
@@ -352,10 +365,11 @@ class UiState {
 
   clearSelection() {
     this._selection.clear();
+    this.updateForms();
   }
 
   setSelection(...handles: Handle[]) {
-    this.clearSelection();
+    this._selection.clear();
     this.addSelection(...handles);
   }
 
@@ -363,6 +377,7 @@ class UiState {
     handles.forEach(h => {
       this._selection.add(h);
     });
+    this.updateForms();
   }
 
   getHandleAt(
@@ -395,6 +410,15 @@ class UiState {
       }
     }
     return choice;
+  }
+
+  private updateForms() {
+    const forms = this.selection
+      .map(handle => handle.entity.get(Form))
+      .map(forms => AutoForm.union(forms.map(form => form.form)));
+    const form = AutoForm.intersection(forms);
+    App.gui.selection.clear();
+    form.inflate(App.gui.selection);
   }
 
   private evaluateKeybindings() {
