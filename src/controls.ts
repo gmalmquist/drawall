@@ -48,17 +48,12 @@ class ElementWrap<E extends HTMLElement> {
 }
 
 class IconButton extends ElementWrap<HTMLElement> {
-  constructor(private readonly name: string, icon?: URL | null) {
+  constructor(private readonly name: string, icon: URL | null = null) {
     super(document.createElement('a'));
     this.element.setAttribute('href', '#');
     this.tooltip = name;
     this.classes = new Set(['tool-button', 'icon-button']);
-
-    if (icon) {
-      this.icon = icon;
-    } else {
-      this.element.innerHTML = name.substring(0, 1).toLocaleUpperCase();
-    }
+    this.icon = icon;
   }
 
   onClick(listener: () => void) {
@@ -73,7 +68,12 @@ class IconButton extends ElementWrap<HTMLElement> {
     }
   }
 
-  set icon(url: URL) {
+  set icon(url: URL | null) {
+    if (url === null) {
+      this.element.style.backgroundImage = '';
+      this.element.innerHTML = this.name.substring(0, 1).toLocaleUpperCase();
+      return;
+    }
     this.element.style.backgroundImage = `url('${url}')`;
     this.element.innerHTML = '';
   }
@@ -91,7 +91,7 @@ interface AutoFieldHandle<V> {
   setValue: (v: V) => void;
 }
 
-type AutoFieldValue<A extends AutoField> = A extends { value: infer V } ? V : never;
+type AutoFieldValue<A extends AutoField> = [A] extends [{ value: infer V }] ? V : never;
 
 class AutoForm {
   private static rulerCount: number = 0;
@@ -209,7 +209,7 @@ class AutoForm {
       };
     }
     if (field.kind === 'toggle') {
-      const input = new ToggleButton(field.name);
+      const input = new ToggleButton(field.name, field.icons);
       input.setToggled(field.value);
       input.onToggle(value => {
         const f = { ...field, value };
@@ -248,23 +248,52 @@ class AutoForm {
         setValue: (_) => {},
       };
     }
-    throw new Error(`TODO: implement inflating ${field.kind} auto fields`);
+    if (field.kind === 'number') {
+      const input = new NumberInput(
+        () => field.value,
+        typeof field.min !== 'undefined' ? field.min : null,
+        typeof field.max !== 'undefined' ? field.max : null,
+      );
+      input.onChange(value => {
+        const f = { ...field, value };
+        this.setField(f);
+      });
+      return {
+        element: input,
+        setValue: v => input.setValue(v),
+      };
+    }
+    if (field.kind === 'button') {
+      const input = new IconButton(field.name, field.icon);
+      input.onClick(field.onClick);
+      return {
+        element: input,
+        setValue: (_) => {},
+      };
+    }
+    return impossible(field);
   }
 
   public static compareValues(one: AutoField, two: AutoField): boolean {
     if (one.kind !== two.kind) return false;
+    const coerce = <A extends AutoField, B extends AutoField>(
+      one: A, two: B): readonly [A, A] => {
+      if (one.kind !== two.kind) throw new Error('unreachable');
+      return [one, two as unknown as A];
+    };
+
     if (one.kind === 'number' || one.kind === 'toggle' || one.kind === 'slider') {
       return one.value === two.value;
     }
     if (one.kind === 'amount') {
-      const a = one.value;
-      const b = two.value as Amount;
+      const [a, b] = coerce(one, two);
       return a.value === b.value && a.unit === b.unit;
     }
     if (one.kind === 'angle') {
-      return one.value.get('model') === (two.value as Angle).get('model');
+      const [a, b] = coerce(one, two);
+      return a.value.get('model') === b.value.get('model');
     }
-    if (one.kind === 'separator') {
+    if (one.kind === 'separator' || one.kind === 'button') {
       return true;
     }
     return impossible(one);
@@ -321,16 +350,13 @@ type AutoField = AutoFieldNumber
   | AutoFieldSlider
   | AutoFieldAngle
   | AutoFieldSeparator
+  | AutoFieldButton
 ;
 
 interface AutoFieldBase<V> {
   name: string;
   label?: string;
   value: V;
-}
-
-interface AutoFieldSeparator extends AutoFieldBase<'separator'> {
-  kind: 'separator',
 }
 
 interface AutoFieldNumber extends AutoFieldBase<number> {
@@ -359,9 +385,18 @@ interface AutoFieldAmount extends AutoFieldBase<Amount> {
 
 interface AutoFieldToggle extends AutoFieldBase<boolean> {
   kind: 'toggle';
-  value: boolean;
+  icons?: ToggleIcons;
 }
 
+interface AutoFieldSeparator extends AutoFieldBase<'separator'> {
+  kind: 'separator',
+}
+
+interface AutoFieldButton extends AutoFieldBase<'button'> {
+  kind: 'button';
+  icon?: URL | null;
+  onClick: () => void;
+}
 
 type FlowOrientation = 'row' | 'column';
 type FlexAlign = 'flex-start' | 'center' | 'flex-end' | 'stretch';
@@ -659,12 +694,61 @@ class AngleInput extends MiniFormInput<Angle, HTMLInputElement> {
   }
 }
 
+class NumberInput extends MiniFormInput<number, HTMLInputElement> {
+  constructor(
+    defaultValue: () => number,
+    private readonly minValue: number | null = null,
+    private readonly maxValue: number | null = null,
+  ) {
+    super(document.createElement('input') as HTMLInputElement, defaultValue);
+    this.element.setAttribute('type', 'number');
+    this.element.setAttribute('size', '6');
+    if (minValue !== null) {
+      this.element.setAttribute('min', minValue.toString());
+    }
+    if (maxValue !== null) {
+      this.element.setAttribute('max', maxValue.toString());
+    }
+  }
+
+  protected override getRawValue(): string {
+    return this.element.value;
+  }
+
+  protected override setRawValue(value: string): void {
+    this.element.value = value;
+  }
+
+  protected override format(value: number): string {
+    return `${value}`;
+  }
+
+  protected override parse(input: string): InputParse<number> {
+    const value = parseFloat(input.trim());
+    if (isNaN(value)) {
+      return { 'error': `cannot parse '${input}' as a number.` };
+    }
+    const [min, max] = [this.minValue, this.maxValue];
+    if (min !== null && value < min) return { value: min };
+    if (max !== null && value > max) return { value: max };
+    return { value };
+  }
+}
+
+interface ToggleIcons {
+  on: URL | null,
+  off: URL | null,
+}
+
 class ToggleButton extends IconButton {
   private readonly listeners = new Array<(on: boolean) => void>();
   private _status: boolean = false;
 
-  constructor(name: string, icon?: URL | null) {
-    super(name, icon);
+  constructor(
+    name: string,
+    private readonly icons?: ToggleIcons,
+  ) {
+    super(name, icons?.off);
     this.addClass('toggle-button');
     this.onClick(() => this.toggle());
   }
@@ -686,8 +770,10 @@ class ToggleButton extends IconButton {
     this._status = on;
     if (on) {
       this.addClass('selected');
+      this.icon = this.icons?.on || null;
     } else {
       this.removeClass('selected');
+      this.icon = this.icons?.off || null;
     }
     this.listeners.forEach(listener => listener(on));
   }

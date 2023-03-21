@@ -685,7 +685,7 @@ class FixedConstraint extends Constraint {
       const lockField = form.add({
         name: 'lock position',
         kind: 'toggle',
-        value: this.enabled as boolean,
+        value: this.enabled,
       });
       form.addFieldListener(({ name, kind, value }) => {
         if (name === 'lock position' && kind === 'toggle') {
@@ -776,7 +776,7 @@ class LengthConstraint extends Constraint {
       const lockField = form.add({
         name: 'lock length',
         kind: 'toggle',
-        value: this.enabled as boolean,
+        value: this.enabled,
       });
       const lengthField = form.add({
         name: 'length',
@@ -860,7 +860,7 @@ class AngleConstraint extends Constraint {
       const lockField = form.add({
         name: 'lock angle',
         kind: 'toggle',
-        value: this.enabled as boolean,
+        value: this.enabled,
       });
       const angleField = form.add({
         name: 'angle',

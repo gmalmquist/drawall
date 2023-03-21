@@ -1,6 +1,9 @@
 type Transform<T> = (t: T) => T;
 type Consume<T> = (t: T) => void;
 type Kinds<T> = T extends { kind: infer K } ? K : never;
+type KindOf<T> = [T] extends [{ kind: infer K }] ? K : never;
+type OfKind<A, K> = [A] extends [{ kind: K }] ? A : never;
+type HomogenousKinds<A extends readonly unknown[]> = A extends readonly [{ kind: infer K }] ? A : never;
 
 const impossible = (x: never): never => {
   throw new Error('impossible');
