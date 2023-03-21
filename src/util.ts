@@ -33,21 +33,31 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
   }
 };
 
+type ComparablePrimitive = number | string | boolean | null | undefined;
+
+type RefCompareFunc<T> = [T] extends [ComparablePrimitive]
+  ? PredicateN<readonly [T, T]> | undefined
+  : PredicateN<readonly [T, T]>;
+
+
 interface RefMapF<A, B> {
   from: MapF<B, A>;
   to: MapF<A, B>;
   compareValues: RefCompareFunc<B>;
 }
 
-interface RefDef<V> {
+interface RefDefBase<V> {
   readonly get: () => V;
   readonly set: (value: V) => void;
-  readonly compareValues: RefCompareFunc<V>;
+  readonly compareValues?: RefCompareFunc<V>;
 }
+type RefDef<V> = [V] extends [ComparablePrimitive]
+  ? Pick<RefDefBase<V>, 'get' | 'set'> & Partial<Pick<RefDefBase<V>, 'compareValues'>>
+  : Required<RefDefBase<V>>;
 
-type RefCompareFunc<T> = T extends number | string
-  ? PredicateN<readonly [T, T]> | undefined
-  : PredicateN<readonly [T, T]>;
+type RefCompareFuncArgs<T> = [T] extends [ComparablePrimitive]
+  ? readonly [PredicateN<readonly [T, T]>] | readonly []
+  : readonly [PredicateN<readonly [T, T]>];
 
 const Refs = {
   mapDef: <A, B>(ref: RefDef<A>, f: RefMapF<A, B>): RefDef<B> => ({
@@ -55,22 +65,23 @@ const Refs = {
     set: (value: B): void => ref.set(f.from(value)),
     compareValues: f.compareValues,
   }),
-  of: <V extends Not<any, RefDef<any>>>(
+  of: <V extends Not<unknown, RefDef<any>>>(
     value: V,
-    compareValues: RefCompareFunc<V>,
+    ...compareValues: RefCompareFuncArgs<V>
   ): Ref<V> => {
     const state = { value };
+    const compare = compareValues.length === 1 ? compareValues[0] : undefined;
     return Ref({
       get: (): V => state.value,
       set: (value: V): void => {
         state.value = value;
       },
-      compareValues,
-    });
+      compareValues: compare,
+    } as RefDef<V>);
   },
 };
 
-class RefImpl<V> implements RefDef<V> {
+class RefImpl<V> implements RefDefBase<V> {
   private readonly listeners = new Set<(value: V) => void>();
   private readonly _get: () => V;
   private readonly _set: (value: V) => void;
@@ -79,7 +90,7 @@ class RefImpl<V> implements RefDef<V> {
   constructor(def: RefDef<V>) {
     this._get = def.get;
     this._set = def.set;
-    this.compareValues = def.compareValues;
+    this.compareValues = def.compareValues as RefCompareFunc<V>;
   }
 
   public get(): V {
@@ -105,6 +116,11 @@ class RefImpl<V> implements RefDef<V> {
 
   public onChange(listener: (value: V) => void) {
     this.listeners.add(listener);
+  }
+
+  public toString(): string {
+    const value = this.get();
+    return `Ref(${typeof value}: ${value})`;
   }
 }
 
