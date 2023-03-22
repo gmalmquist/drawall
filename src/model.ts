@@ -763,7 +763,7 @@ class LengthConstraint extends Constraint {
         unit: Units.distance,
       });
       const hardnessField = form.add({
-        name: 'tension',
+        name: 'length tension',
         label: 'tension',
         kind: 'slider',
         enabled: this.enabledRef,
@@ -856,7 +856,7 @@ class AngleConstraint extends Constraint {
         value: this.targetAngleRef,
       });
       const tensionField = form.add({
-        name: 'tension',
+        name: 'angle tension',
         label: 'tension',
         kind: 'slider',
         enabled: this.enabledRef,

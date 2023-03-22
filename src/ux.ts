@@ -594,7 +594,7 @@ class UiState {
     const forms = this.selection
       .map(handle => handle.entity.get(Form))
       .map(forms => AutoForm.union(forms.map(form => form.form)));
-    const form = AutoForm.intersection(forms);
+    const form = AutoForm.union(forms);
     App.gui.selection.clear();
     form.inflate(App.gui.selection);
   }
