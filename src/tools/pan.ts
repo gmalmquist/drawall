@@ -1,7 +1,13 @@
 class PanTool extends Tool {
   constructor() {
     super('pan tool');
+  }
 
+  get cursor(): Cursor {
+    return 'grab';
+  }
+
+  override setup() {
     this.events.addDragListener({
       onStart: (e) => {
         e.setSnapping({
@@ -27,12 +33,6 @@ class PanTool extends Tool {
       },
     });
   }
-
-  get cursor(): Cursor {
-    return 'grab';
-  }
-
-  override setup() {}
 
   override update() {}
 }

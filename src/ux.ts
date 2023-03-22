@@ -30,6 +30,7 @@ interface HandleProps {
   priority?: number;
   cursor?: () => Cursor;
   snapping?: Snapping;
+  onDelete?: () => 'keep' | 'kill';
 }
 
 type Cursor = 'default' | 'none' | 'help' | 'context-menu'
@@ -112,6 +113,7 @@ class Handle extends Component {
   private _hovered: boolean = false;
   private _cursor: () => Cursor | null;
   private readonly getPos: () => Position;
+  private readonly _onDelete: (() => 'keep' | 'kill') | undefined;
 
   public clickable: boolean = true;
   public draggable: boolean = true;
@@ -132,6 +134,7 @@ class Handle extends Component {
     this._cursor = typeof props.cursor === 'undefined' ? () => null : props.cursor;
 
     this.getPos = props.getPos;
+    this._onDelete = props.onDelete; 
 
     this.snapping = props.snapping;
 
@@ -169,6 +172,21 @@ class Handle extends Component {
       return this.cursor || 'grab';
     }
     return 'default';
+  }
+
+  /** user initiated delete event. */
+  public delete(): boolean {
+    if (this.entity.isDestroyed) {
+      return false; // we're already dead ....
+    }
+    // tries to "nicely" delete this by asking permission first.
+    if (typeof this._onDelete !== 'undefined') {
+      if (this._onDelete() === 'keep') {
+        return false;
+      }
+    }
+    this.entity.destroy();
+    return true;
   }
 
   public intersects(sdf: SDF): boolean {
@@ -234,6 +252,7 @@ interface UiMouseEvent {
   kind: 'down' | 'move' | 'up' | 'click';
   position: Position;
   primary: boolean;
+  double: boolean;
 }
 
 interface UiDragEvent {
@@ -474,7 +493,7 @@ class UiState {
       position: this.mouse.start,
       delta: Vector(Vec.ZERO, 'screen'),
       primary: true,
-      setSnapping: (snapping?: Snapping) => {/* noop */},
+      setSnapping: (snapping?: Snapping) => this.updateSnapping(snapping),
     };
     this.events.handleDrag({ kind: 'update', ...base });
     this.events.handleDrag({ kind: 'end', ...base });
@@ -505,6 +524,41 @@ class UiState {
       already.add(h);
     });
     this.updateForms();
+  }
+
+  loopSelect() {
+    const collected = new Set<Handle>();
+    const frontier = [...this.selection];
+    while (frontier.length > 0) {
+      const handle = frontier.pop()!;
+      if (collected.has(handle)) {
+        continue;
+      }
+      collected.add(handle);
+      if (handle.entity.has(Wall)) {
+        handle.entity.only(Wall).getConnectedLoop()
+          .map(wall => wall.entity.only(Handle))
+          .forEach(h => collected.add(h));
+      } else if (handle.entity.has(WallJoint)) {
+        const dst = handle.entity.only(WallJoint).outgoing?.entity?.only(Handle);
+        if (dst) frontier.push(dst);
+      }
+    }
+    this.setSelection(...Array.from(collected).filter(h => h.selectable));
+  }
+
+  selectAll() {
+    this.setSelection(...App.ecs.getComponents(Handle).filter(h => h.selectable));
+  }
+
+  deleteSelected() {
+    const selected = new Set(this._selection);
+    if (selected.size === 0) {
+      return;
+    }
+    this.cancelDrag();
+    this.clearSelection();
+    selected.forEach(s => s.delete());
   }
 
   getHandleAt(
@@ -760,6 +814,8 @@ class UiState {
             preferredAxis: () => UiState.GLOBAL_Y,
           });
         }
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        this.deleteSelected();
       }
     });
 
@@ -791,6 +847,7 @@ class UiState {
         kind,
         position: getMousePosition(e),
         primary: isPrimary(this.mouse.buttons),
+        double: false,
     });
 
     // mouse drag state management

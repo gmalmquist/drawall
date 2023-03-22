@@ -26,8 +26,11 @@ class Keybindings {
     kb.bind('Escape').to('pointer tool');
     kb.bind('r').to('room tool');
     kb.bind('p').to('pan tool');
+    kb.bind('j').to('joint tool');
     kb.bind('Shift', '%').to('toggle-snap');
     kb.bind('k').to('toggle-kinematics');
+    kb.bind('L').to('loop-select');
+    kb.bind('A').to('select-all');
     return kb;
   }
 

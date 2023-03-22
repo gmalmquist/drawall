@@ -59,6 +59,10 @@ class App {
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
 
+    console.log(`
+      hi! if you're here u probably are savvy enough that you'd like some hotkeys:
+      ${App.keybindings.values().map(binding => `\n${binding.stroke.keys.join('+')}: ${binding.action}`).join('')}
+    `.trim());
   }
 
   static update() {

@@ -1,6 +1,7 @@
 type ToolName = 'none' 
   | 'pointer tool'
   | 'room tool'
+  | 'joint tool'
   | 'pan tool';
 
 abstract class Tool {
@@ -84,6 +85,7 @@ class Tools {
     .addSingle('pointer tool')
     .addSingle('pan tool')
     .addSingle('room tool')
+    .addSingle('joint tool')
   ;
 
   public get current(): Tool {

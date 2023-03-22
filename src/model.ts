@@ -209,6 +209,10 @@ class Wall extends Component implements Solo {
         },
       },
       cursor: () => getResizeCursor(this.outsideNormal),
+      onDelete: () => {
+        this.elideWall();
+        return 'kill';
+      },
     });
     handle.events.addDragListener({
       onStart: (e): [Position, Position] => {
@@ -279,6 +283,36 @@ class Wall extends Component implements Solo {
     }
 
     return results;
+  }
+
+  elideWall() {
+    const joints = this.src.ref().and(this.dst.ref()).unwrap();
+    if (joints === null) return 'kill';
+    const [src, dst] = joints;
+    const prev = src.incoming;
+    const next = dst.outgoing;
+
+    const loop = this.getConnectedLoop('both');
+    if (loop.length <= 3) {
+      loop.forEach(wall => {
+        wall.entity.destroy();
+        wall.src.entity.destroy();
+        wall.dst.entity.destroy();
+      });
+      return 'kill';
+    }
+
+    if (prev === null || next === null) return 'kill';
+
+    // cut out the middle-man (we're the middle-man)
+    prev.dst = next.src;
+    next.src.entity.get(AngleConstraint).forEach(a => { a.enabled = false; });
+
+    this.src = src.shallowDup();
+    this.dst = dst.shallowDup();
+    this.entity.destroy();
+
+    return 'kill';
   }
 
   get room(): Room | null {
@@ -436,6 +470,10 @@ class WallJoint extends Component {
           return axes;
         },
       },
+      onDelete: () => {
+        this.elideJoint();
+        return 'kill';
+      },
     });
 
     entity.add(AngleConstraint,
@@ -460,6 +498,45 @@ class WallJoint extends Component {
     const joint = this.entity.ecs.createEntity().add(WallJoint);
     joint.pos = this.pos;
     return joint;
+  }
+
+  elideJoint() {
+    // remove this joint from the wall by attempting to join the neighboring walls together.
+    const incoming = this.incoming;
+    const outgoing = this.outgoing;
+    if (incoming === null || outgoing === null) return;
+    if (!incoming.entity.isAlive || !outgoing.entity.isAlive) return;
+    this._incoming = null;
+    this._outgoing = null;
+
+    if (incoming.src.incoming === outgoing.dst.outgoing) {
+      // oops, we'll end up with less than three walls! best scrap the whole thing.
+      const seen = new Set<WallJoint>();
+      for (let joint: WallJoint | null = this; joint != null && !seen.has(joint); joint = outgoing?.dst) {
+        joint.entity.destroy();
+        seen.add(joint);
+      }
+      for (let joint: WallJoint | null = this; joint != null && !seen.has(joint); joint = incoming?.src) {
+        joint.entity.destroy();
+        seen.add(joint);
+      }
+      this.entity.destroy();
+      return;
+    }
+
+    const next = outgoing.dst;
+
+    outgoing.dst = outgoing.dst.shallowDup();
+    outgoing.src = outgoing.src.shallowDup();
+    outgoing.dst.entity.destroy();
+    outgoing.src.entity.destroy();
+    outgoing.entity.destroy();
+
+    incoming.dst = next;
+    incoming.dst.entity.get(AngleConstraint).forEach(a => a.enabled = false);
+    incoming.entity.get(LengthConstraint).forEach(a => a.enabled = false);
+
+    this.entity.destroy();
   }
 
   get pos(): Position {

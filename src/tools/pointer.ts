@@ -8,6 +8,8 @@ class PointerTool extends Tool {
     return a.eq(b); 
   });
   private readonly strictSelect = Refs.of<boolean>(false);
+  private lastClickHandle: Handle | null = null;
+  private lastClickAt: number = 0;
 
   constructor() {
     super('pointer tool');
@@ -75,6 +77,18 @@ class PointerTool extends Tool {
       }
 
       if (handle.clickable) {
+        if (this.lastClickHandle === handle && (Time.now - this.lastClickAt) < 0.5) {
+          // handle double-click
+          if (handle.entity.has(Wall)) {
+            // nb: we could reference it directly, but this will
+            // make the UI buttons flicker, which is good for
+            // letting ppl know where the tool is.
+            App.tools.getTool('joint tool').events.handleMouse(e);
+            return;
+          }
+        }
+        this.lastClickHandle = handle;
+        this.lastClickAt = Time.now;
         handle.events.handleMouse(e);
       }
 
@@ -111,26 +125,42 @@ class PointerTool extends Tool {
 
     const drawSelect = this.getDrawSelectDispatcher();
 
+    type NamedAxisP = (() => NamedAxis) | undefined;
+
     this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
-        const overHandle = App.ui.getHandleAt(e.position, h => h.draggable) !== null;
+        const overHandle = App.ui.getHandleAt(e.start, h => h.draggable) !== null;
         const selection = App.ui.selection;
         if (selection.length > 0 && overHandle) {
           const snaps = selection
             .filter(s => typeof s.snapping !== 'undefined')
             .map(s => s.snapping as Snapping);
+          const getPreferred = (arr:  NamedAxisP[]): NamedAxisP => {
+            const cmp = (fa: NamedAxisP, fb: NamedAxisP): boolean => {
+              if (typeof fa === 'undefined' || typeof fb === 'undefined') return false;
+              const [a, b] = [fa(), fb()];
+              const one = a.direction.unit();
+              const two = b.direction.unit().to(one.space);
+              const negate = one.dot(two).sign < 0 ? -1 : 1;
+              const delta = Angles.shortestDelta(one.angle(), two.neg().angle());
+              return unwrap(toDegrees(delta.get(delta.space))) < 1;
+            };
+            return arr.every(el => cmp(arr[0], el)) ? arr[0] : undefined;
+          };
+          const preferredAxis = getPreferred(snaps.map(s => s.preferredAxis));
           const snapping: Snapping = {
-            snapByDefault: snaps.every(s => s.snapByDefault)
-              && !snaps.every(s => typeof s.preferredAxis !== 'undefined'),
+            snapByDefault: snaps.every(s => s.snapByDefault) && typeof preferredAxis !== 'undefined',
             localAxes: () => snaps
               .map(s => s.localAxes)
               .map(a => typeof a === 'undefined' ? [] : a())
               .reduce((arr, a) => [...arr, ...a], []),
-            preferredAxis: snaps.length === 1 ? snaps[0].preferredAxis : undefined,
+            preferredAxis,
             allowLocal: snaps.some(s => s.allowLocal !== false),
             allowGlobal: snaps.some(s => s.allowGlobal !== false),
             allowGeometry: snaps.some(s => s.allowGeometry !== false),
           };
+          console.log(JSON.stringify(snapping, undefined, 2));
+          console.log(selection);
           const cursors = new Set<Cursor>();
           const dispatcher = new UiEventDispatcher(PointerTool);
           for (const handle of selection) {

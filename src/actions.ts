@@ -2,6 +2,8 @@ type UserActionId = ToolName
   | 'noop'
   | 'toggle-snap'
   | 'toggle-kinematics'
+  | 'loop-select'
+  | 'select-all'
 ;
 
 interface UserAction {
@@ -20,8 +22,12 @@ class UserActions {
       name, apply
     });
     const toggle = (name: UserActionId, ref: Ref<boolean>) => add(name, () => ref.set(!ref.get()));
+
     toggle('toggle-snap', App.ui.snapping.enableByDefaultRef);
     toggle('toggle-kinematics', App.settings.kinematics);
+
+    add('loop-select', () => App.ui.loopSelect());
+    add('select-all', () => App.ui.selectAll());
     // add('foo', () => doFoo());
   }
 
