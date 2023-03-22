@@ -33,45 +33,57 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
   }
 };
 
-type ComparablePrimitive = number | string | boolean | null | undefined;
+interface Eq<T> {
+  eq: (other: T) => boolean;
+}
 
-type RefCompareFunc<T> = [T] extends [ComparablePrimitive]
-  ? PredicateN<readonly [T, T]> | undefined
-  : PredicateN<readonly [T, T]>;
+type Comparable<T> = number | string | boolean | null | undefined | Eq<T>;
 
+type RefCompareFunc<V> = [V] extends [Comparable<V>]
+  ? PredicateN<readonly [V, V]> | undefined
+  : PredicateN<readonly [V, V]>;
 
-interface RefMapF<A, B> {
+type CompareFuncVarg<V> = [V] extends [Comparable<V>]
+  ? readonly [PredicateN<readonly [V, V]>] | readonly []
+  : readonly [PredicateN<readonly [V, V]>];
+;
+
+type CompareFuncPartial<V> = [V] extends [Comparable<V>]
+  ? { compareValues?: RefCompareFunc<V> }
+  : { compareValues: RefCompareFunc<V> }
+;
+
+interface RefMapFBase<A, B> {
   from: MapF<B, A>;
   to: MapF<A, B>;
-  compareValues: RefCompareFunc<B>;
 }
+
+type RefMapF<A, B> = RefMapFBase<A, B> & CompareFuncPartial<B>;
 
 interface RefDefBase<V> {
   readonly get: () => V;
   readonly set: (value: V) => void;
-  readonly compareValues?: RefCompareFunc<V>;
 }
-type RefDef<V> = [V] extends [ComparablePrimitive]
-  ? Pick<RefDefBase<V>, 'get' | 'set'> & Partial<Pick<RefDefBase<V>, 'compareValues'>>
-  : Required<RefDefBase<V>>;
 
-type RefCompareFuncArgs<T> = [T] extends [ComparablePrimitive]
-  ? readonly [PredicateN<readonly [T, T]>] | readonly []
-  : readonly [PredicateN<readonly [T, T]>];
+type RefDef<V> = RefDefBase<V> & CompareFuncPartial<V>;
+
+type RefValue<R extends RefDefBase<unknown>> = R extends RefDefBase<infer T> ? T : never;
+
+type UnwrapRefArray<A extends readonly unknown[]> = A extends readonly []
+  ? never
+  : A extends readonly [RefDefBase<infer Start>, ...infer Rest]
+    ? readonly [Start, UnwrapRefArray<Rest>]
+    : never
+;
 
 const Refs = {
-  mapDef: <A, B>(ref: RefDef<A>, f: RefMapF<A, B>): RefDef<B> => ({
-    get: (): B => f.to(ref.get()),
-    set: (value: B): void => ref.set(f.from(value)),
-    compareValues: f.compareValues,
-  }),
   of: <V extends Not<unknown, RefDef<any>>>(
     value: V,
-    ...compareValues: RefCompareFuncArgs<V>
+    ...compareValues: CompareFuncVarg<V>
   ): Ref<V> => {
     const state = { value };
     const compare = compareValues.length === 1 ? compareValues[0] : undefined;
-    return Ref({
+    return new RefImpl({
       get: (): V => state.value,
       set: (value: V): void => {
         state.value = value;
@@ -79,10 +91,35 @@ const Refs = {
       compareValues: compare,
     } as RefDef<V>);
   },
+  mapDef: <A, B>(ref: RefDef<A>, f: RefMapF<A, B>): RefDef<B> => ({
+    get: (): B => f.to(ref.get()),
+    set: (value: B): void => ref.set(f.from(value)),
+    compareValues: f.compareValues as RefCompareFunc<B>,
+  }),
+  reduce: <A extends readonly RefDefBase<any>[], B>(
+    map: RefMapF<UnwrapRefArray<A>, B>,
+    compareValues: RefCompareFunc<B>,
+    ...refs: A
+  ): Ref<B> => {
+    return new RefImpl({
+      get: (): B => map.to(refs.map(r => r.get()) as unknown as UnwrapRefArray<A>),
+      set: (value: B): void => {
+        const values = map.from(value);
+        for (let i = 0; i < refs.length; i++) {
+          const ref = refs[i];
+          const val = values[i];
+          (ref as Ref<any>).set(val as any);
+        }
+      },
+      compareValues,
+    } as RefDef<B>);
+  },
 };
 
 class RefImpl<V> implements RefDefBase<V> {
   private readonly listeners = new Set<(value: V) => void>();
+  private readonly upstream = new Set<RefImpl<any>>();
+  private readonly downstream = new Set<RefImpl<any>>();
   private readonly _get: () => V;
   private readonly _set: (value: V) => void;
   public readonly compareValues: RefCompareFunc<V>;
@@ -98,20 +135,30 @@ class RefImpl<V> implements RefDefBase<V> {
   }
 
   public set(value: V): void {
-    if (this.eq(value)) return;
-    this._set(value);
-    for (const listener of this.listeners) {
-      listener(value);
+    if (this.eq(value)) {
+      return;
     }
+    this._set(value);
+    this.fireUpdate({ value, kind: 'internal' });
   }
 
   public map<W>(f: RefMapF<V, W>): Ref<W> {
-    return Ref(Refs.mapDef(this, f));
+    const mapped = new RefImpl(Refs.mapDef(this, f));
+    mapped.upstream.add(this);
+    this.downstream.add(mapped);
+    return mapped;
   }
 
-  public eq(value: V): boolean {
+  public eq(other: V): boolean {
+    const value = this.get();
     const cmp = this.compareValues;
-    return typeof cmp !== 'undefined' ? cmp(this.get(), value) : this.get() === value; 
+    if (typeof cmp !== 'undefined') {
+      return cmp(value, other);
+    }
+    if (typeof (value as any).eq === 'function') {
+      return (value as unknown as Eq<V>).eq(other);
+    }
+    return value === other;
   }
 
   public onChange(listener: (value: V) => void) {
@@ -122,10 +169,73 @@ class RefImpl<V> implements RefDefBase<V> {
     const value = this.get();
     return `Ref(${typeof value}: ${value})`;
   }
+
+  private getUpdateValue(update: RefUpdate<V>): V {
+    if (update.kind === 'external') {
+      return this.get();
+    }
+    return update.value;
+  }
+
+  private fireUpdate(update: RefUpdate<V>) {
+    if (update.kind === 'external' && update.source === this) {
+      // This shouldn't be possible.
+      return;
+    }
+
+    const value = this.getUpdateValue(update);
+    for (const listener of this.listeners) {
+      listener(value);
+    }
+
+    const event: Pick<RefExternalUpdate, 'kind' | 'source'> = {
+      kind: 'external',
+      source: this,
+    };
+
+    if (update.kind === 'internal' || update.direction === 'up') {
+      for (const ref of this.upstream) {
+        ref.fireUpdate({ direction: 'up', ...event }); 
+      }
+    }
+    if (update.kind === 'internal' || update.direction === 'down') {
+      for (const ref of this.downstream) {
+        ref.fireUpdate({ direction: 'down', ...event }); 
+      }
+    }
+  }
+}
+
+type RefUpdate<V> = RefInternalUpdate<V> | RefExternalUpdate;
+
+interface RefInternalUpdate<V> {
+  readonly kind: 'internal';
+  readonly value: V;
+}
+
+interface RefExternalUpdate {
+  readonly kind: 'external';
+  readonly source: Ref<any>;
+  readonly direction: 'up' | 'down';
 }
 
 type Ref<V> = RefImpl<V>;
-const Ref = <V>(def: RefDef<V>): Ref<V> => new RefImpl(def);
+
+const foo = Refs.of(12).map<number>({
+  to: x => x * 2,
+  from: x => x / 2,
+});
+const bar = Refs.of(12).map<{ x: number }>({
+  to: x => ({ x }),
+  from: x => x.x,
+  // type check will fail without this
+  compareValues: (a,b) => a.x === b.x,
+});
+const baz = Refs.of(
+  { x: 12 },
+  // type check will fail without this
+  (a, b) => a.x === b.x
+);
 
 class DefaultMap<K, V> {
   private readonly map = new Map<K, V>();

@@ -27,16 +27,16 @@ class ElementWrap<E extends HTMLElement> {
     this.classes = set;
   }
 
-  set tooltip(text: string) {
-    this.element.setAttribute('title', text);
+  setEnabled(enabled: boolean) {
+    if (enabled) {
+      this.removeClass('disabled');
+    } else {
+      this.addClass('disabled');
+    }
   }
 
-  set disabled(disabled: boolean) {
-    if (disabled) {
-      this.addClass('disabled');
-    } else {
-      this.removeClass('disabled');
-    }
+  set tooltip(text: string) {
+    this.element.setAttribute('title', text);
   }
 
   onClick(listener: () => void) {
@@ -84,72 +84,62 @@ type AutoFieldListener = (field: AutoField) => void;
 interface AutoFieldUi<T> {
   element: ElementWrap<HTMLElement>,
   setValue: (value: T) => void;
+  clear: () => void;
+  setEnabled: (enabled: boolean) => void;
 }
 
 interface AutoFieldHandle<V> {
-  getValue: () => V;
-  setValue: (v: V) => void;
+  readonly value: Ref<V>;
+  readonly enabled: Ref<boolean>;
 }
+
+type AutoFieldId = Pick<AutoField, 'name' | 'kind'>;
 
 type AutoFieldValue<A extends AutoField> = [A] extends [{ value: infer V }] ? V : never;
 
+// type puns type puns
+type Amoral<V> = Exclude<V, 'value'>;
+
+
 class AutoForm {
   private static rulerCount: number = 0;
-  private readonly listeners = new Set<AutoFieldListener>();
   private readonly fields = new Array<AutoField>();
-  private readonly byId = new Map<string, AutoField>();
+  private readonly fieldDefs = new Map<string, Amoral<AutoField>>();
   private readonly uiMap = new Map<string, AutoFieldUi<any>>();
-  private parent: AutoForm | null = null;
+  private readonly handles = new DefaultMap<string, Set<AutoFieldHandle<any>>>(() => new Set());
+  private readonly downstream = new Set<AutoForm>();
 
   constructor() {
   }
 
-  addFieldListener(listener: AutoFieldListener) {
-    this.listeners.add(listener);
-  }
-
-  has(field: { name: string, kind: Kinds<AutoField> }): boolean {
-    return this.byId.has(AutoForm.fieldId(field));
+  has(field: AutoFieldId): boolean {
+    return this.fieldDefs.has(AutoForm.fieldId(field));
   }
 
   addSeparator() {
-    this.add({ name: `${AutoForm.rulerCount++}`, kind: 'separator', value: 'separator' });
+    this.add<'separator'>({
+      name: `${AutoForm.rulerCount++}`,
+      kind: 'separator',
+      value: Refs.of('separator'),
+    });
   }
 
-  add<A extends AutoField>(field: A): AutoFieldHandle<AutoFieldValue<A>> {
-    if (field.kind === 'separator'
-      && this.fields.length > 0
-      && this.fields[this.fields.length - 1].kind === 'separator') {
-      return { getValue: () => 'separator', setValue: (_) => {} } as AutoFieldHandle<AutoFieldValue<A>>;
-    }
+  add<Value>(field: AutoField & { value: Ref<Value> }): AutoFieldHandle<Value> {
+    type HandleType = AutoFieldHandle<Value>;
+
+    this.addFieldDef(field);
+
     const id = AutoForm.fieldId(field);
-    const handle: AutoFieldHandle<AutoFieldValue<A>> = {
-      setValue: (value: AutoFieldValue<A>) => this.setField({ ...field, value } as A),
-      getValue: () => this.byId.get(id)!.value as AutoFieldValue<A>,
+    const handle: AutoFieldHandle<Value> = {
+      value: field.value,
+      enabled: field.enabled || Refs.of(true),
     };
-    if (this.byId.has(id)) {
-      return handle; 
-    }
-    this.byId.set(id, field);
-    this.fields.push(field);
-    return handle;
-  }
 
-  setField(field: AutoField): boolean {
-    if (!this.has(field)) {
-      return false;
-    }
-    if (!this.updateField(field)) {
-      return false;
-    }
-    const input = this.uiMap.get(AutoForm.fieldId(field));
-    if (typeof input !== 'undefined') {
-      input.setValue(field.value);
-    }
-    if (this.parent !== null) {
-      this.parent.setField(field);
-    }
-    return true;
+    handle.value.onChange(_ => this.updateUi(field));
+    handle.enabled.onChange(_ => this.updateUi(field));
+    this.handles.get(id).add(handle);
+
+    return handle;
   }
 
   public inflate(into?: MiniForm): MiniForm {
@@ -158,6 +148,7 @@ class AutoForm {
     for (const field of this.fields) {
       const inflated = this.inflateField(field);
       this.uiMap.set(AutoForm.fieldId(field), inflated);
+      this.updateUi(field);
       if (field.label) {
         form.appendLabeled(field.label, inflated.element);
       } else {
@@ -167,100 +158,110 @@ class AutoForm {
     return form;
   }
 
-  private updateField(field: AutoField): boolean {
+  private addFieldDef(field: Amoral<AutoField>): void {
+    if (field.kind === 'separator'
+      && this.fields.length > 0
+      && this.fields[this.fields.length - 1].kind === 'separator') {
+      // elide repeatedly added separators
+      return;
+    }
     const id = AutoForm.fieldId(field);
-    if (!this.byId.has(id)) return false;
-    const previous = this.byId.get(id)!;
-    if (AutoForm.compareValues(field, previous)) {
-      return false;
+    if (!this.fieldDefs.has(id)) {
+      this.fieldDefs.set(id, field);
+      this.fields.push(field);
     }
-    this.byId.set(id, field);
-    for (let i = 0; i < this.fields.length; i++) {
-      if (AutoForm.fieldId(this.fields[i]) === id) {
-        this.fields[i] = field;
-        break;
-      }
-    }
-    this.fireValueChange(field);
-    return true;
   }
 
-  private fireValueChange(field: AutoField) {
-    this.listeners.forEach(listener => listener(field));
+  private updateUi<A extends AutoField>(field: A) {
+    type Value = AutoFieldValue<A>;
+
+    for (const down of this.downstream) {
+      down.updateUi(field);
+    }
+
+    const id = AutoForm.fieldId(field);
+    if (!this.uiMap.has(id)) return;
+    
+    const ui = this.uiMap.get(id) as AutoFieldUi<Value>;
+
+    const values = new Set<Value>();
+    const enables = new Set<boolean>();
+    for (const handle of this.handles.get(id)) {
+      values.add((handle as AutoFieldHandle<Value>).value.get());
+      enables.add(handle.enabled.get());
+    }
+
+    if (values.size === 1) {
+      ui.setValue(Array.from(values)[0]!);
+    } else {
+      ui.clear();
+    }
+
+    ui.setEnabled(Array.from(enables).some(e => e));
   }
 
-  private forward(other: AutoForm) {
-    this.addFieldListener(f => other.setField(f));
-    other.parent = this;
+  private updateHandle<V, R extends Ref<V>>(
+    field: AutoField & { value: Ref<V> }, 
+    value: V) {
+    for (const handle of this.handles.get(AutoForm.fieldId(field))) {
+      (handle as AutoFieldHandle<V>).value.set(value);
+    }
   }
 
   private inflateField(field: AutoField): AutoFieldUi<any> {
     if (field.kind === 'amount') {
-      const input = new AmountInput(() => field.value);
+      const input = new AmountInput();
       input.minValue = typeof field.min !== 'undefined' ? field.min : null;
       input.maxValue = typeof field.max !== 'undefined' ? field.max : null;
-      input.onChange(value => {
-        const f = { ...field, value };
-        this.setField(f);
-      });
+      input.onChange(value => this.updateHandle(field, value));
       return {
         element: input,
         setValue: v => input.setValue(v),
-      };
-    }
-    if (field.kind === 'toggle') {
-      const input = new ToggleButton(field.name, field.icons);
-      input.setToggled(field.value);
-      input.onToggle(value => {
-        const f = { ...field, value };
-        this.setField(f);
-      });
-      return {
-        element: input,
-        setValue: v => input.setToggled(v),
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
       };
     }
     if (field.kind === 'slider') {
-      const input = new SliderInput(() => field.value, field.min, field.max);
-      input.onChange(value => {
-        const f = { ...field, value };
-        this.setField(f);
-      });
+      const input = new SliderInput(field.min, field.max);
+      input.onChange(value => this.updateHandle(field, value));
       return {
         element: input,
         setValue: v => input.setValue(v),
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
       };
     }
     if (field.kind === 'angle') {
-      const input = new AngleInput(() => field.value);
-      input.onChange(value => {
-        const f = { ...field, value };
-        this.setField(f);
-      });
+      const input = new AngleInput();
+      input.onChange(value => this.updateHandle(field, value));
       return {
         element: input,
         setValue: v => input.setValue(v),
-      };
-    }
-    if (field.kind === 'separator') {
-      return {
-        element: new Separator(true),
-        setValue: (_) => {},
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
       };
     }
     if (field.kind === 'number') {
       const input = new NumberInput(
-        () => field.value,
         typeof field.min !== 'undefined' ? field.min : null,
         typeof field.max !== 'undefined' ? field.max : null,
       );
-      input.onChange(value => {
-        const f = { ...field, value };
-        this.setField(f);
-      });
+      input.onChange(value => this.updateHandle(field, value));
       return {
         element: input,
         setValue: v => input.setValue(v),
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
+      };
+    }
+    if (field.kind === 'toggle') {
+      const input = new ToggleButton(field.name, field.icons);
+      input.onToggle(value => this.updateHandle(field, value));
+      return {
+        element: input,
+        setValue: v => input.setToggled(v),
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
       };
     }
     if (field.kind === 'button') {
@@ -269,34 +270,19 @@ class AutoForm {
       return {
         element: input,
         setValue: (_) => {},
+        clear: () => {},
+        setEnabled: e => input.setEnabled(e),
+      };
+    }
+    if (field.kind === 'separator') {
+      return {
+        element: new Separator(true),
+        setValue: (_) => {},
+        clear: () => {},
+        setEnabled: (_) => {},
       };
     }
     return impossible(field);
-  }
-
-  public static compareValues(one: AutoField, two: AutoField): boolean {
-    if (one.kind !== two.kind) return false;
-    const coerce = <A extends AutoField, B extends AutoField>(
-      one: A, two: B): readonly [A, A] => {
-      if (one.kind !== two.kind) throw new Error('unreachable');
-      return [one, two as unknown as A];
-    };
-
-    if (one.kind === 'number' || one.kind === 'toggle' || one.kind === 'slider') {
-      return one.value === two.value;
-    }
-    if (one.kind === 'amount') {
-      const [a, b] = coerce(one, two);
-      return a.value === b.value && a.unit === b.unit;
-    }
-    if (one.kind === 'angle') {
-      const [a, b] = coerce(one, two);
-      return a.value.get('model') === b.value.get('model');
-    }
-    if (one.kind === 'separator' || one.kind === 'button') {
-      return true;
-    }
-    return impossible(one);
   }
 
   public static intersection(forms: AutoForm[]): AutoForm {
@@ -307,7 +293,7 @@ class AutoForm {
     for (const form of remainder) {
       const check = Array.from(included);
       for (const field of check) {
-        if (!form.byId.has(field)) {
+        if (!form.fieldDefs.has(field)) {
           included.delete(field);
         }
       }
@@ -315,12 +301,19 @@ class AutoForm {
     }
     const result = new AutoForm();
     for (const field of first.fields) {
-      if (included.has(AutoForm.fieldId(field))) {
-        result.add(field);
+      const id = AutoForm.fieldId(field);
+      if (included.has(id)) {
+        result.addFieldDef(field);
+
+        for (const form of forms) {
+          for (const handle of form.handles.get(id)) {
+            result.handles.get(id).add(handle);
+          }
+        }
       }
     }
     for (const form of forms) {
-      result.forward(form);
+      form.downstream.add(result);
     }
     return result;
   }
@@ -332,9 +325,13 @@ class AutoForm {
         result.addSeparator();
       }
       for (const field of form.fields) {
-        result.add(field);
+        result.addFieldDef(field);
+        const id = AutoForm.fieldId(field);
+        for (const handle of form.handles.get(id)) {
+          result.handles.get(id).add(handle);
+        }
       }
-      result.forward(form);
+      form.downstream.add(result);
     }
     return result;
   }
@@ -356,7 +353,8 @@ type AutoField = AutoFieldNumber
 interface AutoFieldBase<V> {
   name: string;
   label?: string;
-  value: V;
+  value: Ref<V>;
+  enabled?: Ref<boolean>;
 }
 
 interface AutoFieldNumber extends AutoFieldBase<number> {
@@ -373,7 +371,6 @@ interface AutoFieldSlider extends AutoFieldBase<number> {
 
 interface AutoFieldAngle extends AutoFieldBase<Angle> {
   kind: 'angle';
-  value: Angle;
 }
 
 interface AutoFieldAmount extends AutoFieldBase<Amount> {
@@ -512,14 +509,17 @@ type InputParse<V> = InputParseValue<V> | InputParseError;
 abstract class MiniFormInput<V, E extends HTMLElement> extends ElementWrap<E> implements Resetable {
   private readonly changeListeners = new Set<(value: V) => void>();
 
-  constructor(
-    element: E, 
-    private readonly getDefaultValue: () => V) {
+  constructor(element: E) {
     super(element);
     this.addClass('mini-form-input');
-    this.setRawValue(this.format(this.defaultValue));
     this.bindChangeListener(() => {
+      if (this.getRawValue() === '') {
+        return;
+      }
       const value = this.getValue();
+      if (value === null) {
+        return;
+      }
       for (const item of this.changeListeners) {
         item(value);
       }
@@ -530,28 +530,28 @@ abstract class MiniFormInput<V, E extends HTMLElement> extends ElementWrap<E> im
     });
   }
 
-  get defaultValue(): V {
-    return this.getDefaultValue();
-  }
-
   public onChange(listener: (value: V) => void) {
      this.changeListeners.add(listener);
   }
 
-  public getValue(): V {
+  public getValue(): V | null {
     const parse = this.parse(`${this.getRawValue()}`);
     if ('error' in parse) {
       this.tooltip = parse.error;
       this.addClass('error');
-      return this.defaultValue;
+      return null;
     }
     this.tooltip = '';
     this.removeClass('error');
     return parse.value;
   }
 
+  public clear() {
+    this.setRawValue('');
+  }
+
   public reset() {
-    this.setValue(this.defaultValue);
+    this.clear();
   }
 
   public setValue(value: V): void {
@@ -577,15 +577,13 @@ class SliderInput extends MiniFormInput<number, HTMLInputElement> {
   private static readonly RESOLUTION = 10000;
 
   constructor(
-    defaultValue: () => number,
     public minValue: number,
     public maxValue: number) {
-    super(document.createElement('input') as HTMLInputElement, defaultValue);
+    super(document.createElement('input') as HTMLInputElement);
     this.addClass('mini-slider');
     this.element.setAttribute('type', 'range');
     this.element.setAttribute('min', '0');
     this.element.setAttribute('max', `${SliderInput.RESOLUTION}`);
-    this.setValue(defaultValue());
   }
 
   protected override getRawValue(): string {
@@ -616,8 +614,8 @@ class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
   public minValue: Amount | null = null;
   public maxValue: Amount | null = null;
 
-  constructor(defaultValue: () => Amount) {
-    super(document.createElement('input') as HTMLInputElement, defaultValue);
+  constructor() {
+    super(document.createElement('input') as HTMLInputElement);
     this.addClass('amount');
     this.element.setAttribute('type', 'text');
     this.element.setAttribute('size', '8');
@@ -657,8 +655,8 @@ class AngleInput extends MiniFormInput<Angle, HTMLInputElement> {
   public minValue: Angle | null = null;
   public maxValue: Angle | null = null;
 
-  constructor(defaultValue: () => Angle = () => Angle(Radians(0), 'model')) {
-    super(document.createElement('input') as HTMLInputElement, defaultValue);
+  constructor() {
+    super(document.createElement('input') as HTMLInputElement);
     this.element.setAttribute('type', 'text');
     this.element.setAttribute('size', '6');
   }
@@ -696,11 +694,10 @@ class AngleInput extends MiniFormInput<Angle, HTMLInputElement> {
 
 class NumberInput extends MiniFormInput<number, HTMLInputElement> {
   constructor(
-    defaultValue: () => number,
     private readonly minValue: number | null = null,
     private readonly maxValue: number | null = null,
   ) {
-    super(document.createElement('input') as HTMLInputElement, defaultValue);
+    super(document.createElement('input') as HTMLInputElement);
     this.element.setAttribute('type', 'number');
     this.element.setAttribute('size', '6');
     if (minValue !== null) {
@@ -751,6 +748,12 @@ class ToggleButton extends IconButton {
     super(name, icons?.off);
     this.addClass('toggle-button');
     this.onClick(() => this.toggle());
+  }
+
+  clear() {
+    // specifically avoiding firing events.
+    this._status = false;
+    this.removeClass('selected');
   }
 
   onToggle(listener: (on: boolean) => void) {

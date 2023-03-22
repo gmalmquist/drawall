@@ -304,96 +304,6 @@ class Wall extends Component implements Solo {
     return this.getEdge().length;
   }
 
-  showPopup(openAt: Position) {
-    this.entity.removeAll(PopupWindow);
-    const p = this.entity.add(PopupWindow);
-    p.setPosition(openAt);
-    p.title = this.name;
-
-    const length = this.entity.only(LengthConstraint);
-
-    const lengthRefMap = new Map<string, LengthReference>();
-    for (const wall of this.entity.ecs.getComponents(Wall)) {
-      if (wall === this) continue;
-      lengthRefMap.set(wall.name, {
-        name: wall.name,
-        getLength: () => wall.getLength(),
-      });
-    }
-
-    const ui = p.getUiBuilder()
-      .addCheckbox('enable', length.enabled)
-      .addLabel('length', 'enable')
-      .addFormattedInput(
-        'length', 
-        (value: string): string => {
-          try {
-            let measure = Units.distance.parse(value)!;
-            if (measure.unit === UNITLESS) {
-              measure = App.project.modelUnit.newAmount(measure.value);
-            }
-            return App.project.displayUnit.format(measure);
-          } catch (_) {
-            return value;
-          }
-        },
-        {
-          value: App.project.displayUnit.format(
-            App.project.modelUnit.newAmount(
-              length.enabled ? length.length : Distances.between(this.src.pos, this.dst.pos).get('model'))
-          ),
-          size: 8,
-        },
-      )
-      .newRow()
-      .addDropdown('lengthRef', {
-        options: Array.from(lengthRefMap.keys()).sort().map(name => ({
-          name,
-          label: `length = ${name}`,
-        })),
-        placeholder: '-- set length equal to --',
-        selected: length.lengthReference ? length.lengthReference.name : undefined,
-      })
-      .newRow()
-      .addLabel('tension', 'tension')
-      .addSlider('tension', { min: 0, max: 1, initial: length.hardness })
-      .newRow();
-
-    ui.onChange((name, value) => {
-      if (name === 'length') {
-        try {
-          const amount = Units.distance.parse(value)!;
-          const original = length.length;
-          length.length = App.project.modelUnit.from(amount).value;
-          if (original !== length.length) {
-            length.enabled = true;
-            length.lengthReference = null;
-            ui.setValue('enable', 'true');
-            ui.setValue('lengthRef', '');
-          }
-        } catch (e) {
-          console.error(`could not parse distance '${value}'`);
-        }
-      } else if (name === 'tension') {
-        length.hardness = parseFloat(value);
-      } else if (name === 'enable') {
-        length.enabled = value === 'true';
-        ui.fireChange('length');
-      } else if (name === 'lengthRef') {
-        const lr = lengthRefMap.get(value);
-        if (lr) {
-          length.lengthReference = lr;
-          length.enabled = true;
-        } else {
-          length.lengthReference = null;
-        }
-      }
-    });
-
-    ui.addResetButton();
-    p.show();
-  }
-
   tearDown() {
     this.src.detachOutgoing();
     this.dst.detachIncoming();
@@ -458,7 +368,6 @@ class WallJoint extends Component {
           right: this.incoming ? this.incoming.src.entity.onlyRef(PhysNode).or(position) : position,
         };
       },
-      Angle(Radians(Math.PI/2.), 'model'),
     );
 
     entity.add(FixedConstraint,
@@ -523,148 +432,58 @@ class WallJoint extends Component {
     }
   }
 
-  showPopup(openAt: Position) {
-    this.entity.removeAll(PopupWindow);
-    const p = this.entity.add(PopupWindow);
-    p.setPosition(openAt);
-    p.title = this.name;
-    const ui = p.getUiBuilder()
-    this.createAnchorUi(ui);
-    this.createAngleUi(ui);
-    ui.addResetButton();
-    p.show();
-  }
-
   override tearDown() {
     const out = this._outgoing;
     const inc = this._incoming;
     if (out !== null && out.src === this) out.entity.destroy();
     if (inc !== null && inc.dst === this) inc.entity.destroy();
   }
-
-  private createAnchorUi(ui: UiBuilder) {
-    const fixed = this.entity.only(FixedConstraint);
-    ui.addCheckbox('fix', fixed.enabled)
-      .addLabel('lock position', 'fix')
-      .addSpacer()
-      .newRow();
-    ui.onChange((name, value) => {
-      if (name === 'fix') {
-        fixed.enabled = value === 'true';
-      }
-    });
-  }
-
-  private createAngleUi(ui: UiBuilder) {
-    if (this.incoming === null || this.outgoing === null) {
-      return;
-    }
-    const angleConstraint = this.entity.only(AngleConstraint);
-    const angle = Spaces.getCalc('model', (t: Radians, c: Radians) => {
-      return toDegrees(angleConstraint.enabled ? t : c);
-    }, angleConstraint.targetAngle, angleConstraint.currentAngle);
-
-    ui
-      .addCheckbox('lock angle', angleConstraint?.enabled)
-      .addLabel('angle', 'lock angle')
-      .addNumberInput('angle', {
-        min: 0,
-        max: 360,
-        value: unwrap(angle),
-        size: 4,
-      })
-      .addRadioGroup('units', [{ name: 'radians' }, { name: 'degrees', isDefault: true }])
-      .newRow()
-      .addLabel('tension', 'strength')
-      .addSlider('strength', { min: 0, max: 1, initial: angleConstraint.hardness })
-      .newRow();
-
-    const resetAngle = () => {
-      const scale = ui.getValue('units') === 'degrees' ? 180 / Math.PI : 1;
-      ui.setValue('angle', (ui.getValue('units') === 'degrees'
-        ? toDegrees(angleConstraint.targetAngle.get('model'))
-        : angleConstraint.targetAngle.get('model')).toString());
-    };
-
-    const parseAngle = (value: string) => {
-      const prev = angleConstraint.targetAngle;
-      const angle = parseFloat(value);
-      if (isNaN(angle)) {
-        resetAngle();
-        return prev;
-      }
-      return Angle(ui.getValue('units') === 'degrees'
-        ? toRadians(Degrees(angle))
-        : Radians(angle), 'model');
-    };
-
-    ui.onChange((name: string, value: string) => {
-      if (name === 'angle') {
-        const prev = angleConstraint.targetAngle;
-        angleConstraint.targetAngle = parseAngle(value.trim());
-        if (angleConstraint.targetAngle !== prev) {
-          angleConstraint.enabled = true;
-          ui.setValue('lock angle', true);
-        }
-      } else if (name === 'strength') {
-        angleConstraint.hardness = parseFloat(value);
-      } else if (name === 'units') {
-        resetAngle();
-      } else if (name === 'lock angle') {
-        angleConstraint.enabled = value === 'true';
-      }
-    });
-  }
 }
 
 class Constraint extends Component {
-  private _enabled: boolean = false;
+  protected readonly enabledRef = Refs.of(false);
+  protected readonly tensionRef = Refs.of(0.5);
 
   public enforce(): void {}
 
   public priority: number = 0;
 
-  // hardness between 0 and 1
-  private _hardness: number = 0.5;
-
   constructor(entity: Entity) {
     super(entity);
     this.addKind(Constraint);
+    this.enabledRef.onChange(e => {
+      if (e) this.onEnable();
+      else this.onDisable();
+    });
   }
 
   public get enabled(): boolean {
-    return this._enabled;
+    return this.enabledRef.get();
   }
 
   public set enabled(enabled: boolean) {
-    if (enabled === this._enabled) return;
-    if (enabled) {
-      this.onEnable();
-    } else {
-      this.onDisable();
-    }
-    this._enabled = enabled;
+    this.enabledRef.set(enabled);
   }
 
-  public get hardness(): number {
-    return this._hardness;
+  public get tension(): number {
+    return this.tensionRef.get();
   }
 
-  public set hardness(hardness: number) {
-    this._hardness = clamp01(hardness);
+  public set tension(t: number) {
+    this.tensionRef.set(t);
   }
 
   get influence() {
     if (!this.enabled) return 0;
     const dt = clamp01(Time.delta);
-    const a = lerp(this.hardness, 0, dt);
-    const b = lerp(this.hardness, dt, 1);
-    return lerp(this.hardness, a, b);
+    const a = lerp(this.tension, 0, dt);
+    const b = lerp(this.tension, dt, 1);
+    return lerp(this.tension, a, b);
   }
 
   // for subclasses to override
-  onEnable() {}
-  onDisable() {}
+  protected onEnable() {}
+  protected onDisable() {}
 }
 
 class FixedConstraint extends Constraint {
@@ -676,7 +495,7 @@ class FixedConstraint extends Constraint {
     private readonly setPoints: (pts: Position[]) => void,
   ) {
     super(entity);
-    this.hardness = 1.0;
+    this.tension = 1.0;
     this.priority = 5;
     this.enabled = false;
 
@@ -685,12 +504,7 @@ class FixedConstraint extends Constraint {
       const lockField = form.add({
         name: 'lock position',
         kind: 'toggle',
-        value: this.enabled,
-      });
-      form.addFieldListener(({ name, kind, value }) => {
-        if (name === 'lock position' && kind === 'toggle') {
-          this.enabled = value;
-        }
+        value: this.enabledRef,
       });
       return form;
     });
@@ -726,11 +540,11 @@ class MinLengthConstraint extends Constraint {
   ) {
     super(entity);
     this.enabled = true;
-    this.hardness = 1;
+    this.tension = 1;
   }
 
   private get springConstant(): number {
-    return this.hardness * 3;
+    return this.tension * 3;
   }
 
   private getEdge(): Edge {
@@ -760,15 +574,17 @@ class MinLengthConstraint extends Constraint {
 }
 
 class LengthConstraint extends Constraint {
+  public readonly targetLength = Refs.of(0);
   public lengthReference: LengthReference | null = null;
 
   constructor(
     entity: Entity,
     private readonly getSrc: () => PhysNode,
     private readonly getDst: () => PhysNode,
-    public length: number,
+    length: number,
   ) {
     super(entity);
+    this.targetLength.set(length);
     this.enabled = false;
 
     this.entity.add(Form).setFactory(() => {
@@ -776,13 +592,18 @@ class LengthConstraint extends Constraint {
       const lockField = form.add({
         name: 'lock length',
         kind: 'toggle',
-        value: this.enabled,
+        value: this.enabledRef,
       });
       const lengthField = form.add({
         name: 'length',
         label: 'length',
         kind: 'amount',
-        value: App.project.displayUnit.from(App.project.modelUnit.newAmount(length)),
+        enabled: this.enabledRef,
+        value: this.targetLength.map({
+          to: modelLength => App.project.displayUnit.from(App.project.modelUnit.newAmount(modelLength)),
+          from: amount => App.project.modelUnit.from(amount).value,
+          compareValues: (a, b) => a.value === b.value && a.unit === b.unit,
+        }),
         min: App.project.modelUnit.newAmount(0),
         unit: Units.distance,
       });
@@ -790,26 +611,26 @@ class LengthConstraint extends Constraint {
         name: 'tension',
         label: 'tension',
         kind: 'slider',
-        value: this.hardness,
+        enabled: this.enabledRef,
+        value: this.tensionRef,
         min: 0,
         max: 1,
       });
-      form.addFieldListener(({ name, kind, value }) => {
-        if (name === 'length' && kind === 'amount') {
-          lockField.setValue(true);
-          this.length = App.project.modelUnit.from(value).value;
-        } else if (name === 'lock length' && kind === 'toggle') {
-          this.enabled = value;
-        } else if (name === 'tension' && kind === 'slider') {
-          this.hardness = value;
-        }
-      });
+      lengthField.value.onChange(() => this.enabledRef.set(true));
       return form;
     });
   }
 
+  get length() {
+    return this.targetLength.get();
+  }
+
+  set length(v: number) {
+    this.targetLength.set(v);
+  }
+
   private get springConstant(): number {
-    return this.hardness * 3;
+    return this.tension * 3;
   }
 
   private getEdge(): Edge {
@@ -848,10 +669,11 @@ interface Corner {
 }
 
 class AngleConstraint extends Constraint {
+  public readonly targetAngleRef = Refs.of(Angle(Radians(Math.PI/2), 'model'));
+
   constructor(
     entity: Entity,
     public readonly getCorner: () => Corner,
-    public targetAngle: Angle = Angle(Radians(Math.PI/2), 'model'),
   ) {
     super(entity);
 
@@ -860,35 +682,37 @@ class AngleConstraint extends Constraint {
       const lockField = form.add({
         name: 'lock angle',
         kind: 'toggle',
-        value: this.enabled,
+        value: this.enabledRef,
       });
       const angleField = form.add({
         name: 'angle',
         label: 'angle',
         kind: 'angle',
-        value: this.enabled ? this.targetAngle : this.currentAngle,
+        enabled: this.enabledRef,
+        value: this.targetAngleRef,
       });
       const tensionField = form.add({
         name: 'tension',
         label: 'tension',
         kind: 'slider',
-        value: this.hardness,
+        enabled: this.enabledRef,
+        value: this.tensionRef,
         min: 0,
         max: 1,
       });
-      form.addFieldListener(({ name, kind, value }) => {
-        if (name === 'angle' && kind === 'angle') {
-          lockField.setValue(true);
-          this.targetAngle = value;
-        } else if (name === 'lock angle' && kind === 'toggle') {
-          this.enabled = value;
-        } else if (name === 'tension' && kind === 'slider') {
-          this.hardness = value;
-        }
-      });
+      angleField.value.onChange(() => this.enabledRef.set(true));
       return form;
     });
   }
+
+  get targetAngle(): Angle {
+    return this.targetAngleRef.get();
+  }
+
+  set targetAngle(a: Angle) {
+    this.targetAngleRef.set(a);
+  }
+    
 
   private getLeft(): Vector {
     const c = this.getCorner();
@@ -910,7 +734,7 @@ class AngleConstraint extends Constraint {
   }
 
   get springConstant(): number {
-    return this.hardness * 3;
+    return this.tension * 3;
   }
 
   enforce() {
@@ -927,8 +751,8 @@ class AngleConstraint extends Constraint {
 
     const deltaL = Vectors.between(corner.left.pos, targetLeft);
     const deltaR = Vectors.between(corner.right.pos, targetRight);
-    corner.left.addForce(deltaL.scale(this.hardness));
-    corner.right.addForce(deltaR.scale(this.hardness));
+    corner.left.addForce(deltaL.scale(this.tension));
+    corner.right.addForce(deltaR.scale(this.tension));
 
     if (!App.debug) return;
     App.canvas.lineWidth = 1;

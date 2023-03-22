@@ -59,7 +59,8 @@ class GUI {
   }
 
   private setupProject() {
-    const gridSpacing = new AmountInput(() => App.project.gridSpacing);
+    const gridSpacing = new AmountInput();
+    gridSpacing.setValue(App.project.gridSpacing);
     gridSpacing.minValue = Units.distance.parse('1cm')!;
     gridSpacing.onChange(spacing => {
       if (spacing.value <= 0) {
