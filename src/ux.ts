@@ -273,11 +273,44 @@ interface SnapAxes {
   preferred: NamedAxis | null,
 }
 
-interface SnapState {
-  enabled: boolean,
-  snapToLocal: boolean,
-  snapToGlobal: boolean,
-  snapToGeometry: boolean,
+class SnapState {
+  public readonly enableByDefaultRef: Ref<boolean> = Refs.of(false);
+  public readonly enabledRef: Ref<boolean> = Refs.of(false);
+  public readonly snapToLocalRef: Ref<boolean> = Refs.of(true);
+  public readonly snapToGlobalRef: Ref<boolean> = Refs.of(true);
+  public readonly snapToGeometryRef: Ref<boolean> = Refs.of(false);
+
+  public get enabled(): boolean {
+    return this.enabledRef.get();
+  }
+
+  public set enabled(v: boolean) {
+    this.enabledRef.set(v);
+  }
+
+  public get snapToLocal(): boolean {
+    return this.snapToLocalRef.get();
+  }
+
+  public set snapToLocal(v: boolean) {
+    this.snapToLocalRef.set(v);
+  }
+
+  public get snapToGlobal(): boolean {
+    return this.snapToGlobalRef.get();
+  }
+
+  public set snapToGlobal(v: boolean) {
+    this.snapToGlobalRef.set(v);
+  }
+
+  public get snapToGeometry(): boolean {
+    return this.snapToGeometryRef.get();
+  }
+
+  public set snapToGeometry(v: boolean) {
+    this.snapToGeometryRef.set(v);
+  }
 }
 
 class UiState {
@@ -308,47 +341,25 @@ class UiState {
   private keysPressed = new DefaultMap<string, boolean>(() => false);
   private swappedTool: ToolName | null = null;
   private snapAxes: SnapAxes | null = null;
-  public readonly snapping: SnapState = {
-    enabled: false,
-    snapToLocal: true,
-    snapToGlobal: true,
-    snapToGeometry: false,
-  };
+  public readonly snapping = new SnapState();
 
-  constructor() {
-    this.events.forward({
-      handleDrag: e => App.tools.current.events.handleDrag(e),
-      handleKey: e => App.tools.current.events.handleKey(e),
-      handleMouse: e => App.tools.current.events.handleMouse(e),
-    });
+  update() {
+    App.tools.current.update();
 
-    this.events.onKey('keydown', e => {
-      this.keysPressed.set(e.key, true);
-      this.evaluateKeybindings();
-      if (e.key === 'Shift') {
-        this.snapping.enabled = !this.snapping.enabled;
-      } else if (e.key === 'x') {
-        if (this.dragging) {
-          this.updateSnapping({
-            snapByDefault: true,
-            preferredAxis: () => UiState.GLOBAL_X,
-          });
-        }
-      } else if (e.key === 'y') {
-        if (this.dragging) {
-          this.updateSnapping({
-            snapByDefault: true,
-            preferredAxis: () => UiState.GLOBAL_Y,
-          });
-        }
-      }
-    });
+    if (this.dragging) {
+      this.renderSnapAxes();
+    }
+  }
 
-    this.events.onKey('keyup', e => {
-      this.keysPressed.delete(e.key);
-    });
+  isKeyPressed(key: string): boolean {
+    return this.keysPressed.get(key);
+  }
 
-    this.setup();
+  get pressedKeys(): string[] {
+    // little does the map api know that its
+    // keys are literal keys this time!!! >:D
+    return Array.from(this.keysPressed.keys())
+      .filter(key => this.keysPressed.get(key));
   }
 
   get multiSelecting(): boolean {
@@ -357,14 +368,6 @@ class UiState {
 
   get useAlternateSnap(): boolean {
     return this.keysPressed.get('Shift');
-  }
-
-  update() {
-    App.tools.current.update();
-
-    if (this.dragging) {
-      this.renderSnapAxes();
-    }
   }
 
   get mousePos(): Position {
@@ -386,14 +389,17 @@ class UiState {
   }
 
   setSelection(...handles: Handle[]) {
+    this._selection.forEach(handle => { handle.selected = false; });
     this._selection.clear();
     this.addSelection(...handles);
   }
 
   addSelection(...handles: Handle[]) {
-    handles.forEach(h => {
+    const already = new Set(this._selection);
+    handles.filter(h => !already.has(h)).forEach(h => {
       this._selection.add(h);
       h.selected = true;
+      already.add(h);
     });
     this.updateForms();
   }
@@ -437,21 +443,6 @@ class UiState {
     const form = AutoForm.intersection(forms);
     App.gui.selection.clear();
     form.inflate(App.gui.selection);
-  }
-
-  private evaluateKeybindings() {
-    const stroke: KeyStroke = {
-      // little does the map api know that its
-      // keys are literal keys!!! >:D
-      keys: Array.from(this.keysPressed.keys())
-        .filter(key => this.keysPressed.get(key)),
-    };
-    const hotkey = App.keybindings.match(stroke);
-    if (hotkey !== null) {
-      const action = App.actions.get(hotkey.action);
-      App.log('executing keybinding', formatKeyStroke(hotkey.stroke), ':', action.name);
-      action.apply();
-    }
   }
 
   private getAxisColor(axis: NamedAxis): string {
@@ -545,7 +536,7 @@ class UiState {
 
   private updateSnapping(snapping?: Snapping) {
     this.snapAxes = this.getSnapAxes(snapping);
-    this.snapping.enabled = !!snapping?.snapByDefault;
+    this.snapping.enabled = !!snapping?.snapByDefault || this.snapping.enableByDefaultRef.get();
   }
 
   private getSnapAxes(snapping?: Snapping): SnapAxes {
@@ -642,6 +633,38 @@ class UiState {
   }
 
   setup() {
+    this.events.forward({
+      handleDrag: e => App.tools.current.events.handleDrag(e),
+      handleKey: e => App.tools.current.events.handleKey(e),
+      handleMouse: e => App.tools.current.events.handleMouse(e),
+    });
+
+    this.events.onKey('keydown', e => {
+      this.keysPressed.set(e.key, true);
+      if (e.key === 'Shift') {
+        this.snapping.enabled = !this.snapping.enabled;
+      } else if (e.key === 'x') {
+        if (this.dragging) {
+          this.updateSnapping({
+            snapByDefault: true,
+            preferredAxis: () => UiState.GLOBAL_X,
+          });
+        }
+      } else if (e.key === 'y') {
+        if (this.dragging) {
+          this.updateSnapping({
+            snapByDefault: true,
+            preferredAxis: () => UiState.GLOBAL_Y,
+          });
+        }
+      }
+    });
+
+    this.events.onKey('keyup', e => {
+      App.actions.evaluateKeybindings();
+      this.keysPressed.delete(e.key);
+    });
+
     const makeKeyEvent = (kind: Kinds<UiKeyEvent>, e: KeyboardEvent): UiKeyEvent => ({
         kind,
         key: e.key,

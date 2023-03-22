@@ -1,5 +1,7 @@
 type UserActionId = ToolName
   | 'noop'
+  | 'toggle-snap'
+  | 'toggle-kinematics'
 ;
 
 interface UserAction {
@@ -11,9 +13,15 @@ class UserActions {
   private readonly map = new Map<UserActionId, UserAction>();
 
   constructor() {
+  }
+
+  setup() {
     const add = (name: UserActionId, apply: () => void) => this.register({
       name, apply
     });
+    const toggle = (name: UserActionId, ref: Ref<boolean>) => add(name, () => ref.set(!ref.get()));
+    toggle('toggle-snap', App.ui.snapping.enableByDefaultRef);
+    toggle('toggle-kinematics', App.settings.kinematics);
     // add('foo', () => doFoo());
   }
 
@@ -30,6 +38,18 @@ class UserActions {
 
   get actions(): UserActionId[] {
     return Array.from(this.map.keys());
+  }
+
+  public evaluateKeybindings() {
+    const stroke: KeyStroke = {
+      keys: App.ui.pressedKeys,
+    };
+    const hotkey = App.keybindings.match(stroke);
+    if (hotkey !== null) {
+      const action = App.actions.get(hotkey.action);
+      App.log('executing keybinding', formatKeyStroke(hotkey.stroke), ':', action.name);
+      action.apply();
+    }
   }
 }
 

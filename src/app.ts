@@ -9,6 +9,7 @@ class App {
   public static readonly ui = new UiState();
   public static readonly canvas = new Canvas2d(
       document.getElementById('main-canvas') as HTMLCanvasElement)
+  public static readonly settings = new Settings();
   public static project = new Project();
   public static debug: boolean = false;
 
@@ -37,10 +38,18 @@ class App {
   }
 
   static init() {
+    App.actions.setup();
     App.gui.setup();
+    App.ui.setup();
+    setupCanvas();
 
     // register systems
     App.ecs.registerSystem(Recycler);
+
+    // this renderer has to come before
+    // the other ones, bc it clears the
+    // canvas.
+    App.ecs.registerSystem(RenderCanvas);
 
     App.ecs.registerSystem(AngleRenderer);
     App.ecs.registerSystem(WallRenderer);
@@ -48,13 +57,19 @@ class App {
 
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
+
   }
 
   static update() {
+    Time.tick();
     App.ecs.update();
     App.ui.update();
   }
+
+  static start() {
+    App.init();
+    setInterval(() => this.update(), 15);
+  }
 }
 
-App.init();
-
+setTimeout(() => App.start(), 10);

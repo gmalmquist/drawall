@@ -34,6 +34,10 @@ abstract class Component {
 
   tearDown() {
   }
+
+  ref() {
+    return this.entity.ref((_) => this);
+  }
 }
 
 class TestComponent extends Component implements Solo {
@@ -189,6 +193,10 @@ class Entity {
     this.ecs.deleteEntity(this.id);
   }
 
+  has<C extends Component>(kind: ComponentType<C>): boolean {
+    return this.components.get(kind).length > 0;
+  }
+
   get<C extends Component>(kind: ComponentType<C>): C[] {
     return this.components.get(kind);
   }
@@ -252,11 +260,17 @@ class EntityRefImpl<T> {
     );
   }
 
-  intersection<U>(e: EntityRefImpl<U>): EntityRefImpl<readonly [T, U]> {
+  and<U>(e: EntityRefImpl<U>): EntityRefImpl<readonly [T, U]> {
     return new EntityRefImpl(
       () => [this.getter(), e.getter()],
       [...this.entities, ...e.entities],
     );
+  }
+
+  with(f: (t: T) => void) {
+    if (this.isAlive) {
+      f(this.getter());
+    }
   }
 }
 

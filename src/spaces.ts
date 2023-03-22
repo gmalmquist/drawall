@@ -281,7 +281,6 @@ class SpaceAngle extends BaseSpaceValue<Radians> {
     return unwrap(this.get(this.space)) === unwrap(other.get(this.space));
   }
 
-
   toString(): string {
     return `Angle(${formatDegrees(toDegrees(this.get(this.space)))}, ${this.space})`;
   }
@@ -368,6 +367,10 @@ class SpaceVec extends BaseSpaceValue<Vec> {
       return this.map(v => v.scale(factor));
     }
     return this.map((v: Vec, factor: number) => v.scale(factor), factor);
+  }
+
+  neg(): SpaceVec {
+    return this.scale(-1);
   }
 
   unit(): SpaceVec {

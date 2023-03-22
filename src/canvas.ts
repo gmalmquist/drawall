@@ -78,7 +78,7 @@ class Canvas2d {
   }
 
   set fontSize(s: number) {
-    this.g.font = `${s} sans-serif`;
+    this.g.font = `${s}px sans-serif`;
   }
 
   set lineWidth(w: number) {
@@ -231,7 +231,7 @@ interface TextDrawProps {
   baseline?: CanvasTextBaseline;
 }
 
-setTimeout(() => {
+function setupCanvas() {
   const c = App.canvas;
   c.handleResize();
 
@@ -242,80 +242,79 @@ setTimeout(() => {
     c.viewport.radius = Math.max(10, c.viewport.radius + Math.sign(wheel.deltaY) * 10);
     c.updateTransforms();
   });
+};
 
-  const drawGridLines = () => {
-    // render grid
-    const gridSpacing = App.project.modelUnit.from(App.project.gridSpacing).value;
-    const left = Vector(new Vec(-1, 0), 'screen').get('model').unit();
-    const right = Vector(new Vec(1, 0), 'screen').get('model').unit();
-    const up = Vector(new Vec(0, -1), 'screen').get('model').unit();
-    const down = Vector(new Vec(0, 1), 'screen').get('model').unit();
+function drawGridLines() {
+  const c = App.canvas;
+  // render grid
+  const gridSpacing = App.project.modelUnit.from(App.project.gridSpacing).value;
+  const left = Vector(new Vec(-1, 0), 'screen').get('model').unit();
+  const right = Vector(new Vec(1, 0), 'screen').get('model').unit();
+  const up = Vector(new Vec(0, -1), 'screen').get('model').unit();
+  const down = Vector(new Vec(0, 1), 'screen').get('model').unit();
 
-    const dirMinus = left.plus(up);
-    const dirPlus = right.plus(down);
-    const topLeft = Position(Point.ZERO, 'screen').get('model')
-      .trunc(gridSpacing)
-      .splus(gridSpacing, dirMinus);
-    const bottomRight = Position(new Point(c.width, c.height), 'screen').get('model')
-      .trunc(gridSpacing)
-      .splus(gridSpacing, dirPlus);
+  const dirMinus = left.plus(up);
+  const dirPlus = right.plus(down);
+  const topLeft = Position(Point.ZERO, 'screen').get('model')
+    .trunc(gridSpacing)
+    .splus(gridSpacing, dirMinus);
+  const bottomRight = Position(new Point(c.width, c.height), 'screen').get('model')
+    .trunc(gridSpacing)
+    .splus(gridSpacing, dirPlus);
 
-    const axisX = Vector(Axis.X, 'screen');
-    const axisY = Vector(Axis.Y, 'screen');
+  const axisX = Vector(Axis.X, 'screen');
+  const axisY = Vector(Axis.Y, 'screen');
 
-    const gridX = Vec.between(topLeft, bottomRight).onAxis(axisX.get('model'));
-    const gridY = Vec.between(topLeft, bottomRight).onAxis(axisY.get('model'));
-    const steps = Math.floor(Math.max(gridX.mag(), gridY.mag()) / gridSpacing);
+  const gridX = Vec.between(topLeft, bottomRight).onAxis(axisX.get('model'));
+  const gridY = Vec.between(topLeft, bottomRight).onAxis(axisY.get('model'));
+  const steps = Math.floor(Math.max(gridX.mag(), gridY.mag()) / gridSpacing);
 
-    c.lineWidth = 1;
-    c.strokeStyle = '#ccc'; 
-    c.fillStyle = 'black'; 
-    c.textAlign = 'center';
-    c.textBaseline = 'top';
-    for (let i = 0; i <= steps; i++) {
-      const s = gridSpacing * i;
-      const x = topLeft.splus(s, dirPlus.onAxis(axisX.get('model')).unit());
-      c.strokeLine(
-        Position(x, 'model'), 
-        Position(x.plus(gridY), 'model'),
-      );
-      const value = App.project.modelUnit.newAmount(x.trunc().x);
-      const label = App.project.displayUnit.format(value);
+  c.lineWidth = 1;
+  c.strokeStyle = '#ccc'; 
+  c.fillStyle = 'black'; 
+  c.textAlign = 'center';
+  c.textBaseline = 'top';
+  for (let i = 0; i <= steps; i++) {
+    const s = gridSpacing * i;
+    const x = topLeft.splus(s, dirPlus.onAxis(axisX.get('model')).unit());
+    c.strokeLine(
+      Position(x, 'model'), 
+      Position(x.plus(gridY), 'model'),
+    );
+    const value = App.project.modelUnit.newAmount(x.trunc().x);
+    const label = App.project.displayUnit.format(value);
+    c.text({
+      text: label,
+      point: Position(x, 'model')
+        .onLine(Position(new Point(0, 10), 'screen'), axisX),
+    });
+  }
+  c.textAlign = 'left';
+  c.textBaseline = 'middle';
+  for (let i = 0; i <= steps; i++) {
+    const s = gridSpacing * i;
+    const y = topLeft.splus(s, dirPlus.onAxis(axisY.get('model')).unit());
+    c.strokeLine(
+      Position(y, 'model'),
+      Position(y.plus(gridX), 'model'),
+    );
+    const value = App.project.modelUnit.newAmount(y.trunc().y);
+    const label = App.project.displayUnit.format(value);
+    if (i > 0) {
       c.text({
         text: label,
-        point: Position(x, 'model')
-          .onLine(Position(new Point(0, 10), 'screen'), axisX),
+        point: Position(y, 'model')
+          .onLine(Position(new Point(10, 0), 'screen'), axisY),
       });
     }
-    c.textAlign = 'left';
-    c.textBaseline = 'middle';
-    for (let i = 0; i <= steps; i++) {
-      const s = gridSpacing * i;
-      const y = topLeft.splus(s, dirPlus.onAxis(axisY.get('model')).unit());
-      c.strokeLine(
-        Position(y, 'model'),
-        Position(y.plus(gridX), 'model'),
-      );
-      const value = App.project.modelUnit.newAmount(y.trunc().y);
-      const label = App.project.displayUnit.format(value);
-      if (i > 0) {
-        c.text({
-          text: label,
-          point: Position(y, 'model')
-            .onLine(Position(new Point(10, 0), 'screen'), axisY),
-        });
-      }
-    }
-    c.strokeStyle = 'black';
-  };
+  }
+  c.strokeStyle = 'black';
+};
 
-  setInterval(() => {
-    Time.tick();
-    c.clear();
-    c.fontSize = App.project.fontSize;
-    drawGridLines();
-    App.update();
-  }, 15);
-}, 100);
-
+function RenderCanvas() {
+  const c = App.canvas;
+  c.clear();
+  c.fontSize = App.settings.fontSize;
+  drawGridLines();
+};
 

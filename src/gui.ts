@@ -36,30 +36,60 @@ class GUI {
   }
 
   private setupUx() {
-    const snapButtons = new MiniForm();
-    snapButtons.verticalAlign = 'stretch';
+    const form = new AutoForm();
 
-    const snapLocal = new ToggleButton('Local Axes Snapping');
-    snapLocal.setToggled(App.ui.snapping.snapToLocal);
-    snapLocal.onToggle(snap => { App.ui.snapping.snapToLocal = snap; });
+    form.addSeparator();
 
-    const snapGlobal = new ToggleButton('Global Axes Snapping');
-    snapGlobal.setToggled(App.ui.snapping.snapToGlobal);
-    snapGlobal.onToggle(snap => { App.ui.snapping.snapToGlobal = snap; });
+    form.add({
+      name: 'Kinematics',
+      kind: 'toggle',
+      value: App.settings.kinematics,
+    });
 
-    const snapGeometry = new ToggleButton('Geometry Axes Snapping');
-    snapGeometry.setToggled(App.ui.snapping.snapToGeometry);
-    snapGeometry.onToggle(snap => { App.ui.snapping.snapToGeometry = snap; });
+    form.addSeparator();
 
-    snapButtons.append(snapLocal);
-    snapButtons.append(snapGlobal);
-    snapButtons.append(snapGeometry);
+    form.add({
+      name: 'Local Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToLocalRef,
+    });
 
-    this.ux.append(snapButtons);
+    form.add({
+      name: 'Global Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToGlobalRef,
+    });
+
+    form.add({
+      name: 'Geometry Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToGeometryRef,
+    });
+
+    form.addSeparator();
+
+    form.add({
+      name: 'Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.enableByDefaultRef,
+    });
+
+    this.ux.clear();
+    form.inflate(this.ux);
   }
 
   private setupProject() {
     const form = new AutoForm();
+
+    const fontSize = form.add({
+      name: 'font size',
+      label: 'font size',
+      kind: 'number',
+      min: 4,
+      max: 100,
+      value: App.settings.fontSizeRef,
+    });
+
     const gridSpacing = form.add({
       name: 'grid spacing',
       label: 'grid spacing',

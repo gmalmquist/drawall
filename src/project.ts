@@ -7,12 +7,6 @@ class Project {
 
   private _gridSpacing: Amount = { unit: 'feet', value: 1 };
 
-  public fontSizeRef: Ref<number> = Refs.of(12);
-
-  public get fontSize(): number {
-    return this.fontSizeRef.get();
-  }
-
   public get gridSpacing() {
     return this._gridSpacing;
   }

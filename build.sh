@@ -75,6 +75,7 @@ ux.js
 model.js
 popups.js
 project.js
+settings.js
 app.js
 EOF
 )

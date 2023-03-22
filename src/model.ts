@@ -107,6 +107,37 @@ class Room extends Component implements Solo {
   }
 }
 
+class PhysEdge extends Component implements Solo {
+  public readonly [SOLO] = true;
+
+  constructor(
+    entity: Entity,
+    private readonly _src: () => EntityRef<PhysNode>,
+    private readonly _dst: () => EntityRef<PhysNode>,
+  ) {
+    super(entity);
+  }
+
+  get src(): EntityRef<PhysNode> {
+    return this._src();
+  }
+
+  get dst(): EntityRef<PhysNode> {
+    return this._dst();
+  }
+
+  get edge(): EntityRef<SpaceEdge> {
+    return this.src.and(this.dst).map(([src, dst]) => new SpaceEdge(src.pos, dst.pos));
+  }
+
+  addForce(force: Vector) {
+    this.src.and(this.dst).with(([a, b]) => {
+      a.addForce(force);
+      b.addForce(force);
+    });
+  }
+}
+
 class Wall extends Component implements Solo {
   public readonly [SOLO] = true;
   private _src: WallJoint;
@@ -119,6 +150,12 @@ class Wall extends Component implements Solo {
     this._dst = entity.ecs.createEntity().add(WallJoint);
     this.src.attachOutgoing(this);
     this.dst.attachIncoming(this);
+
+    entity.add(
+      PhysEdge,
+      () => this.src.ref().map(x => x.entity.only(PhysNode)),
+      () => this.dst.ref().map(x => x.entity.only(PhysNode)),
+    );
 
     const handle = entity.add(Handle, {
       getPos: () => this.src.pos,
@@ -186,6 +223,8 @@ class Wall extends Component implements Solo {
       () => this.src.entity.only(PhysNode),
       () => this.dst.entity.only(PhysNode),
     );
+
+    entity.add(AxisConstraint);
   }
 
   getConnectedLoop(direction: 'forward' | 'backward' | 'both' = 'both'): Wall[] {
@@ -292,6 +331,17 @@ class Wall extends Component implements Solo {
     rest.src.pos = edge.lerp(s);
     rest.dst = this.dst;
     this.dst = rest.src;
+
+    // need to redestribute length constraints, if enabled.
+    const length1 = this.entity.only(LengthConstraint);
+    if (length1.enabled) {
+      const length2 = rest.entity.only(LengthConstraint);
+      const total = length1.targetLength.get();
+      length1.targetLength.set(total * s);
+      length2.targetLength.set(total * (1-s));
+      length2.enabled = true;
+      length2.tension = length1.tension;
+    }
 
     return [this, rest];
   }
@@ -793,6 +843,110 @@ class AngleConstraint extends Constraint {
   }
 }
 
+class AxisConstraint extends Constraint {
+  public readonly axis = Refs.of(
+    Vector(Axis.X, 'screen'),
+    (one, two) => {
+      const a = one.get('screen');
+      const b = two.get('screen');
+      return a.minus(b).mag() < 0.001;
+    },
+  );
+
+  constructor(entity: Entity) {
+    super(entity);
+    this.entity.add(Form).setFactory(() => {
+      const form = new AutoForm();
+      form.add({
+        name: 'axis lock enabled',
+        kind: 'toggle',
+        value: this.enabledRef,
+      });
+      form.add({
+        name: 'axis',
+        kind: 'toggle', // TODO
+        value: this.axis.map<boolean>({
+          to: (axis: Vector) => Math.abs(axis.get('screen').x) < Math.abs(axis.get('screen').y),
+          from: (vertical: boolean) => vertical ? Vector(Axis.Y, 'screen') : Vector(Axis.X, 'screen'),
+        }),
+        enabled: this.enabledRef,
+      });
+      form.add({
+        name: 'axis tension',
+        label: 'axis tension',
+        kind: 'slider',
+        min: 0,
+        max: 1,
+        value: this.tensionRef,
+        enabled: this.enabledRef,
+      });
+      return form;
+    });
+  }
+
+  onEnable() {
+    for (const phys of this.entity.get(PhysEdge)) {
+      const edge = phys.edge.unwrap();
+      if (edge === null) continue;
+      const tangent = edge.tangent;
+      const x = Vector(Axis.X, 'screen').to(tangent.space);
+      const y = Vector(Axis.Y, 'screen').to(tangent.space);
+      this.axis.set(Math.abs(tangent.dot(x)) > Math.abs(tangent.dot(y)) ? x : y);
+    }
+  }
+
+  enforce() {
+    if (!this.entity.has(PhysEdge)) {
+      return;
+    }
+    const phys = this.entity.only(PhysEdge);
+    const edge = phys.edge.unwrap();
+    if (edge === null) {
+      return;
+    }
+ 
+    const tangent = edge.tangent;
+
+    const axis = this.axis.get().to('model').unit();
+    const flip = axis.dot(tangent) > axis.neg().dot(tangent) ? 1 : -1;
+
+    const center = edge.lerp(0.5);
+    const length = edge.length.scale(0.5);
+
+    const targetSrc = center.dplus(length, axis.scale(-flip));
+    const targetDst = center.dplus(length, axis.scale(flip));
+
+    const deltaSrc = Vectors.between(edge.src, targetSrc);
+    const deltaDst = Vectors.between(edge.dst, targetDst);
+
+    // now enforce the deltas to be normal to the current position
+    // so we hopefully rotate with out changing size, all else equal.
+    const normDeltaSrc = deltaSrc.onAxis(edge.normal).unit().scale(deltaSrc.mag());
+    const normDeltaDst = deltaDst.onAxis(edge.normal).unit().scale(deltaDst.mag());
+
+    const k = 3 * this.tension; // spring constant
+
+    phys.src.with(s => s.addForce(normDeltaSrc.scale(k / 2)));
+    phys.dst.with(s => s.addForce(normDeltaDst.scale(k / 2)));
+
+    App.ifDebug(() => {
+      App.canvas.lineWidth = 1;
+
+      App.canvas.strokeStyle = 'purple';
+      App.canvas.strokeLine(edge.src, edge.src.plus(normDeltaSrc));
+
+      App.canvas.strokeStyle = 'orange';
+      App.canvas.strokeLine(edge.dst, edge.dst.plus(normDeltaDst));
+
+      App.canvas.strokeStyle = BLUE;
+      App.canvas.strokeLine(
+        center.dplus(Distance(1000, 'screen'), axis),
+        center.dplus(Distance(-1000, 'screen'), axis),
+      );
+    })
+  }
+}
+
 // reference the length of something else
 interface LengthReference {
   name: string;
@@ -1029,9 +1183,11 @@ const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
 };
 
 const Kinematics = (ecs: EntityComponentSystem) => {
+  const enabled = App.settings.kinematics.get() && !App.ui.dragging;
+
   const positions = ecs.getComponents(PhysNode);
-  if (App.ui.dragging) {
-    // don't move everything around while we're dragging stuff
+  if (!enabled) {
+    // make sure we're not accumulating forces in the meantime
     positions.forEach(p => p.clearForces());
     return; 
   }
