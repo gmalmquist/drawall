@@ -13,6 +13,14 @@ const mapAngle = (r: Radians, f: (a: number) => number) => Radians(f(unwrap(r)))
 type Degrees = Newtype<number, { readonly _: unique symbol; }>;
 const Degrees = newtype<Degrees>();
 
+type Sign = -1 | 1 | 0;
+
+const signum = (v: number): Sign => {
+  if (v < 0) return -1;
+  if (v > 0) return +1;
+  return 0;
+};
+
 const normalizeRadians = (a: Radians) => {
   let r = unwrap(a);
   while (r < 0) r += TAU;

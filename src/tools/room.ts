@@ -121,7 +121,7 @@ class DrawRoomTool extends Tool {
 
       // oke this is gonna be some indecipherable math to see how things
       // are oriented to know which things to connect to what.
-      if (norm(a1).dot(tan(b2)) > 0) {
+      if (norm(a1).dot(tan(b2)).sign > 0) {
         // what we care about
         a1.dst = b2.src; 
 

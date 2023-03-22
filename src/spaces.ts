@@ -157,9 +157,24 @@ class SpaceValue<V> implements Spaced<V> {
   }
 }
 
+// division does this funny thing where it kinda inverts the input type.
+// if u divide a Distance / Distance, you get a flat scalar back out.
+// but if u instead divide a Distance / scalar, you still have a Distance.
+// this isn't perfectly accurate, bc it's not taking into account actual units
+// like Distance squared versus inverse distance etc, but there's a limit to what
+// I can sanely represent in the type system!
+type DistanceDivisor = number | Spaced<number>;
+
+type DivReturnType<Divisor extends DistanceDivisor> = [Divisor] extends [number]
+  ? SpaceDistance : number;
+
 class SpaceDistance extends BaseSpaceValue<number> {
   constructor(private readonly pos: Spaced<number>) {
     super(pos.space);
+  }
+
+  get sign(): Sign {
+    return signum(this.get(this.space));
   }
 
   plus(d: Spaced<number>): Distance {
@@ -173,6 +188,18 @@ class SpaceDistance extends BaseSpaceValue<number> {
   scale(f: number | Spaced<number>): Distance {
     if (typeof f === 'number') return this.map(d => d * f);
     return this.map((a: number, b: number) => a * b, f);
+  }
+
+  neg(): Distance {
+    return this.scale(-1);
+  }
+
+  div<D extends DistanceDivisor>(divisor: D): DivReturnType<D> {
+    if (typeof divisor === 'number') {
+      return this.map(d => d / divisor) as Distance as DivReturnType<D>;
+    }
+    const scalar = this.map((a: number, b: number) => a / b, divisor).get(this.space);
+    return scalar as DivReturnType<D>;
   }
 
   lt(other: Distance): boolean {
@@ -197,6 +224,18 @@ class SpaceDistance extends BaseSpaceValue<number> {
 
   ne(other: Distance): boolean {
     return this.get(this.space) === other.get(this.space);
+  }
+
+  max(other: Distance): Distance {
+    return this.ge(other) ? this : other;
+  }
+
+  min(other: Distance): Distance {
+    return this.le(other) ? this : other;
+  }
+
+  abs(): Distance {
+    return this.map(a => Math.abs(a));
   }
 
   get(space: SpaceName): number {
@@ -377,12 +416,11 @@ class SpaceVec extends BaseSpaceValue<Vec> {
     return this.map(v => v.unit());
   }
 
-  splus(scale: number, vec: Spaced<Vec>): Vector {
-    return Spaces.calc(Vector, (a: Vec, b: Vec) => a.splus(scale, b), this, vec);
-  }
-
-  dplus(distance: Spaced<number>, vec: Spaced<Vec>): Vector {
-    return Spaces.calc(Vector, (a: Vec, s: number, b: Vec) => a.splus(s, b), this, distance, vec);
+  splus(scale: number | Spaced<number>, vec: Spaced<Vec>): Vector {
+    if (typeof scale === 'number') {
+      return Spaces.calc(Vector, (a: Vec, b: Vec) => a.splus(scale, b), this, vec);
+    }
+    return Spaces.calc(Vector, (a: Vec, s: number, b: Vec) => a.splus(s, b), this, scale, vec);
   }
 
   plus(vec: Spaced<Vec>): Vector {
@@ -405,8 +443,8 @@ class SpaceVec extends BaseSpaceValue<Vec> {
     return Spaces.calc(Position, (a: Vec) => a.toPoint(), this);
   }
 
-  dot(v: Spaced<Vec>): number {
-    return Spaces.getCalc(this.space, (a: Vec, b: Vec) => a.dot(b), v, this);
+  dot(v: Spaced<Vec>): Distance {
+    return Spaces.calc(Distance, (a: Vec, b: Vec) => a.dot(b), v, this);
   }
 
   mag2(): Distance {
@@ -457,12 +495,11 @@ class SpacePos extends BaseSpaceValue<Point> {
     return this.pos.get(space);
   }
 
-  splus(scale: number, vec: Spaced<Vec>): SpacePos {
-    return this.map((p: Point, v: Vec) => p.splus(scale, v), vec);
-  }
-
-  dplus(distance: Spaced<number>, vec: Spaced<Vec>): SpacePos {
-    return this.map((p: Point, scale: number, v: Vec) => p.splus(scale, v), distance, vec);
+  splus(scale: number | Spaced<number>, vec: Spaced<Vec>): SpacePos {
+    if (typeof scale === 'number') {
+      return this.map((p: Point, v: Vec) => p.splus(scale, v), vec);
+    }
+    return this.map((p: Point, scale: number, v: Vec) => p.splus(scale, v), scale, vec);
   }
 
   plus(vec: Spaced<Vec>): SpacePos {
@@ -547,14 +584,14 @@ class SpaceEdge {
   }
 
   public unlerp(p: Position): number {
-    const displacement = Vectors.between(this.src, p).get(this.src.space);
-    const tangent = this.vector.get(this.src.space);
-    return displacement.dot(tangent) / tangent.mag2();
+    const displacement = Vectors.between(this.src, p);
+    const vector = this.vector;
+    return displacement.dot(vector).div(vector.mag2());
   }
 
   public closestPoint(p: Position) {
     const projected = p.minus(Vectors.between(this.origin, p).onAxis(this.normal));
-    const s = Vectors.between(this.origin, p).dot(this.vector) / this.vector.mag2().get(this.origin.space);
+    const s = Vectors.between(this.origin, p).dot(this.vector).div(this.vector.mag2());
     if (s < 0) return this.src;
     if (s > 1) return this.dst;
     return projected;
@@ -571,10 +608,10 @@ class SpaceEdge {
     const hit = ray.intersection(other);
     if (hit === null) return null;
     if (hit.time < 0 || hit.time > 1) return null;
-    if (Vectors.between(other.src, hit.point).dot(other.vector) < 0) {
+    if (Vectors.between(other.src, hit.point).dot(other.vector).sign < 0) {
       return null;
     }
-    if (Vectors.between(other.dst, hit.point).dot(other.vector.scale(-1)) < 0) {
+    if (Vectors.between(other.dst, hit.point).dot(other.vector.scale(-1)).sign < 0) {
       return null;
     }
     return hit.point;
@@ -607,8 +644,8 @@ class SpaceRay {
     // (o-q)N + t(d*N) = 0
     // t = (q-o)N / (d*N)
     const denominator = this.direction.dot(line.normal);
-    if (denominator === 0) return null;
-    const time = Vectors.between(this.origin, line.origin).dot(line.normal) / denominator;
+    if (denominator.sign === 0) return null;
+    const time = Vectors.between(this.origin, line.origin).dot(line.normal).div(denominator);
     return {
       time,
       point: this.at(time),
@@ -626,7 +663,16 @@ class SpaceRay {
   }
 }
 
-class Line {
+abstract class SDF {
+  /** signed distances are sexy */
+  public abstract sdist(point: Position): Distance;
+
+  public contains(point: Position): boolean {
+    return this.sdist(point).sign <= 0;
+  }
+}
+
+class Line extends SDF {
   public readonly origin: Position;
   public readonly tangent: Vector;
 
@@ -634,6 +680,7 @@ class Line {
     origin: Position,
     tangent: Vector,
   ) {
+    super();
     this.origin = origin;
     this.tangent = tangent.unit();
   }
@@ -642,16 +689,69 @@ class Line {
     return this.tangent.r90();
   }
 
-  distance(point: Position): Distance {
-    return Distance(Math.abs(this.sdist(point)), point.space);
-  }
-
   project(point: Position): Position {
-    return point.splus(-this.sdist(point), this.normal);
+    return point.splus(this.sdist(point).neg(), this.normal);
   }
 
-  private sdist(point: Position): number {
+  distance(point: Position): Distance {
+    return this.sdist(point).abs();
+  }
+
+  public override sdist(point: Position): Distance {
     return Vectors.between(this.origin, point).dot(this.normal);
+  }
+}
+
+class HalfPlane extends SDF {
+  constructor(
+    private readonly origin: Position,
+    private readonly normal: Vector) {
+    super();
+  }
+
+  public override sdist(point: Position): Distance {
+    return Vectors.between(this.origin, point).dot(this.normal).neg();
+  }
+
+  get tangent(): Vector {
+    return this.tangent.unit();
+  }
+}
+
+class Rect extends SDF {
+  public readonly corners: readonly [Position, Position, Position, Position];
+
+  constructor(
+    // these are private bc they're kinda a lie; which direction
+    // is up/down/left/right varies depending on the coordinate system.
+    // the important thing is that they are opposite corners.
+    private readonly topLeft: Position,
+    private readonly bottomRight: Position,
+  ) {
+    super();
+    const diagonal = Vectors.between(topLeft, bottomRight);
+    // again, these directions are massive air quotes
+    const right = diagonal.onAxis(Vector(Axis.X, diagonal.space));
+    const down = diagonal.onAxis(Vector(Axis.Y, diagonal.space));
+    const bottomLeft = topLeft.plus(down);
+    const topRight = topLeft.plus(right);
+    
+    this.corners = [ topLeft, topRight, bottomRight, bottomLeft ];
+  }
+
+  public override sdist(point: Position): Distance {
+    const [first, ...more] = this.edges.map(e =>
+      new HalfPlane(e.src, e.normal).sdist(point));
+    return more.reduce((a, b) => a.max(b), first);
+  }
+
+  get edges(): readonly SpaceEdge[] {
+    return this.corners.map((c, i) => 
+      new SpaceEdge(c, this.corners[(i + 1) % this.corners.length]));
+  }
+
+  get centroid(): Position {
+    return this.topLeft.lerp(0.5, this.bottomRight);
   }
 }
 

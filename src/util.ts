@@ -246,22 +246,6 @@ interface RefExternalUpdate {
 
 type Ref<V> = RefImpl<V>;
 
-const foo = Refs.of(12).map<number>({
-  to: x => x * 2,
-  from: x => x / 2,
-});
-const bar = Refs.of(12).map<{ x: number }>({
-  to: x => ({ x }),
-  from: x => x.x,
-  // type check will fail without this
-  compareValues: (a,b) => a.x === b.x,
-});
-const baz = Refs.of(
-  { x: 12 },
-  // type check will fail without this
-  (a, b) => a.x === b.x
-);
-
 class DefaultMap<K, V> {
   private readonly map = new Map<K, V>();
 

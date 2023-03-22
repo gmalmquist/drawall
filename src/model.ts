@@ -90,7 +90,7 @@ class Room extends Component implements Solo {
     // this room's walls form a convex polygon.
     for (const wall of this.walls) {
       const vec = Vectors.between(wall.midpoint, position);
-      if (vec.dot(wall.insideNormal) < 0) {
+      if (vec.dot(wall.insideNormal).sign < 0) {
         return false;
       }
     }
@@ -891,7 +891,7 @@ class AxisConstraint extends Constraint {
       const tangent = edge.tangent;
       const x = Vector(Axis.X, 'screen').to(tangent.space);
       const y = Vector(Axis.Y, 'screen').to(tangent.space);
-      this.axis.set(Math.abs(tangent.dot(x)) > Math.abs(tangent.dot(y)) ? x : y);
+      this.axis.set(tangent.dot(x).abs().gt(tangent.dot(y).abs()) ? x : y);
     }
   }
 
@@ -913,8 +913,8 @@ class AxisConstraint extends Constraint {
     const center = edge.lerp(0.5);
     const length = edge.length.scale(0.5);
 
-    const targetSrc = center.dplus(length, axis.scale(-flip));
-    const targetDst = center.dplus(length, axis.scale(flip));
+    const targetSrc = center.splus(length, axis.scale(-flip));
+    const targetDst = center.splus(length, axis.scale(flip));
 
     const deltaSrc = Vectors.between(edge.src, targetSrc);
     const deltaDst = Vectors.between(edge.dst, targetDst);
@@ -940,8 +940,8 @@ class AxisConstraint extends Constraint {
 
       App.canvas.strokeStyle = BLUE;
       App.canvas.strokeLine(
-        center.dplus(Distance(1000, 'screen'), axis),
-        center.dplus(Distance(-1000, 'screen'), axis),
+        center.splus(Distance(1000, 'screen'), axis),
+        center.splus(Distance(-1000, 'screen'), axis),
       );
     })
   }
@@ -1016,7 +1016,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     for (let i = 0; i < ticks; i++) {
       const s = 1.0 * i / ticks;
-      const p = edge.lerp(s).dplus(offset, edge.tangent);
+      const p = edge.lerp(s).splus(offset, edge.tangent);
       const v = edge.vector.unit().scale(tickSize).rotate(Angles.fromDegrees(Degrees(30), 'model'));
 
       if (active) {
@@ -1041,7 +1041,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = Distance(10, 'screen');
-    const textPosition = edge.lerp(0.5).dplus(textOffset.scale(-1), edge.vector.r90().unit());
+    const textPosition = edge.lerp(0.5).splus(textOffset.neg(), edge.vector.r90().unit());
     canvas.text({
       point: textPosition,
       axis: edge.vector,
@@ -1055,7 +1055,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.ecs.getComponents(Popup).some(p => p.isVisible)) {
       canvas.text({
-        point: textPosition.dplus(Distance(-15, 'screen'), edge.vector.r90().unit()),
+        point: textPosition.splus(Distance(-15, 'screen'), edge.vector.r90().unit()),
         axis: edge.vector,
         keepUpright: true,
         text: wall.name,
@@ -1146,14 +1146,14 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       text: label,
       align: 'center',
       baseline: 'middle',
-      point: center.dplus(textDistance, middle),
+      point: center.splus(textDistance, middle),
       fill: color,
       shadow: highlight,
     });
 
     canvas.beginPath();
     canvas.moveTo(center);
-    canvas.lineTo(center.dplus(arcRadius, rightVec.unit()));
+    canvas.lineTo(center.splus(arcRadius, rightVec.unit()));
     canvas.arc(
       center,
       arcRadius,
