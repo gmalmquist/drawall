@@ -526,7 +526,11 @@ class SpaceEdge {
   }
 
   get normal(): Vector {
-    return this.vector.unit().r90();
+    return this.tangent.r90();
+  }
+
+  get tangent(): Vector {
+    return this.vector.unit();
   }
 
   get line(): Line {

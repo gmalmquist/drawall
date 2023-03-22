@@ -5,7 +5,10 @@ class PointerTool extends Tool {
     super('pointer tool');
 
     this.events.onMouse('down', e => {
-      const handle = App.ui.getHandleAt(e.position, h => h.clickable || h.draggable);
+      const handle = App.ui.getHandleAt(
+        e.position, 
+        h => h.clickable || h.draggable || h.selectable
+      );
       if (!App.ui.multiSelecting) {
         App.ui.clearSelection();
       }

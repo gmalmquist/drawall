@@ -77,6 +77,10 @@ class Canvas2d {
     this.g.setLineDash(segments);
   }
 
+  set fontSize(s: number) {
+    this.g.font = `${s} sans-serif`;
+  }
+
   set lineWidth(w: number) {
     this.g.lineWidth = w;
   }
@@ -308,6 +312,7 @@ setTimeout(() => {
   setInterval(() => {
     Time.tick();
     c.clear();
+    c.fontSize = App.project.fontSize;
     drawGridLines();
     App.update();
   }, 15);

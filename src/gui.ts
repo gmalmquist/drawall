@@ -59,12 +59,22 @@ class GUI {
   }
 
   private setupProject() {
-    const gridSpacing = new AmountInput();
-    gridSpacing.setValue(App.project.gridSpacing);
-    gridSpacing.minValue = Units.distance.parse('1cm')!;
-    gridSpacing.onChange(spacing => {
+    const form = new AutoForm();
+    const gridSpacing = form.add({
+      name: 'grid spacing',
+      label: 'grid spacing',
+      kind: 'amount',
+      min: Units.distance.parse('1cm')!,
+      value: Refs.of(
+        App.project.gridSpacing,
+        (a, b) => a.unit === b.unit && a.value === b.value,
+      ),
+      unit: Units.distance,
+    });
+
+    gridSpacing.value.onChange(spacing => {
       if (spacing.value <= 0) {
-        gridSpacing.setValue(App.project.gridSpacing);
+        gridSpacing.value.set(App.project.gridSpacing);
         return;
       }
       const unit = Units.distance.get(spacing.unit)!;
@@ -81,7 +91,9 @@ class GUI {
         }
       }
     });
-    this.project.appendLabeled('grid spacing', gridSpacing);
+
+    this.project.clear();
+    form.inflate(this.project);
   }
 }
 

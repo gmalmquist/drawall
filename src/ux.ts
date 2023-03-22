@@ -23,9 +23,10 @@ interface HandleProps {
   getPos: () => Position;
   setPos?: (p: Position) => void;
   distance?: (p: Position) => Distance;
-  draggable?: boolean;
   clickable?: boolean;
+  draggable?: boolean;
   hoverable?: boolean;
+  selectable?: boolean;
   priority?: number;
   cursor?: () => Cursor;
   snapping?: Snapping;
@@ -51,13 +52,15 @@ class Handle extends Component {
   public readonly events = new UiEventDispatcher(Handle);
 
   private readonly distanceFunc: (p: Position) => Distance;
+  private _selected: boolean = false;
   private _dragging: boolean = false;
   private _hovered: boolean = false;
   private _cursor: () => Cursor | null;
 
-  public draggable: boolean = true;
   public clickable: boolean = true;
+  public draggable: boolean = true;
   public hoverable: boolean = true;
+  public selectable: boolean = true;
   public ignoreNonPrimary: boolean = true;
   public priority: number = 0;
   public readonly snapping: Snapping | undefined;
@@ -66,9 +69,10 @@ class Handle extends Component {
     super(entity);
 
     this.priority = typeof props.priority === 'undefined' ? 0 : props.priority;
-    this.draggable = typeof props.draggable === 'undefined' ? true : props.draggable;
     this.clickable = typeof props.clickable === 'undefined' ? true : props.clickable;
+    this.draggable = typeof props.draggable === 'undefined' ? true : props.draggable;
     this.hoverable = typeof props.hoverable === 'undefined' ? true : props.hoverable;
+    this.selectable = typeof props.selectable === 'undefined' ? true : props.selectable;
     this._cursor = typeof props.cursor === 'undefined' ? () => null : props.cursor;
 
     this.snapping = props.snapping;
@@ -106,8 +110,20 @@ class Handle extends Component {
     return this._hovered;
   }
 
+  get isSelected(): boolean {
+    return this._selected;
+  }
+
+  get isActive(): boolean {
+    return this.isDragging || this.isHovered || this.isSelected;
+  }
+
   set hovered(h: boolean) {
     this._hovered = h;
+  }
+
+  set selected(s: boolean) {
+    this._selected = s;
   }
 
   get pos(): Position {
@@ -364,6 +380,7 @@ class UiState {
   }
 
   clearSelection() {
+    this._selection.forEach(handle => { handle.selected = false; });
     this._selection.clear();
     this.updateForms();
   }
@@ -376,6 +393,7 @@ class UiState {
   addSelection(...handles: Handle[]) {
     handles.forEach(h => {
       this._selection.add(h);
+      h.selected = true;
     });
     this.updateForms();
   }

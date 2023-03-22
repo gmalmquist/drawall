@@ -829,23 +829,46 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
   const walls = ecs.getComponents(Wall);
   for (const wall of walls) {
     if (wall.src === null || wall.dst ===  null) continue;
-    const hovered = wall.entity.get(Handle).some(h => h.isHovered);
-    const active = hovered || wall.entity.get(PopupWindow).some(p => p.isVisible);
-    canvas.strokeStyle = 'black';
-    canvas.lineWidth = active ? 2 : 1;
-    canvas.strokeLine(wall.src.pos, wall.dst.pos);
-    canvas.lineWidth = 1;
+    const active = wall.entity.get(Handle).some(h => h.isActive);
+    canvas.lineWidth = active ? 3 : 1;
+   
+    const strokeWall = (width: number, color: string) => {
+      canvas.strokeStyle = color;
+      canvas.lineWidth = width;
+      canvas.strokeLine(wall.src.pos, wall.dst.pos);
+    };
+
+    if (active) {
+      strokeWall(5, BLUE);
+      strokeWall(3, PINK);
+      strokeWall(1, 'white');
+    } else {
+      strokeWall(1, 'black');
+    }
 
     const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
-    const tickSpacing = Distance(10, 'screen');
+    const tickSpacingPx = 10;
+    const tickSpacing = Distance(tickSpacingPx, 'screen');
     const tickSize = Distance(10, 'screen');
     const ticks = Math.floor(
      edge.length.get('screen') / tickSpacing.get('screen')
     );
+
+    canvas.strokeStyle = 'black';
+    const offset = Distance(
+      active ? -((Time.now * 10) % tickSpacingPx) + tickSpacingPx/2 : 0,
+      'screen'
+    );
+
     for (let i = 0; i < ticks; i++) {
       const s = 1.0 * i / ticks;
-      const p = edge.lerp(s);
+      const p = edge.lerp(s).dplus(offset, edge.tangent);
       const v = edge.vector.unit().scale(tickSize).rotate(Angles.fromDegrees(Degrees(30), 'model'));
+
+      if (active) {
+        const hue = 360 * s;
+        canvas.strokeStyle = `hsl(${hue},100%,50%)`;
+      }
       canvas.strokeLine(p, p.plus(v));
     }
 
@@ -894,8 +917,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
   const joints = ecs.getComponents(WallJoint);
   const canvas = App.canvas;
   for (const joint of joints) {
-    const hovered = joint.entity.get(Handle).some(h => h.isHovered);
-    const active = hovered || joint.entity.get(PopupWindow).some(p => p.isVisible);
+    const active = joint.entity.get(Handle).some(h => h.isActive);
     const locked = joint.entity.get(FixedConstraint).some(f => f.enabled);
 
     canvas.fillStyle = 'black';
@@ -915,6 +937,10 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
     if (active) {
       canvas.lineWidth = 2;
+      canvas.strokeStyle = BLUE;
+      canvas.strokeCircle(pos, radius.scale(2).plus(Distance(2, 'screen')));
+      canvas.lineWidth = 2;
+      canvas.strokeStyle = PINK;
       canvas.strokeCircle(pos, radius.scale(2));
     }
   }
