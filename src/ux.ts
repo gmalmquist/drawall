@@ -472,10 +472,6 @@ class UiState {
   }
 
   get multiSelecting(): boolean {
-    return this.keysPressed.get('Control');
-  }
-
-  get useAlternateSnap(): boolean {
     return this.keysPressed.get('Shift');
   }
 
@@ -803,7 +799,7 @@ class UiState {
       }
 
       this.keysPressed.set(e.key, true);
-      if (e.key === 'Shift') {
+      if (e.key === 'Control') {
         this.snapping.enabled = !this.snapping.enabled;
       } else if (e.key === 'x') {
         if (this.dragging) {

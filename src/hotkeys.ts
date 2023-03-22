@@ -66,14 +66,18 @@ class Keybindings {
     const bindings = this.values()
       .sort((a, b) => b.stroke.keys.length - a.stroke.keys.length);
     for (const binding of bindings) {
-      if (binding.stroke.keys.length === 0) {
-        continue;
-      }
-      if (binding.stroke.keys.every(k => keys.has(k))) {
+      if (this.matches(stroke, binding)) {
         return binding;
       }
     }
     return null;
+  }
+
+  private matches(stroke: KeyStroke, binding: Keybinding): boolean {
+    const strokeKeys = new Set(stroke.keys);
+    const bindingKeys = new Set(binding.stroke.keys);
+    return stroke.keys.every(k => bindingKeys.has(k))
+      && binding.stroke.keys.every(k => strokeKeys.has(k));
   }
 }
 

@@ -136,6 +136,8 @@ class PointerTool extends Tool {
             .filter(s => typeof s.snapping !== 'undefined')
             .map(s => s.snapping as Snapping);
           const getPreferred = (arr:  NamedAxisP[]): NamedAxisP => {
+            if (true) return arr.length === 1 ? arr[0] : undefined;
+            // this isn't working
             const cmp = (fa: NamedAxisP, fb: NamedAxisP): boolean => {
               if (typeof fa === 'undefined' || typeof fb === 'undefined') return false;
               const [a, b] = [fa(), fb()];
