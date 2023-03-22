@@ -46,7 +46,7 @@ class UserActions {
     return Array.from(this.map.keys());
   }
 
-  public evaluateKeybindings() {
+  public evaluateKeybindings(): boolean {
     const stroke: KeyStroke = {
       keys: App.ui.pressedKeys,
     };
@@ -55,7 +55,9 @@ class UserActions {
       const action = App.actions.get(hotkey.action);
       App.log('executing keybinding', formatKeyStroke(hotkey.stroke), ':', action.name);
       action.apply();
+      return true;
     }
+    return false;
   }
 }
 

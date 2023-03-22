@@ -159,15 +159,11 @@ class PointerTool extends Tool {
             allowGlobal: snaps.some(s => s.allowGlobal !== false),
             allowGeometry: snaps.some(s => s.allowGeometry !== false),
           };
-          console.log(JSON.stringify(snapping, undefined, 2));
-          console.log(selection);
           const cursors = new Set<Cursor>();
           const dispatcher = new UiEventDispatcher(PointerTool);
           for (const handle of selection) {
             dispatcher.forward(handle.events);
-            if (handle.cursor) {
-              cursors.add(handle.getContextualCursor());
-            }
+            cursors.add(handle.getContextualCursor());
           }
           const cursor = cursors.size === 1 ? Array.from(cursors)[0]! : 'grabbing';
           App.pane.style.cursor = cursor;

@@ -304,13 +304,11 @@ class Wall extends Component implements Solo {
 
     if (prev === null || next === null) return 'kill';
 
-    // cut out the middle-man (we're the middle-man)
-    prev.dst = next.src;
-    next.src.entity.get(AngleConstraint).forEach(a => { a.enabled = false; });
+    const midjoint = this.entity.ecs.createEntity().add(WallJoint);
+    midjoint.pos = src.pos.lerp(0.5, dst.pos);
 
-    this.src = src.shallowDup();
-    this.dst = dst.shallowDup();
-    this.entity.destroy();
+    prev.dst = midjoint;
+    next.src = midjoint;
 
     return 'kill';
   }
@@ -404,6 +402,8 @@ class Wall extends Component implements Solo {
       length2.enabled = true;
       length2.tension = length1.tension;
     }
+
+    length1.entity.only(AxisConstraint).enabled = false;
 
     return [this, rest];
   }
@@ -1082,6 +1082,31 @@ const Recycler = (ecs: EntityComponentSystem) => {
   }
 };
 
+const AxisConstraintRenderer = (ecs: EntityComponentSystem) => {
+  if (!App.settings.showGuides.get()) return;
+  const canvas = App.canvas;
+  const constraints = ecs.getComponents(AxisConstraint);
+  for (const constraint of constraints) {
+    if (!constraint.enabled) continue;
+
+    const phys = constraint.entity.only(PhysEdge);
+
+    phys.edge.with(edge => {
+      const center = edge.midpoint;
+      const axis = constraint.axis.get().to(center.space).unit();
+      const scale = 1.5;
+      const left = center.splus(edge.length.scale(scale/2), axis);
+      const right = center.splus(edge.length.scale(scale/2), axis.neg());
+
+      canvas.strokeStyle = BLUE;
+      canvas.lineWidth = 1;
+      canvas.setLineDash([8, 4]);
+      canvas.strokeLine(left, right);
+      canvas.setLineDash([]);
+    });
+  }
+};
+
 const WallRenderer = (ecs: EntityComponentSystem) => {
   const canvas = App.canvas;
 
@@ -1089,29 +1114,38 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
   for (const wall of walls) {
     if (wall.src === null || wall.dst ===  null) continue;
     const active = wall.entity.get(Handle).some(h => h.isActive);
-    canvas.lineWidth = active ? 3 : 1;
    
-    const strokeWall = (width: number, color: string) => {
+    const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
+
+    const strokeWall = (width: number, color: string, offset: Distance | number = 0) => {
       canvas.strokeStyle = color;
       canvas.lineWidth = width;
-      canvas.strokeLine(wall.src.pos, wall.dst.pos);
+      canvas.strokeLine(
+        wall.src.pos.splus(offset, edge.normal),
+        wall.dst.pos.splus(offset, edge.normal),
+      );
     };
 
-    if (active) {
-      strokeWall(5, BLUE);
-      strokeWall(3, PINK);
-      strokeWall(1, 'white');
-    } else {
-      strokeWall(1, 'black');
-    }
-
-    const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
     const tickSpacingPx = 10;
     const tickSpacing = Distance(tickSpacingPx, 'screen');
     const tickSize = Distance(10, 'screen');
+    const tickAngle = Angles.fromDegrees(Degrees(30), 'model');
     const ticks = Math.floor(
      edge.length.get('screen') / tickSpacing.get('screen')
     );
+
+    const tickHeight = tickSize.scale(Math.sin(unwrap(tickAngle.get('model'))));
+
+    if (active) {
+      const off = 0;
+      const thpx = tickHeight.get('screen');
+      strokeWall(thpx + 1, BLUE, off);
+      strokeWall(thpx/2 + 1, PINK, off);
+      strokeWall(2, 'white', off);
+    } else {
+      strokeWall(3, 'black', tickHeight.scale(0.5));
+      strokeWall(1, 'black', tickHeight.scale(-0.5));
+      }
 
     canvas.strokeStyle = 'black';
     const offset = Distance(
@@ -1121,8 +1155,8 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     for (let i = 0; i < ticks; i++) {
       const s = 1.0 * i / ticks;
-      const p = edge.lerp(s).splus(offset, edge.tangent);
-      const v = edge.vector.unit().scale(tickSize).rotate(Angles.fromDegrees(Degrees(30), 'model'));
+      const p = edge.lerp(s).splus(offset, edge.tangent).splus(tickHeight.div(-2), edge.normal);
+      const v = edge.vector.unit().scale(tickSize).rotate(tickAngle);
 
       if (active) {
         const hue = 360 * s;
@@ -1130,6 +1164,8 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       }
       canvas.strokeLine(p, p.plus(v));
     }
+
+    if (!App.settings.showLengths.get()) continue;
 
     const roundAmount = (a: Amount): Amount => ({ value: Math.round(a.value), unit: a.unit });
 
@@ -1145,8 +1181,28 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorTextU = App.project.displayUnit.format(dispError);
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
-    const textOffset = Distance(10, 'screen');
+    const textOffset = Distance(App.settings.fontSize/2 + 10, 'screen');
     const textPosition = edge.lerp(0.5).splus(textOffset.neg(), edge.vector.r90().unit());
+
+    if (constraint.enabled) {
+      const offCenter = Distance(App.settings.fontSize * 3, 'screen');
+      const maxAccentWidth = edge.length.scale(0.5).minus(offCenter.scale(1.5));
+      const accentWidth = Distance(50, 'screen').min(maxAccentWidth);
+      if (accentWidth.sign > 0) {
+        canvas.strokeStyle = 'black';
+        canvas.lineWidth = 1;
+
+        canvas.strokeLine(
+          textPosition.splus(offCenter, edge.tangent),
+          textPosition.splus(offCenter.plus(accentWidth), edge.tangent),
+        );
+        canvas.strokeLine(
+          textPosition.splus(offCenter, edge.tangent.neg()),
+          textPosition.splus(offCenter.plus(accentWidth), edge.tangent.neg()),
+        );
+      }
+    }
+
     canvas.text({
       point: textPosition,
       axis: edge.vector,
@@ -1158,7 +1214,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       baseline: 'middle',
     });
 
-    if (App.ecs.getComponents(Popup).some(p => p.isVisible)) {
+    if (App.debug) {
       canvas.text({
         point: textPosition.splus(Distance(-15, 'screen'), edge.vector.r90().unit()),
         axis: edge.vector,
@@ -1206,6 +1262,8 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const AngleRenderer = (ecs: EntityComponentSystem) => {
+  if (!App.settings.showAngles.get()) return;
+
   const constraints = ecs.getComponents(AngleConstraint);
 
   const canvas = App.canvas;
@@ -1233,7 +1291,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       return Degrees(Math.round(unwrap(toDegrees(delta))));
     }, constraint.currentAngle, constraint.targetAngle);
     
-    const middle = rightVec.rotate(constraint.currentAngle.scale(0.5)).unit();
+    const middle = rightVec.rotate(constraint.currentAngle.scale(0.5)).to('model').unit();
 
     let label = formatDegrees(angle);
     if (unwrap(error) > 0) {

@@ -14,6 +14,10 @@ class JointTool extends Tool {
         this.split(wall.entity.only(Wall), e.position);
       }
     });
+    this.events.onMouse('move', e => {
+      const wall = App.ui.getHandleAt(e.position, h => h.entity.has(Wall));
+      App.pane.style.cursor = wall === null ? this.cursor : 'pointer';
+    });
   }
 
   override update() {

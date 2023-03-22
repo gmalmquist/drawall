@@ -30,7 +30,9 @@ class Keybindings {
     kb.bind('Shift', '%').to('toggle-snap');
     kb.bind('k').to('toggle-kinematics');
     kb.bind('L').to('loop-select');
+    kb.bind('Control', 'l').to('loop-select');
     kb.bind('A').to('select-all');
+    kb.bind('Control', 'a').to('select-all');
     return kb;
   }
 

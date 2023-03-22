@@ -182,7 +182,7 @@ class SpaceDistance extends BaseSpaceValue<number> {
   }
 
   minus(d: Spaced<number>): Distance {
-    return this.map((a: number, b: number) => a + b, d);
+    return this.map((a: number, b: number) => a - b, d);
   }
 
   scale(f: number | Spaced<number>): Distance {

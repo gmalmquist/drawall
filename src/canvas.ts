@@ -255,6 +255,7 @@ function setupCanvas() {
 };
 
 function drawGridLines() {
+  if (!App.settings.showGrid.get()) return;
   const c = App.canvas;
   // render grid
   const gridSpacing = App.project.modelUnit.from(App.project.gridSpacing).value;

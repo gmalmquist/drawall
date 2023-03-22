@@ -71,7 +71,8 @@ class IconButton extends ElementWrap<HTMLElement> {
   set icon(url: URL | null) {
     if (url === null) {
       this.element.style.backgroundImage = '';
-      this.element.innerHTML = this.name.substring(0, 1).toLocaleUpperCase();
+      this.element.innerHTML = this.name.charAt(0).toLocaleUpperCase()
+        + this.name.charAt(1).toLocaleLowerCase();
       return;
     }
     this.element.style.backgroundImage = `url('${url}')`;

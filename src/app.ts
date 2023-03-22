@@ -52,6 +52,7 @@ class App {
     // canvas.
     App.ecs.registerSystem(RenderCanvas);
 
+    App.ecs.registerSystem(AxisConstraintRenderer);
     App.ecs.registerSystem(AngleRenderer);
     App.ecs.registerSystem(WallRenderer);
     App.ecs.registerSystem(WallJointRenderer);

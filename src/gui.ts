@@ -38,6 +38,30 @@ class GUI {
   private setupUx() {
     const form = new AutoForm();
 
+    form.add({
+      name: 'Grid',
+      kind: 'toggle',
+      value: App.settings.showGrid,
+    });
+
+    form.add({
+      name: 'Guides',
+      kind: 'toggle',
+      value: App.settings.showGuides,
+    });
+
+    form.add({
+      name: 'Lengths',
+      kind: 'toggle',
+      value: App.settings.showLengths,
+    });
+
+    form.add({
+      name: 'Angles',
+      kind: 'toggle',
+      value: App.settings.showAngles,
+    });
+
     form.addSeparator();
 
     form.add({

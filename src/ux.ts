@@ -268,6 +268,7 @@ interface UiKeyEvent {
   kind: 'keydown' | 'keyup';
   key: string;
   which: number;
+  preventDefault: () => void;
 }
 
 interface UiDragListener<C> {
@@ -797,6 +798,10 @@ class UiState {
     });
 
     this.events.onKey('keydown', e => {
+      if (this.keysPressed.get(e.key)) {
+        return;
+      }
+
       this.keysPressed.set(e.key, true);
       if (e.key === 'Shift') {
         this.snapping.enabled = !this.snapping.enabled;
@@ -817,10 +822,13 @@ class UiState {
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         this.deleteSelected();
       }
+
+      if (App.actions.evaluateKeybindings()) {
+        e.preventDefault();
+      }
     });
 
     this.events.onKey('keyup', e => {
-      App.actions.evaluateKeybindings();
       this.keysPressed.delete(e.key);
     });
 
@@ -828,6 +836,7 @@ class UiState {
         kind,
         key: e.key,
         which: e.which,
+        preventDefault: () => e.preventDefault(),
     });
 
     // mouse event util
