@@ -70,9 +70,9 @@ type RefDef<V> = RefDefBase<V> & CompareFuncPartial<V>;
 type RefValue<R extends RefDefBase<unknown>> = R extends RefDefBase<infer T> ? T : never;
 
 type UnwrapRefArray<A extends readonly unknown[]> = A extends readonly []
-  ? never
+  ? readonly []
   : A extends readonly [RefDefBase<infer Start>, ...infer Rest]
-    ? readonly [Start, UnwrapRefArray<Rest>]
+    ? readonly [Start, ...UnwrapRefArray<Rest>]
     : never
 ;
 
@@ -96,12 +96,11 @@ const Refs = {
     set: (value: B): void => ref.set(f.from(value)),
     compareValues: f.compareValues as RefCompareFunc<B>,
   }),
-  reduce: <A extends readonly RefDefBase<any>[], B>(
+  reduce: <A extends readonly Ref<any>[], B>(
     map: RefMapF<UnwrapRefArray<A>, B>,
-    compareValues: RefCompareFunc<B>,
     ...refs: A
   ): Ref<B> => {
-    return new RefImpl({
+    const reduced = new RefImpl({
       get: (): B => map.to(refs.map(r => r.get()) as unknown as UnwrapRefArray<A>),
       set: (value: B): void => {
         const values = map.from(value);
@@ -111,15 +110,41 @@ const Refs = {
           (ref as Ref<any>).set(val as any);
         }
       },
-      compareValues,
+      compareValues: map.compareValues,
     } as RefDef<B>);
+    for (const ref of refs) {
+      reduced.upstream.add(ref);
+      ref.downstream.add(reduced);
+    }
+    return reduced;
+  },
+  polling: <V extends Not<unknown, RefDef<any>>>(
+    props: PollingRefProps<V>,
+    ...compareValues: CompareFuncVarg<V>
+  ): Ref<V> => {
+    const ref = Refs.of(props.poll(), ...compareValues);
+    const state = { interval: 0 };
+    state.interval = setInterval(() => {
+      if (props.stopWhen()) {
+        clearInterval(state.interval);
+        return;
+      }
+      ref.set(props.poll());
+    }, props.delayMillis);
+    return ref;
   },
 };
 
+interface PollingRefProps<V> {
+  poll: () => V;
+  stopWhen: () => boolean;
+  delayMillis: number;
+}
+
 class RefImpl<V> implements RefDefBase<V> {
+  readonly upstream = new Set<RefImpl<any>>();
+  readonly downstream = new Set<RefImpl<any>>();
   private readonly listeners = new Set<(value: V) => void>();
-  private readonly upstream = new Set<RefImpl<any>>();
-  private readonly downstream = new Set<RefImpl<any>>();
   private readonly _get: () => V;
   private readonly _set: (value: V) => void;
   public readonly compareValues: RefCompareFunc<V>;

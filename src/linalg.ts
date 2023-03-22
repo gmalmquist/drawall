@@ -228,6 +228,8 @@ class Edge {
     public readonly src: Point,
     public readonly dst: Point) {}
 
+  get length() { return this.vector().mag(); }
+
   ray(): Ray {
     return new Ray(this.src, this.vector());
   }

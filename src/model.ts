@@ -616,8 +616,17 @@ class LengthConstraint extends Constraint {
         min: 0,
         max: 1,
       });
-      lengthField.value.onChange(() => this.enabledRef.set(true));
       return form;
+    });
+
+    Refs.polling({
+      poll: () => this.getEdge().length,
+      stopWhen: () => this.entity.isDestroyed,
+      delayMillis: 250,
+    }).onChange(value => {
+      if (!this.enabled) {
+        this.targetLength.set(value);
+      }
     });
   }
 
@@ -700,7 +709,15 @@ class AngleConstraint extends Constraint {
         min: 0,
         max: 1,
       });
-      angleField.value.onChange(() => this.enabledRef.set(true));
+      Refs.polling({
+        poll: () => this.currentAngle,
+        stopWhen: () => this.entity.isDestroyed,
+        delayMillis: 250,
+      }).onChange(value => {
+        if (!this.enabled) {
+          this.targetAngle = value;
+        }
+      });
       return form;
     });
   }
@@ -713,7 +730,6 @@ class AngleConstraint extends Constraint {
     this.targetAngleRef.set(a);
   }
     
-
   private getLeft(): Vector {
     const c = this.getCorner();
     return Vectors.between(c.center.pos, c.left.pos);
