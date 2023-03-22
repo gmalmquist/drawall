@@ -38,6 +38,7 @@ class App {
   }
 
   static init() {
+    App.tools.setup();
     App.actions.setup();
     App.gui.setup();
     App.ui.setup();
@@ -62,8 +63,11 @@ class App {
 
   static update() {
     Time.tick();
+    // nb: order matters, mostly bc it affects draw order
+    // for things like tool actions.
     App.ecs.update();
     App.ui.update();
+    App.tools.update();
   }
 
   static start() {

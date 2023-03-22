@@ -32,6 +32,43 @@ interface HandleProps {
   snapping?: Snapping;
 }
 
+type Cursor = 'default' | 'none' | 'help' | 'context-menu'
+  | 'pointer' | 'progress' | 'wait' | 'cell' | 'crosshair'
+  | 'text' | 'vertical-text' | 'alias' | 'copy' | 'move'
+  | 'no-drop' | 'grab' | 'grabbing' | 'all-scroll' | 'col-resize'
+  | 'row-resize' | 'n-resize' | 's-resize' | 'w-resize' | 'e-resize'
+  | 'ne-resize' | 'nw-resize' | 'se-resize' | 'sw-resize'
+  | 'ew-resize' | 'ns-resize' | 'nesw-resize' | 'nwse-resize'
+  | 'zoom-in' | 'zoom-out';
+
+const getResizeCursor = (direction: Vector, bidirectional: boolean = true): Cursor => {
+  const dir = direction.get('screen');
+  const options: Array<readonly [Vec, Cursor, Cursor]> = [
+    [new Vec( 0,-1), 'n-resize', 'ns-resize'],
+    [new Vec(+1,-1), 'ne-resize', 'nesw-resize'],
+    [new Vec(+1, 0), 'e-resize', 'ew-resize'], // ew gross
+    [new Vec(+1,+1), 'se-resize', 'nwse-resize'],
+    [new Vec( 0,+1), 's-resize', 'ns-resize'],
+    [new Vec(-1,+1), 'sw-resize', 'nesw-resize'],
+    [new Vec(-1, 0), 'w-resize', 'ew-resize'], // ew gross
+    [new Vec(-1,-1), 'nw-resize', 'nwse-resize'],
+  ];
+  const map = new Map<Cursor, Vec>();
+  for (const [vec, uni, bi] of options) {
+    map.set(bidirectional ? bi : uni, vec.unit());
+  }
+  const compare = (a: Vec, b: Vec): number => {
+    const d = a.dot(b);
+    return bidirectional ? Math.abs(d) : d;
+  };
+  const choices = Array.from(map.keys());
+  return choices.reduce(
+    (a, b) => compare(dir, map.get(a)!) >= compare(dir, map.get(b)!) ? a : b,
+    choices[0]!,
+  );
+};
+
+
 class Form extends Component {
   private factory: (() => AutoForm) | null = null;
 
@@ -48,6 +85,24 @@ class Form extends Component {
   }
 }
 
+class Surfaced extends Component implements Surface, Solo {
+  public readonly [SOLO] = true;
+
+  constructor(
+    entity: Entity, 
+    public readonly getSurface: () => EntityRef<Surface>) {
+    super(entity);
+  }
+
+  intersects(sdf: SDF): boolean {
+    return this.getSurface().map(s => s.intersects(sdf)).or(false);
+  }
+
+  containedBy(sdf: SDF): boolean {
+    return this.getSurface().map(s => s.containedBy(sdf)).or(false);
+  }
+}
+
 class Handle extends Component {
   public readonly events = new UiEventDispatcher(Handle);
 
@@ -56,6 +111,7 @@ class Handle extends Component {
   private _dragging: boolean = false;
   private _hovered: boolean = false;
   private _cursor: () => Cursor | null;
+  private readonly getPos: () => Position;
 
   public clickable: boolean = true;
   public draggable: boolean = true;
@@ -74,6 +130,8 @@ class Handle extends Component {
     this.hoverable = typeof props.hoverable === 'undefined' ? true : props.hoverable;
     this.selectable = typeof props.selectable === 'undefined' ? true : props.selectable;
     this._cursor = typeof props.cursor === 'undefined' ? () => null : props.cursor;
+
+    this.getPos = props.getPos;
 
     this.snapping = props.snapping;
 
@@ -96,6 +154,35 @@ class Handle extends Component {
         },
       });
     }
+  }
+
+  getContextualCursor(): Cursor {
+    // if already selected, prioritize showing the user that this can be dragged.
+    // otherwise, prioritize highlighting that this can be clicked.
+    if (this.isSelected && this.draggable) {
+      return this.cursor || (App.ui.dragging ? 'grabbing' : 'grab');
+    }
+    if (this.clickable) {
+      return 'pointer';
+    }
+    if (this.draggable) {
+      return this.cursor || 'grab';
+    }
+    return 'default';
+  }
+
+  public intersects(sdf: SDF): boolean {
+    if (this.entity.has(Surfaced)) {
+      return this.entity.only(Surfaced).intersects(sdf);
+    }
+    return sdf.contains(this.getPos());
+  }
+
+  public containedBy(sdf: SDF): boolean {
+    if (this.entity.has(Surfaced)) {
+      return this.entity.only(Surfaced).containedBy(sdf);
+    }
+    return sdf.contains(this.getPos());
   }
 
   get cursor(): Cursor | null {
@@ -208,8 +295,10 @@ class UiEventDispatcher implements UiEventHandler {
   private readonly key: UiEventListenerMap<UiKeyEvent> = new MultiMap();
   private readonly label: string;
 
-  constructor(containingClass: new (...args: any[]) => any) {
-    this.label = containingClass.name;
+  constructor(containingClass: new (...args: any[]) => any, label?: string) {
+    this.label = typeof label === 'undefined'
+      ? containingClass.name
+      : `${containingClass.name}: ${label}`;
   }
 
   addDragListener<C>(listener: UiDragListener<C>) {
@@ -376,6 +465,20 @@ class UiState {
 
   get dragging(): boolean {
     return this.mouse.dragging;
+  }
+
+  cancelDrag() {
+    if (!this.mouse.dragging) return;
+    const base = {
+      start: this.mouse.start,
+      position: this.mouse.start,
+      delta: Vector(Vec.ZERO, 'screen'),
+      primary: true,
+      setSnapping: (snapping?: Snapping) => {/* noop */},
+    };
+    this.events.handleDrag({ kind: 'update', ...base });
+    this.events.handleDrag({ kind: 'end', ...base });
+    this.mouse.dragging = false;
   }
 
   get selection(): Handle[] {

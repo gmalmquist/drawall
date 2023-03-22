@@ -1,39 +1,3 @@
-type Cursor = 'default' | 'none' | 'help' | 'context-menu'
-  | 'pointer' | 'progress' | 'wait' | 'cell' | 'crosshair'
-  | 'text' | 'vertical-text' | 'alias' | 'copy' | 'move'
-  | 'no-drop' | 'grab' | 'grabbing' | 'all-scroll' | 'col-resize'
-  | 'row-resize' | 'n-resize' | 's-resize' | 'w-resize' | 'e-resize'
-  | 'ne-resize' | 'nw-resize' | 'se-resize' | 'sw-resize'
-  | 'ew-resize' | 'ns-resize' | 'nesw-resize' | 'nwse-resize'
-  | 'zoom-in' | 'zoom-out';
-
-const getResizeCursor = (direction: Vector, bidirectional: boolean = true): Cursor => {
-  const dir = direction.get('screen');
-  const options: Array<readonly [Vec, Cursor, Cursor]> = [
-    [new Vec( 0,-1), 'n-resize', 'ns-resize'],
-    [new Vec(+1,-1), 'ne-resize', 'nesw-resize'],
-    [new Vec(+1, 0), 'e-resize', 'ew-resize'], // ew gross
-    [new Vec(+1,+1), 'se-resize', 'nwse-resize'],
-    [new Vec( 0,+1), 's-resize', 'ns-resize'],
-    [new Vec(-1,+1), 'sw-resize', 'nesw-resize'],
-    [new Vec(-1, 0), 'w-resize', 'ew-resize'], // ew gross
-    [new Vec(-1,-1), 'nw-resize', 'nwse-resize'],
-  ];
-  const map = new Map<Cursor, Vec>();
-  for (const [vec, uni, bi] of options) {
-    map.set(bidirectional ? bi : uni, vec.unit());
-  }
-  const compare = (a: Vec, b: Vec): number => {
-    const d = a.dot(b);
-    return bidirectional ? Math.abs(d) : d;
-  };
-  const choices = Array.from(map.keys());
-  return choices.reduce(
-    (a, b) => compare(dir, map.get(a)!) >= compare(dir, map.get(b)!) ? a : b,
-    choices[0]!,
-  );
-};
-
 type ToolName = 'none' 
   | 'pointer tool'
   | 'room tool'
@@ -138,11 +102,6 @@ class Tools {
     App.actions.register({ name: tool.name, apply: () => this.set(tool.name) });
 
     App.log('registered tool', tool.name, tool);
-
-    if (this.allToolsRegistered()) {
-      App.log('setting up tools.');
-      this.setup();
-    }
   }
 
   public getTools(): Tool[] {
@@ -161,16 +120,10 @@ class Tools {
     this.toolListeners.forEach(listener => listener(name));
     this._current = tool;
     App.pane.style.cursor = tool.cursor;
-    if (typeof tool.setup !== 'undefined') {
-      tool.setup();
-    }
   }
 
   update() {
-    const u = this.current.update;
-    if (typeof u !== 'undefined') {
-      u();
-    }
+    this.current.update();
   }
 
   private allToolsRegistered(): boolean {
@@ -181,7 +134,11 @@ class Tools {
     );
   }
 
-  private setup() {
+  setup() {
+    for (const tool of this.registry.values()) {
+      tool.setup();
+    }
+
     const toolbar = document.getElementsByClassName('toolbar')[0]! as HTMLElement;
     this.chain.groups.forEach(group => this.setupToolGroup(toolbar, group));
     this.set('pointer tool');

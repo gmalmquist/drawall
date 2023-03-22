@@ -1,4 +1,4 @@
-class PhysNode extends Component implements Solo {
+class PhysNode extends Component implements Solo, Surface {
   readonly [SOLO] = true;
 
   private _pos: Point = Point.ZERO;
@@ -50,6 +50,14 @@ class PhysNode extends Component implements Solo {
 
   clearForces() {
     this.forceAccum = Vec.ZERO;
+  }
+
+  intersects(sdf: SDF): boolean {
+    return sdf.contains(this.pos);
+  }
+
+  containedBy(sdf: SDF): boolean {
+    return sdf.contains(this.pos);
   }
 }
 
@@ -107,7 +115,7 @@ class Room extends Component implements Solo {
   }
 }
 
-class PhysEdge extends Component implements Solo {
+class PhysEdge extends Component implements Solo, Surface {
   public readonly [SOLO] = true;
 
   constructor(
@@ -136,6 +144,24 @@ class PhysEdge extends Component implements Solo {
       b.addForce(force);
     });
   }
+
+  intersects(sdf: SDF): boolean {
+    if (this.containedBy(sdf)) return true;
+    return this.src.and(this.dst).map(([a, b]) => {
+      // lazy sampling is good enough for now
+      const samples = 100;
+      for (let i = 0; i < samples; i++) {
+        if (sdf.contains(a.pos.lerp(1.0*i/samples, b.pos))) return true;
+      }
+      return false;
+    }).or(false);
+  }
+
+  containedBy(sdf: SDF): boolean {
+    return this.src.and(this.dst).map(([a, b]) => {
+      return a.containedBy(sdf) && b.containedBy(sdf);
+    }).or(false);
+  }
 }
 
 class Wall extends Component implements Solo {
@@ -156,6 +182,8 @@ class Wall extends Component implements Solo {
       () => this.src.ref().map(x => x.entity.only(PhysNode)),
       () => this.dst.ref().map(x => x.entity.only(PhysNode)),
     );
+
+    entity.add(Surfaced, () => entity.ref(e => e.only(PhysEdge)));
 
     const handle = entity.add(Handle, {
       getPos: () => this.src.pos,

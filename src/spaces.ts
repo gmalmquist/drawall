@@ -528,6 +528,10 @@ class SpacePos extends BaseSpaceValue<Point> {
 
   get create() { return SpacePos.of; }
 
+  eq(other: SpacePos): boolean {
+    return Vectors.between(this, other).mag().get(this.space) < 0.001;
+  }
+
   public static zero(space: SpaceName): SpacePos {
     return SpacePos.of(Point.ZERO, space);
   }
@@ -575,6 +579,10 @@ class SpaceEdge {
 
   get line(): Line {
     return new Line(this.origin, this.vector);
+  }
+
+  get midpoint(): Position {
+    return this.lerp(0.5);
   }
 
   public lerp(s: number): Position {
@@ -672,6 +680,11 @@ abstract class SDF {
   }
 }
 
+interface Surface {
+  intersects: (sdf: SDF) => boolean;
+  containedBy: (sdf: SDF) => boolean;
+}
+
 class Line extends SDF {
   public readonly origin: Position;
   public readonly tangent: Vector;
@@ -740,8 +753,11 @@ class Rect extends SDF {
   }
 
   public override sdist(point: Position): Distance {
-    const [first, ...more] = this.edges.map(e =>
-      new HalfPlane(e.src, e.normal).sdist(point));
+    const centroid = this.centroid;
+    const [first, ...more] = this.edges.map(e => {
+      const hp = new HalfPlane(e.src, e.normal)
+      return hp.sdist(point).scale(-hp.sdist(centroid).sign);
+    });
     return more.reduce((a, b) => a.max(b), first);
   }
 
@@ -752,6 +768,10 @@ class Rect extends SDF {
 
   get centroid(): Position {
     return this.topLeft.lerp(0.5, this.bottomRight);
+  }
+
+  eq(rect: Rect) {
+    return this.corners.every((c, i) => c.eq(rect.corners[i]));
   }
 }
 

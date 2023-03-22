@@ -165,6 +165,16 @@ class Canvas2d {
     g.fill();
   }
 
+  rect(rect: Rect) {
+    this.beginPath();
+    const [first, ...more] = rect.corners;
+    this.moveTo(first);
+    for (const m of more) {
+      this.lineTo(m);
+    }
+    this.closePath();
+  }
+
   text(props: TextDrawProps) {
     const p = props.point.get('screen');
     const fillStyle = props.fill || this.g.fillStyle;

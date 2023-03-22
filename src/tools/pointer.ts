@@ -1,8 +1,53 @@
 class PointerTool extends Tool {
   private readonly hovered: Set<Handle> = new Set();
+  private readonly selectionRect = Refs.of<Rect | null>(null, (a, b) => {
+    if ((a === null) !== (b === null)) {
+      return false;
+    }
+    if (a === null || b === null) return true;
+    return a.eq(b); 
+  });
+  private readonly strictSelect = Refs.of<boolean>(false);
 
   constructor() {
     super('pointer tool');
+  }
+
+  private setHovered(handle: Handle) {
+    if (this.hovered.has(handle)) return;
+    this.clearHovered();
+    this.hovered.add(handle);
+    handle.hovered = true;
+  }
+
+  private addHovered(handle: Handle) {
+    if (this.hovered.has(handle)) return;
+    this.hovered.add(handle);
+    handle.hovered = true;
+  }
+
+  private clearHovered() {
+    Array.from(this.hovered)
+      .forEach(h => h.hovered = false);
+    this.hovered.clear();
+  }
+
+  override setup() {
+    this.strictSelect.onChange(strict => {
+      if (strict) this.clearHovered();
+    });
+
+    this.events.onKey('keydown', e => {
+      if (e.key === 'Escape') {
+        App.ui.clearSelection();
+        this.clearHovered();
+        App.ecs.getComponents(Handle).forEach(h => {
+          h.hovered = false;
+          h.selected = false;
+        });
+        App.ui.cancelDrag();
+      }
+    });
 
     this.events.onMouse('down', e => {
       const handle = App.ui.getHandleAt(
@@ -10,7 +55,11 @@ class PointerTool extends Tool {
         h => h.clickable || h.draggable || h.selectable
       );
       if (handle === null) {
-        App.ui.clearSelection();
+        if (!App.ui.multiSelecting) {
+          App.ui.clearSelection();
+          this.clearHovered();
+          App.ecs.getComponents(Handle).forEach(h => h.hovered = false);
+        }
       } else if (App.ui.selection.length > 1 || App.ui.multiSelecting || handle.selected) {
         App.ui.addSelection(handle);
       } else {
@@ -41,31 +90,32 @@ class PointerTool extends Tool {
     this.events.onMouse('move', e => {
       if (App.ui.dragging) return;
 
-      const clickable = App.ui.getHandleAt(e.position, h => h.clickable);
+      const clickable = App.ui.getHandleAt(e.position, h => h.clickable && h.hoverable);
       if (clickable !== null) {
-        App.pane.style.cursor = 'pointer';
+        const c = clickable.getContextualCursor() || this.cursor;
+        App.pane.style.cursor = clickable.getContextualCursor() || this.cursor;
         this.setHovered(clickable);
         return;
       }
 
-      const draggable = App.ui.getHandleAt(e.position, h => h.draggable);
+      const draggable = App.ui.getHandleAt(e.position, h => h.draggable && h.hoverable);
       if (draggable !== null) {
-        App.pane.style.cursor = draggable.cursor || 'grab';
+        App.pane.style.cursor = draggable.getContextualCursor() || this.cursor;
         this.setHovered(draggable);
         return;
       }
 
       App.pane.style.cursor = this.cursor;
-
       this.clearHovered();
     });
 
-    const panTool = App.tools.getTool('pan tool');
+    const drawSelect = this.getDrawSelectDispatcher();
 
     this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
+        const overHandle = App.ui.getHandleAt(e.position, h => h.draggable) !== null;
         const selection = App.ui.selection;
-        if (selection.length > 0) {
+        if (selection.length > 0 && overHandle) {
           const snaps = selection
             .filter(s => typeof s.snapping !== 'undefined')
             .map(s => s.snapping as Snapping);
@@ -86,18 +136,17 @@ class PointerTool extends Tool {
           for (const handle of selection) {
             dispatcher.forward(handle.events);
             if (handle.cursor) {
-              cursors.add(handle.cursor);
+              cursors.add(handle.getContextualCursor());
             }
           }
-          const cursor = cursors.size === 1 ? Array.from(cursors)[0]! : 'grabbed';
+          const cursor = cursors.size === 1 ? Array.from(cursors)[0]! : 'grabbing';
           App.pane.style.cursor = cursor;
           dispatcher.handleDrag(e);
           e.setSnapping(snapping);
           return dispatcher;
         }
-        App.pane.style.cursor = 'grabbed';
-        panTool.events.handleDrag(e);
-        return panTool.events;
+        drawSelect.handleDrag(e);
+        return drawSelect;
       },
       onUpdate: (e, dispatcher) => dispatcher.handleDrag(e),
       onEnd: (e, dispatcher) => {
@@ -107,23 +156,67 @@ class PointerTool extends Tool {
     });
   }
 
-  private setHovered(handle: Handle) {
-    if (this.hovered.has(handle)) return;
-    this.clearHovered();
-    this.hovered.add(handle);
-    handle.hovered = true;
-  }
-
-  private clearHovered() {
-    Array.from(this.hovered)
-      .forEach(h => h.hovered = false);
-    this.hovered.clear();
-  }
-
-  override setup() {
-  }
-
   override update() {
+    const rect = this.selectionRect.get();
+    if (rect === null) return;
+
+    const palette = this.strictSelect.get() 
+      ? ['hsla(348,79%,81%,0.3)', 'hsla(348,79%,20%,0.3)'] 
+      : ['hsla(196,94%,66%,0.3)', 'hsla(196,94%,20%,0.3)'];
+
+    const [fill, stroke] = palette;
+
+    App.canvas.fillStyle = fill;
+    App.canvas.strokeStyle = stroke;
+    App.canvas.lineWidth = 1;
+    App.canvas.rect(rect);
+    App.canvas.fill();
+    App.canvas.stroke();
+  }
+
+  private getDrawSelectDispatcher(): UiEventDispatcher {
+    const dispatcher = new UiEventDispatcher(PointerTool, 'Rectangular Select');
+    const rectFor = (e: UiDragEvent) => {
+      const rect = new Rect(e.start, e.position);
+      this.selectionRect.set(rect);
+      return rect;
+    };
+    dispatcher.addDragListener<0>({
+      onStart: e => {
+        App.pane.style.cursor = 'default';
+        rectFor(e);
+        return 0;
+      },
+      onUpdate: (e, _) => {
+        App.pane.style.cursor = 'default';
+        const rect = rectFor(e);
+        const strict = this.useStrictSelectFor(e);
+        this.strictSelect.set(strict);
+        const selectables = App.ecs.getComponents(Handle).filter(h => h.selectable);
+        for (const s of selectables) {
+          s.hovered = strict ? s.containedBy(rect) : s.intersects(rect);
+          if (s.hovered) {
+            this.hovered.add(s);
+          }
+        }
+      },
+      onEnd: (e, _) => {
+        App.pane.style.cursor = 'default';
+        const rect = rectFor(e);
+        const strict = this.useStrictSelectFor(e);
+        const selected = App.ecs.getComponents(Handle).filter(h => h.selectable)
+          .filter(h => strict ? h.containedBy(rect) : h.intersects(rect));
+        this.clearHovered();
+        App.ui.addSelection(...selected);
+        this.selectionRect.set(null);
+      },
+    });
+    return dispatcher;
+  }
+
+  private useStrictSelectFor(e: UiDragEvent): boolean {
+    const delta = Vectors.between(e.start, e.position).get('screen');
+    return delta.x < 0 && delta.y < 0;
   }
 }
 
