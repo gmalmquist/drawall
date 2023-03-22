@@ -828,6 +828,8 @@ class UiState {
       this.keysPressed.delete(e.key);
     });
 
+    window.addEventListener('focus', () => this.keysPressed.clear());
+
     const makeKeyEvent = (kind: Kinds<UiKeyEvent>, e: KeyboardEvent): UiKeyEvent => ({
         kind,
         key: e.key,
