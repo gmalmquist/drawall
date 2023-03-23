@@ -163,7 +163,11 @@ class Handle extends Component {
     // if already selected, prioritize showing the user that this can be dragged.
     // otherwise, prioritize highlighting that this can be clicked.
     if (this.isSelected && this.draggable) {
-      return this.cursor || (App.ui.dragging ? 'grabbing' : 'grab');
+      const nonSpecific = App.ui.dragging ? 'grabbing' : 'grab';
+      if (App.ui.selection.length > 1 || this.cursor === null) {
+        return nonSpecific;
+      }
+      return this.cursor;
     }
     if (this.clickable) {
       return 'pointer';
