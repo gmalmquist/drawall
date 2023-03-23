@@ -48,6 +48,10 @@ class DrawRoomTool extends Tool {
     return Icons.roomTool;
   }
 
+  override onToolSelected() {
+    App.ui.clearSelection();
+  }
+
   get cursor(): Cursor {
     return 'crosshair';
   }

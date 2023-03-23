@@ -1,4 +1,4 @@
-class PointerTool extends Tool {
+class PointerTool extends SnappingTool {
   private readonly hovered: Set<Handle> = new Set();
   private readonly selectionRect = Refs.of<Rect | null>(null, (a, b) => {
     if ((a === null) !== (b === null)) {
@@ -66,7 +66,7 @@ class PointerTool extends Tool {
           this.clearHovered();
           App.ecs.getComponents(Handle).forEach(h => h.hovered = false);
         }
-      } else if (App.ui.selection.length > 1 || App.ui.multiSelecting || handle.selected) {
+      } else if (App.ui.selection.size > 1 || App.ui.multiSelecting || handle.selected) {
         App.ui.addSelection(handle);
       } else {
         App.ui.setSelection(handle);
@@ -135,8 +135,8 @@ class PointerTool extends Tool {
       onStart: e => {
         const overHandle = App.ui.getHandleAt(e.start, h => h.draggable) !== null;
         const selection = App.ui.selection;
-        if (selection.length > 0 && overHandle) {
-          const snaps = selection
+        if (selection.size > 0 && overHandle) {
+          const snaps = Array.from(selection)
             .filter(s => typeof s.snapping !== 'undefined')
             .map(s => s.snapping as Snapping);
           const getPreferred = (arr:  NamedAxisP[]): NamedAxisP => {

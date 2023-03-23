@@ -1,5 +1,10 @@
 .mini-form {
   display: flex;
+
+  transition-property: opacity;
+  transition-duration: 0.5s;
+
+  overflow: hidden;
 }
 
 .mini-form > * + * {
@@ -41,6 +46,11 @@
   user-select: none;
   cursor: not-allowed;
   opacity: 0.4;
+
+  /** hide completely to save space. not sure if good idea? */
+  width: 0;
+  height: 0;
+  opacity: 0;
 }
 
 .icon-button {

@@ -6,11 +6,9 @@ class JointTool extends Tool {
   override get icon(): URL {
     return Icons.jointTool;
   }
-
   get cursor(): Cursor {
     return 'default';
   }
-
   override setup() {
     this.events.onMouse('click', e => {
       const wall = App.ui.getHandleAt(e.position, h => h.entity.has(Wall));
@@ -25,6 +23,10 @@ class JointTool extends Tool {
   }
 
   override update() {
+  }
+
+  override onToolSelected() {
+    App.ui.clearSelection();
   }
 
   split(wall: Wall, position: Position) {

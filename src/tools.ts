@@ -14,6 +14,10 @@ abstract class Tool {
   ) {
   }
 
+  get allowSnap(): boolean {
+    return false;
+  }
+
   get description(): string {
     return '';
   }
@@ -26,9 +30,57 @@ abstract class Tool {
     return 'default';
   }
 
+  createUi(form: AutoForm): void {
+  }
+
+  onToolSelected() {
+  }
+
   abstract update(): void;
 
   abstract setup(): void;
+}
+
+abstract class SnappingTool extends Tool {
+  constructor(name: ToolName) {
+    super(name);
+  }
+
+  override get allowSnap(): boolean {
+    return true;
+  }
+
+  override createUi(form: AutoForm) {
+    form.add({
+      name: 'Local Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToLocalRef,
+      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
+    });
+
+    form.add({
+      name: 'Global Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToGlobalRef,
+      icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
+    });
+
+    form.add({
+      name: 'Geometry Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToGeometryRef,
+      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
+    });
+
+    form.addSeparator();
+
+    form.add({
+      name: 'Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.enableByDefaultRef,
+      icons: { on: Icons.snapOn, off: Icons.snapOff },
+    });
+  }
 }
 
 interface ToolGroup {
@@ -122,6 +174,11 @@ class Tools {
     this.toolListeners.forEach(listener => listener(name));
     this._current = tool;
     App.pane.style.cursor = tool.cursor;
+    App.gui.tool.clear();
+    const ui = new AutoForm();
+    tool.createUi(ui)
+    ui.inflate(App.gui.tool);
+    tool.onToolSelected();
   }
 
   update() {

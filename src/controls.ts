@@ -148,10 +148,15 @@ class AutoForm {
     form.verticalAlign = 'stretch';
     for (const field of this.fields) {
       const inflated = this.inflateField(field);
-      this.uiMap.set(AutoForm.fieldId(field), inflated);
+      const id = AutoForm.fieldId(field);
+      this.uiMap.set(id, inflated);
       this.updateUi(field);
       if (field.label) {
-        form.appendLabeled(field.label, inflated.element);
+        const wrapped = form.appendLabeled(field.label, inflated.element);
+        for (const handle of this.handles.get(id)) {
+          handle.enabled.onChange(e => wrapped.setEnabled(e));
+          wrapped.setEnabled(handle.enabled.get());
+        }
       } else {
         form.append(inflated.element);
       }
@@ -471,7 +476,7 @@ class MiniForm extends ElementWrap<HTMLElement> implements Resetable {
     this.element.appendChild(ruler);
   }
 
-  appendLabeled(text: string, e: ElementWrap<HTMLElement> | Resetable) {
+  appendLabeled(text: string, e: ElementWrap<HTMLElement> | Resetable): MiniForm {
     const label = new MiniLabel(text.toLocaleUpperCase());
     label.addClass('over-label');
 
@@ -482,6 +487,7 @@ class MiniForm extends ElementWrap<HTMLElement> implements Resetable {
     column.append(e);
 
     this.append(column);
+    return column;
   }
 }
 

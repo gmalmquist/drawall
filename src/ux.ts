@@ -104,11 +104,26 @@ class Surfaced extends Component implements Surface, Solo {
   }
 }
 
-class Handle extends Component {
+class Selected extends Component implements Solo {
+  public readonly [SOLO] = true;
+  public readonly selectionIndex: number;
+
+  constructor(entity: Entity) {
+    super(entity);
+    this.selectionIndex = App.ecs.getComponents(Selected).length;
+  }
+
+  deselect() {
+    this.entity.removeAll(Selected);
+  }
+}
+
+class Handle extends Component implements Solo {
+  public readonly [SOLO] = true;
+
   public readonly events = new UiEventDispatcher(Handle);
 
   private readonly distanceFunc: (p: Position) => Distance;
-  private _selected: boolean = false;
   private _dragging: boolean = false;
   private _hovered: boolean = false;
   private _cursor: () => Cursor | null;
@@ -164,7 +179,7 @@ class Handle extends Component {
     // otherwise, prioritize highlighting that this can be clicked.
     if (this.isSelected && this.draggable) {
       const nonSpecific = App.ui.dragging ? 'grabbing' : 'grab';
-      if (App.ui.selection.length > 1 || this.cursor === null) {
+      if (App.ui.selection.size > 1 || this.cursor === null) {
         return nonSpecific;
       }
       return this.cursor;
@@ -220,7 +235,7 @@ class Handle extends Component {
   }
 
   get isSelected(): boolean {
-    return this._selected;
+    return this.entity.has(Selected);
   }
 
   get isActive(): boolean {
@@ -232,7 +247,12 @@ class Handle extends Component {
   }
 
   set selected(s: boolean) {
-    this._selected = s;
+    if (!s) {
+      this.entity.removeAll(Selected);
+      this.hovered = false;
+    } else {
+      this.entity.add(Selected);
+    }
   }
 
   get pos(): Position {
@@ -501,28 +521,42 @@ class UiState {
     this.mouse.dragging = false;
   }
 
-  get selection(): Handle[] {
-    return Array.from(this._selection);
+  get selection(): Set<Handle> {
+    return new Set(
+      App.ecs.getComponents(Selected)
+        .map(s => s.entity)
+        .filter(s => s.has(Handle))
+        .map(s => s.only(Handle))
+    ); 
   }
 
   clearSelection() {
-    this._selection.forEach(handle => { handle.selected = false; });
-    this._selection.clear();
+    App.ecs.getComponents(Selected).forEach(s => {
+      s.entity.get(Handle).forEach(h => {
+        h.hovered = false;
+      });
+      s.deselect();
+    });
     this.updateForms();
   }
 
   setSelection(...handles: Handle[]) {
-    this._selection.forEach(handle => { handle.selected = false; });
-    this._selection.clear();
-    this.addSelection(...handles);
+    const current = this.selection;
+    const updated = new Set(handles);
+    for (const h of current) {
+      if (!updated.has(h)) {
+        h.selected = false;
+      }
+    }
+    for (const h of updated) {
+      h.selected = true;
+    }
+    this.updateForms();
   }
 
   addSelection(...handles: Handle[]) {
-    const already = new Set(this._selection);
-    handles.filter(h => !already.has(h)).forEach(h => {
-      this._selection.add(h);
+    handles.forEach(h => { 
       h.selected = true;
-      already.add(h);
     });
     this.updateForms();
   }
@@ -595,7 +629,7 @@ class UiState {
   }
 
   private updateForms() {
-    const forms = this.selection
+    const forms = Array.from(this.selection)
       .map(handle => handle.entity.get(Form))
       .map(forms => AutoForm.union(forms.map(form => form.form)));
     const form = AutoForm.union(forms);
@@ -711,7 +745,7 @@ class UiState {
 
     if (snapping?.allowLocal !== false) {
       // don't add tons of axes that are right next to each other.
-      snapAxes.local = this.selection
+      snapAxes.local = Array.from(this.selection)
         .map(h => h.snapping?.localAxes || (() => []))
         .map(axes => axes())
         .reduce((a, b) => [...a, ...b], []);
@@ -725,8 +759,7 @@ class UiState {
       // we can probably add an axis-defining component
       // to do this less ad-hoc.
       for (const wall of App.ecs.getComponents(Wall)) {
-        if (wall.entity.get(Handle)
-          .some(handle => this.selection.some(s => handle === s))) {
+        if (wall.entity.get(Handle).some(handle => handle.isSelected)) {
           continue;
         }
         snapAxes.geometry.push({
@@ -759,7 +792,7 @@ class UiState {
   }
 
   private getSnapAxis(pos: Position, delta: Vector): NamedAxis | null {
-    if (!this.snapping.enabled || this.snapAxes === null) return null;
+    if (!this.snapping.enabled || this.snapAxes === null || !App.tools.current.allowSnap) return null;
     if (this.snapAxes.preferred) {
       return this.snapAxes.preferred;
     }

@@ -16,11 +16,11 @@ class GUI {
     this.ux = new MiniForm();
     this.project = new MiniForm();
 
-    this.topbar.append(this.tool);
     this.topbar.append(this.selection);
 
     this.topbar.appendSpacer();
 
+    this.topbar.append(this.tool);
     this.topbar.appendRuler();
     this.topbar.append(this.ux);
     this.topbar.appendRuler();
@@ -71,38 +71,6 @@ class GUI {
       kind: 'toggle',
       value: App.settings.kinematics,
       icons: { on: Icons.kinematicsOn, off: Icons.kinematicsOff },
-    });
-
-    form.addSeparator();
-
-    form.add({
-      name: 'Local Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToLocalRef,
-      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
-    });
-
-    form.add({
-      name: 'Global Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToGlobalRef,
-      icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
-    });
-
-    form.add({
-      name: 'Geometry Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToGeometryRef,
-      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
-    });
-
-    form.addSeparator();
-
-    form.add({
-      name: 'Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.enableByDefaultRef,
-      icons: { on: Icons.snapOn, off: Icons.snapOff },
     });
 
     this.ux.clear();
