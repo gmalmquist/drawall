@@ -660,6 +660,10 @@ class FixedConstraint extends Constraint {
         name: 'lock position',
         kind: 'toggle',
         value: this.enabledRef,
+        icons: {
+          on: Icons.posLocked,
+          off: Icons.posUnlocked,
+        },
       });
       return form;
     });
@@ -748,6 +752,10 @@ class LengthConstraint extends Constraint {
         name: 'lock length',
         kind: 'toggle',
         value: this.enabledRef,
+        icons: {
+          on: Icons.lengthLocked,
+          off: Icons.lengthUnlocked,
+        },
       });
       const lengthField = form.add({
         name: 'length',
@@ -970,15 +978,20 @@ class AxisConstraint extends Constraint {
         name: 'axis lock enabled',
         kind: 'toggle',
         value: this.enabledRef,
+        icons: {
+          on: Icons.axisLocked,
+          off: Icons.axisUnlocked,
+        },
       });
       form.add({
         name: 'axis',
-        kind: 'toggle', // TODO
+        kind: 'toggle',
         value: this.axis.map<boolean>({
           to: (axis: Vector) => Math.abs(axis.get('screen').x) < Math.abs(axis.get('screen').y),
           from: (vertical: boolean) => vertical ? Vector(Axis.Y, 'screen') : Vector(Axis.X, 'screen'),
         }),
         enabled: this.enabledRef,
+        icons: { on: Icons.axisY, off: Icons.axisX }, 
       });
       form.add({
         name: 'axis tension',

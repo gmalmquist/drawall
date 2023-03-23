@@ -17,7 +17,6 @@ class GUI {
     this.project = new MiniForm();
 
     this.topbar.append(this.tool);
-    this.topbar.appendRuler();
     this.topbar.append(this.selection);
 
     this.topbar.appendSpacer();
@@ -26,13 +25,12 @@ class GUI {
     this.topbar.append(this.ux);
     this.topbar.appendRuler();
     this.topbar.append(this.project);
-
-    this.topbar.append(new MiniLabel('hi'));
   }
 
   setup() {
     this.setupUx();
     this.setupProject();
+    this.preloadIcons();
   }
 
   private setupUx() {
@@ -42,24 +40,28 @@ class GUI {
       name: 'Grid',
       kind: 'toggle',
       value: App.settings.showGrid,
+      icons: { on: Icons.showGrid, off: Icons.hideGrid },
     });
 
     form.add({
       name: 'Guides',
       kind: 'toggle',
       value: App.settings.showGuides,
+      icons: { on: Icons.showGuides, off: Icons.hideGuides },
     });
 
     form.add({
       name: 'Lengths',
       kind: 'toggle',
       value: App.settings.showLengths,
+      icons: { on: Icons.showLengths, off: Icons.hideLengths },
     });
 
     form.add({
       name: 'Angles',
       kind: 'toggle',
       value: App.settings.showAngles,
+      icons: { on: Icons.showAngles, off: Icons.hideAngles },
     });
 
     form.addSeparator();
@@ -68,6 +70,7 @@ class GUI {
       name: 'Kinematics',
       kind: 'toggle',
       value: App.settings.kinematics,
+      icons: { on: Icons.kinematicsOn, off: Icons.kinematicsOff },
     });
 
     form.addSeparator();
@@ -76,18 +79,21 @@ class GUI {
       name: 'Local Axes Snapping',
       kind: 'toggle',
       value: App.ui.snapping.snapToLocalRef,
+      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
     });
 
     form.add({
       name: 'Global Axes Snapping',
       kind: 'toggle',
       value: App.ui.snapping.snapToGlobalRef,
+      icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
     });
 
     form.add({
       name: 'Geometry Axes Snapping',
       kind: 'toggle',
       value: App.ui.snapping.snapToGeometryRef,
+      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
     });
 
     form.addSeparator();
@@ -96,6 +102,7 @@ class GUI {
       name: 'Snapping',
       kind: 'toggle',
       value: App.ui.snapping.enableByDefaultRef,
+      icons: { on: Icons.snapOn, off: Icons.snapOff },
     });
 
     this.ux.clear();
@@ -148,6 +155,13 @@ class GUI {
 
     this.project.clear();
     form.inflate(this.project);
+  }
+
+  private preloadIcons() {
+    for (const iconUrl of Object.values(Icons)) {
+      const image = new Image();
+      image.src = iconUrl.toString();
+    }
   }
 }
 
