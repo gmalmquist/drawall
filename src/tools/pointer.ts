@@ -15,6 +15,10 @@ class PointerTool extends Tool {
     super('pointer tool');
   }
 
+  override get icon(): URL {
+    return Icons.pointerTool;
+  }
+
   private setHovered(handle: Handle) {
     if (this.hovered.has(handle)) return;
     this.clearHovered();

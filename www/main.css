@@ -30,11 +30,13 @@ body {
   padding-right: 1em;
   padding-top: 2px;
   padding-bottom: 2px;
+  background-color: #f6f5f4;
 }
 
 .toolbar {
   grid-area: tool;
   border-right: thin solid lightgray;
+  background-color: #f6f5f4;
 }
 
 .canvas-wrap {

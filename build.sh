@@ -63,6 +63,7 @@ linalg.js
 spaces.js
 time.js
 units.js
+icons.js
 ecs.js
 mouse.js
 controls.js

@@ -44,6 +44,10 @@ class DrawRoomTool extends Tool {
     });
   }
 
+  override get icon(): URL {
+    return Icons.roomTool;
+  }
+
   get cursor(): Cursor {
     return 'crosshair';
   }

@@ -37,7 +37,7 @@ class MyServer(BaseHTTPRequestHandler):
         self.wfile.write(bytes(f.read(), 'utf-8'))
       return
     path = os.path.join('www', self.path
-      .replace('/', '')
+      .lstrip('/')
       .replace('%', '')
       .replace('..', ''))
     if not os.path.exists(path):

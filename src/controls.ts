@@ -52,7 +52,7 @@ class IconButton extends ElementWrap<HTMLElement> {
     super(document.createElement('a'));
     this.element.setAttribute('href', '#');
     this.tooltip = name;
-    this.classes = new Set(['tool-button', 'icon-button']);
+    this.classes = new Set(['icon-button']);
     this.icon = icon;
   }
 

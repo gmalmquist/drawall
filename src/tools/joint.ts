@@ -3,6 +3,10 @@ class JointTool extends Tool {
     super('joint tool');
   }
 
+  override get icon(): URL {
+    return Icons.jointTool;
+  }
+
   get cursor(): Cursor {
     return 'default';
   }

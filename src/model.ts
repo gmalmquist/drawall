@@ -847,6 +847,10 @@ class AngleConstraint extends Constraint {
         name: 'lock angle',
         kind: 'toggle',
         value: this.enabledRef,
+        icons: {
+          on: Icons.angleLocked,
+          off: Icons.angleUnlocked,
+        },
       });
       const angleField = form.add({
         name: 'angle',

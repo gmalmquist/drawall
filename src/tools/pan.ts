@@ -3,6 +3,10 @@ class PanTool extends Tool {
     super('pan tool');
   }
 
+  override get icon(): URL {
+    return Icons.panTool;
+  }
+
   get cursor(): Cursor {
     return 'grab';
   }
