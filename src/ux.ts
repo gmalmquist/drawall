@@ -115,6 +115,18 @@ class Surfaced extends Component implements Surface, Solo {
   }
 }
 
+class Hovered extends Component implements Solo {
+  public readonly [SOLO] = true;
+
+  constructor(entity: Entity) {
+    super(entity);
+  }
+
+  unhover() {
+    this.entity.removeAll(Hovered);
+  }
+}
+
 class Selected extends Component implements Solo {
   public readonly [SOLO] = true;
   public readonly selectionIndex: number;
@@ -135,7 +147,6 @@ class Handle extends Component implements Solo {
   public readonly events = new UiEventDispatcher(Handle);
 
   private readonly distanceFunc: (p: Position) => Distance;
-  private _hovered: boolean = false;
   private _cursor: () => Cursor | null;
   private readonly getPos: () => Position;
   private readonly _onDelete: (() => 'keep' | 'kill') | undefined;
@@ -237,7 +248,7 @@ class Handle extends Component implements Solo {
   }
 
   get isHovered(): boolean {
-    return this._hovered;
+    return this.entity.has(Hovered);
   }
 
   get isSelected(): boolean {
@@ -249,7 +260,11 @@ class Handle extends Component implements Solo {
   }
 
   set hovered(h: boolean) {
-    this._hovered = h;
+    if (h) {
+      this.entity.add(Hovered);
+    } else {
+      this.entity.removeAll(Hovered);
+    }
   }
 
   set selected(s: boolean) {
@@ -536,11 +551,9 @@ class UiState {
   }
 
   clearSelection() {
-    App.ecs.getComponents(Selected).forEach(s => {
-      s.entity.get(Handle).forEach(h => {
-        h.hovered = false;
-      });
-      s.deselect();
+    App.ecs.getComponents(Selected).map(s => s.entity.only(Handle)).forEach(e => {
+      e.selected = false;
+      e.hovered = false;
     });
     this.updateForms();
   }
@@ -608,6 +621,18 @@ class UiState {
     this.cancelDrag();
     this.clearSelection();
     selected.forEach(s => s.delete());
+  }
+
+  clearHovered() {
+    App.ecs.getComponents(Hovered).forEach(h => h.unhover());
+  }
+
+  setHovered(...handles: Handle[]) {
+    const set = new Set(handles);
+    handles.forEach(h => { h.hovered = true; });
+    App.ecs.getComponents(Hovered)
+      .map(h => h.entity.only(Handle))
+      .forEach(h => { h.hovered = set.has(h); });
   }
 
   getHandleAt(
@@ -850,23 +875,22 @@ class UiState {
       }
 
       this.keysPressed.set(e.key, true);
-      if (e.key === 'Control') {
-        this.snapping.enabled = !this.snapping.enabled;
-      } else if (e.key === 'x') {
-        if (this.dragging) {
+      if (this.dragging) {
+        if (e.key === 'Control') {
+          this.snapping.enabled = !this.snapping.enabled;
+        } else if (e.key === 'x') {
           this.updateSnapping({
             snapByDefault: true,
             preferredAxis: () => UiState.GLOBAL_X,
           });
-        }
-      } else if (e.key === 'y') {
-        if (this.dragging) {
+        } else if (e.key === 'y') {
           this.updateSnapping({
             snapByDefault: true,
             preferredAxis: () => UiState.GLOBAL_Y,
           });
         }
-      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         this.deleteSelected();
       }
 

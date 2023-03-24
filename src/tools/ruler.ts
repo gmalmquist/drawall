@@ -1,4 +1,4 @@
-class RulerTool extends Tool {
+class RulerTool extends SnappingTool {
   constructor() {
     super('ruler tool');
   }
@@ -16,24 +16,78 @@ class RulerTool extends Tool {
   }
 
   override setup() {
-    this.events.addDragListener<Ruler>({
+    this.events.onMouse('move', e => {
+      if (App.ui.dragging) return;
+
+      const handle = App.ui.getHandleAt(e.position);
+
+      if (handle === null) {
+        App.ui.clearHovered();
+        App.pane.style.cursor = this.cursor;
+        return;
+      }
+
+      if (this.isRulerHandle(handle)) {
+        App.ui.setHovered(handle);
+        App.pane.style.cursor = 'grab';
+        return;
+      }
+
+      if (handle.entity.has(PhysEdge) || handle.entity.has(PhysNode)) {
+        App.ui.setHovered(handle);
+        App.pane.style.cursor = this.cursor;
+      }
+    });
+
+    this.events.onMouse('down', e => {
+      if (App.ui.dragging) return;
+
+      const handle = App.ui.getHandleAt(e.position);
+      if (handle === null) {
+        App.ui.clearSelection();
+        return;
+      }
+
+      if (this.isRulerHandle(handle)) {
+        App.ui.setSelection(handle);
+        return;
+      }
+    });
+
+    type DragState = { handle?: Handle, ruler?: Ruler };
+    this.events.addDragListener<DragState>({
       onStart: (e) => {
+        const handle = App.ui.getHandleAt(e.start);
+        if (handle !== null && this.isRulerHandle(handle)) {
+          handle.events.handleDrag(e);
+          App.pane.style.cursor = 'grabbed';
+          return { handle };
+        }
+
+        App.pane.style.cursor = this.cursor;
         const ruler = App.ecs.createEntity().add(Ruler);
         App.ui.setSelection(ruler.entity.only(Handle));
         ruler.start.with(s => s.dragTo(e.start));
-        ruler.end.with(s => s.dragTo(e.position));
-        return ruler;
+        ruler.end.with(s => s.dragTo(e.start.plus(e.delta)));
+        return { ruler };
       },
-      onUpdate: (e, ruler) => {
-        ruler.end.with(s => s.dragTo(e.position));
+      onUpdate: (e, { ruler, handle }) => {
+        ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
+        handle?.events?.handleDrag(e);
       },
-      onEnd: (e, ruler) => {
-        ruler.end.with(s => s.dragTo(e.position));
+      onEnd: (e, { ruler, handle }) => {
+        ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
+        handle?.events?.handleDrag(e);
+        App.pane.style.cursor = this.cursor;
       },
     });
   }
 
   override update() {
+  }
+
+  private isRulerHandle(handle: Handle): boolean {
+    return handle.entity.has(Ruler) || handle.entity.has(RulerEndpoint);
   }
 }
 
@@ -406,8 +460,9 @@ class Ruler extends Component implements Solo {
         };
       },
       onUpdate: (e, { start, end, srcDelta, dstDelta }) => {
-        start.dragTo(e.position.plus(srcDelta));
-        end.dragTo(e.position.plus(dstDelta));
+        const pos = e.start.plus(e.delta);
+        start.dragTo(pos.plus(srcDelta));
+        end.dragTo(pos.plus(dstDelta));
       },
       onEnd: (e, nodes) => {
       },

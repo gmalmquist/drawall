@@ -1,5 +1,4 @@
 class PointerTool extends SnappingTool {
-  private readonly hovered: Set<Handle> = new Set();
   private readonly selectionRect = Refs.of<Rect | null>(null, (a, b) => {
     if ((a === null) !== (b === null)) {
       return false;
@@ -19,38 +18,14 @@ class PointerTool extends SnappingTool {
     return Icons.pointerTool;
   }
 
-  private setHovered(handle: Handle) {
-    if (this.hovered.has(handle)) return;
-    this.clearHovered();
-    this.hovered.add(handle);
-    handle.hovered = true;
-  }
-
-  private addHovered(handle: Handle) {
-    if (this.hovered.has(handle)) return;
-    this.hovered.add(handle);
-    handle.hovered = true;
-  }
-
-  private clearHovered() {
-    Array.from(this.hovered)
-      .forEach(h => h.hovered = false);
-    this.hovered.clear();
-  }
-
   override setup() {
     this.strictSelect.onChange(strict => {
-      if (strict) this.clearHovered();
+      if (strict) App.ui.clearHovered();
     });
 
     this.events.onKey('keydown', e => {
       if (e.key === 'Escape') {
         App.ui.clearSelection();
-        this.clearHovered();
-        App.ecs.getComponents(Handle).forEach(h => {
-          h.hovered = false;
-          h.selected = false;
-        });
         App.ui.cancelDrag();
       }
     });
@@ -63,8 +38,6 @@ class PointerTool extends SnappingTool {
       if (handle === null) {
         if (!App.ui.multiSelecting) {
           App.ui.clearSelection();
-          this.clearHovered();
-          App.ecs.getComponents(Handle).forEach(h => h.hovered = false);
         }
       } else if (App.ui.selection.size > 1 || App.ui.multiSelecting || handle.selected) {
         App.ui.addSelection(handle);
@@ -112,12 +85,12 @@ class PointerTool extends SnappingTool {
 
       if (handle?.clickable || handle?.draggable) {
         App.pane.style.cursor = handle.getContextualCursor() || this.cursor;
-        this.setHovered(handle);
+        handle.hovered = true;
         return;
       }
 
       App.pane.style.cursor = this.cursor;
-      this.clearHovered();
+      App.ui.clearHovered();
     });
 
     const drawSelect = this.getDrawSelectDispatcher();
@@ -220,9 +193,6 @@ class PointerTool extends SnappingTool {
         const selectables = App.ecs.getComponents(Handle).filter(h => h.selectable);
         for (const s of selectables) {
           s.hovered = strict ? s.containedBy(rect) : s.intersects(rect);
-          if (s.hovered) {
-            this.hovered.add(s);
-          }
         }
       },
       onEnd: (e, _) => {
@@ -231,7 +201,7 @@ class PointerTool extends SnappingTool {
         const strict = this.useStrictSelectFor(e);
         const selected = App.ecs.getComponents(Handle).filter(h => h.selectable)
           .filter(h => strict ? h.containedBy(rect) : h.intersects(rect));
-        this.clearHovered();
+        App.ui.clearHovered(); 
         App.ui.addSelection(...selected);
         this.selectionRect.set(null);
       },

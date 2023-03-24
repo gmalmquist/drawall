@@ -30,11 +30,8 @@ class JointTool extends SnappingTool {
       App.pane.style.cursor = handle === null ? this.cursor : 'pointer';
 
       if (handle?.entity?.has(WallJoint)) {
-        handle.hovered = true;
+        App.ui.setHovered(handle);
       }
-      App.ecs.getComponents(Handle)
-        .filter(h => h !== handle)
-        .forEach(h => h.hovered = false);
     });
 
     const pointer = App.tools.getTool('pointer tool');
