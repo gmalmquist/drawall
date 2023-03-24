@@ -69,6 +69,7 @@ ecs.js
 mouse.js
 controls.js
 gui.js
+vectorcanvas.js
 canvas.js
 tools.js
 actions.js

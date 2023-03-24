@@ -8,7 +8,11 @@ class App {
   public static readonly keybindings = Keybindings.defaults();
   public static readonly ui = new UiState();
   public static readonly canvas = new Canvas2d(
-      document.getElementById('main-canvas') as HTMLCanvasElement)
+    document.getElementById('main-canvas') as HTMLCanvasElement)
+  public static readonly background = new VectorCanvas(
+    document.getElementById('background-svg')!);
+  public static readonly foreground = new VectorCanvas(
+    document.getElementById('foreground-svg')!);
   public static readonly settings = new Settings();
   public static project = new Project();
   public static debug: boolean = false;
@@ -38,6 +42,9 @@ class App {
   }
 
   static init() {
+    App.tools.setup();
+    App.background.setup();
+    App.foreground.setup();
     App.tools.setup();
     App.actions.setup();
     App.gui.setup();
@@ -74,6 +81,9 @@ class App {
     App.ecs.update();
     App.ui.update();
     App.tools.update();
+
+    App.background.update();
+    App.foreground.update();
   }
 
   static start() {

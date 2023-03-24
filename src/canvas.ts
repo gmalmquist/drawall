@@ -288,10 +288,15 @@ function drawGridLines() {
   for (let i = 0; i <= steps; i++) {
     const s = gridSpacing * i;
     const x = topLeft.splus(s, dirPlus.onAxis(axisX.get('model')).unit());
-    c.strokeLine(
+    App.background.line(
       Position(x, 'model'), 
       Position(x.plus(gridY), 'model'),
+      { stroke: '#cccccc', }
     );
+    //c.strokeLine(
+    //  Position(x, 'model'), 
+    //  Position(x.plus(gridY), 'model'),
+    //);
     const value = App.project.modelUnit.newAmount(x.trunc().x);
     const label = App.project.displayUnit.format(value);
     c.text({
