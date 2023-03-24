@@ -1,20 +1,21 @@
-class CanvasViewport {
+class Viewport {
+  private _changed: boolean = true;
+
   constructor(
     public origin: Point = Point.ZERO,
     public radius: number = 150.,
     public screen_width: number = 1000,
     public screen_height: number = 1000) {}
 
-  getModelFrame(): Frame {
+  public getModelFrame(): Frame {
     return new Frame(
       this.origin,
       new Vec(this.radius, 0),
       new Vec(0, this.radius),
     );
-
   }
 
-  getScreenFrame(): Frame {
+  public getScreenFrame(): Frame {
     const screen_size = Math.min(this.screen_width, this.screen_height);
     return new Frame(
       new Point(this.screen_width/2., this.screen_height/2),
@@ -43,14 +44,83 @@ class CanvasViewport {
       distance: d => model.distance(screen.distance(d)),
     };
   }
+
+  get changed(): boolean {
+    return this._changed;
+  }
+
+  public resetChanged() {
+    this._changed = false;
+  }
+
+  public setup() {
+    this.handleResize();
+    // sometimes the browser hasn't quite finished rendering things at the
+    // point setup() is called.
+    setTimeout(() => this.handleResize(), 100);
+
+    window.addEventListener('resize', () => this.handleResize());
+    App.pane.addEventListener('wheel', event => {
+      const wheel = event as WheelEvent;
+      this.radius = Math.max(10, this.radius + Math.sign(wheel.deltaY) * 10);
+      this.updateTransforms();
+    });
+    App.settings.fontSizeRef.onChange(_ => {
+      // hmm, this is sort of a hack. when the font size
+      // changes, it doesn't *actually* change the viewport,
+      // but it _does_ require the grid to be redrawn.
+      this._changed = true;
+    });
+  }
+
+ public updateTransforms() {
+   Spaces.put({
+     name: 'model',
+     project: this.getModelFrame().project,
+     unproject: this.getModelFrame().unproject,
+   });
+   
+   Spaces.put({
+     name: 'screen',
+     project: this.getScreenFrame().project,
+     unproject: this.getScreenFrame().unproject,
+   });
+   this._changed = true;
+ }
+ 
+ private handleResize() {
+   this.screen_width = Math.round(App.pane.clientWidth);
+   this.screen_height = Math.round(App.pane.clientHeight);
+   App.background.updateCanvasSize();
+   App.canvas.updateCanvasSize();
+   this.updateTransforms();
+ }
 }
 
 class Canvas2d {
   private readonly g: CanvasRenderingContext2D;
-  viewport: CanvasViewport = new CanvasViewport();
 
-  constructor(private readonly el: HTMLCanvasElement) {
-    this.g = el.getContext('2d')!!;
+  constructor(
+    private readonly el: HTMLCanvasElement,
+    private readonly autoclear: boolean,
+  ) {
+    this.g = el.getContext('2d')!;
+  }
+
+  setup() {
+    App.settings.fontSizeRef.onChange(f => this.fontSize = f);
+  }
+
+  update() {
+    if (this.autoclear) {
+      this.clear();
+    }
+  }
+
+  updateCanvasSize() {
+    this.el.width = this.el.clientWidth;
+    this.el.height = this.el.clientHeight;
+    this.fontSize = App.settings.fontSize;
   }
 
   get width() {
@@ -210,28 +280,6 @@ class Canvas2d {
     const b = dst.get('screen');
     return this.g.createLinearGradient(a.x, a.y, b.x, b.y);
   }
-
-  handleResize() {
-    this.el.width = this.el.clientWidth;
-    this.el.height = this.el.clientHeight;
-    this.viewport.screen_width = this.width;
-    this.viewport.screen_height = this.height;
-    this.updateTransforms();
-  }
-
-  updateTransforms() {
-    Spaces.put({
-      name: 'model',
-      project: this.viewport.getModelFrame().project,
-      unproject: this.viewport.getModelFrame().unproject,
-    });
-    
-    Spaces.put({
-      name: 'screen',
-      project: this.viewport.getScreenFrame().project,
-      unproject: this.viewport.getScreenFrame().unproject,
-    });
-  }
 }
 
 interface TextDrawProps {
@@ -247,22 +295,14 @@ interface TextDrawProps {
   baseline?: CanvasTextBaseline;
 }
 
-function setupCanvas() {
-  const c = App.canvas;
-  c.handleResize();
-
-  window.addEventListener('resize', () => App.canvas.handleResize());
-
-  App.pane.addEventListener('wheel', event => {
-    const wheel = event as WheelEvent;
-    c.viewport.radius = Math.max(10, c.viewport.radius + Math.sign(wheel.deltaY) * 10);
-    c.updateTransforms();
-  });
-};
-
-function drawGridLines() {
+const GridRenderer = (ecs: EntityComponentSystem) => {
   if (!App.settings.showGrid.get()) return;
-  const c = App.canvas;
+  if (!App.viewport.changed) return;
+  App.viewport.resetChanged();
+
+  const c = App.background;
+  c.clear();
+
   // render grid
   const gridSpacing = App.project.modelUnit.from(App.project.gridSpacing).value;
   const left = Vector(new Vec(-1, 0), 'screen').get('model').unit();
@@ -326,12 +366,5 @@ function drawGridLines() {
     }
   }
   c.strokeStyle = 'black';
-};
-
-function RenderCanvas() {
-  const c = App.canvas;
-  c.clear();
-  c.fontSize = App.settings.fontSize;
-  drawGridLines();
 };
 

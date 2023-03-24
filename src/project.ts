@@ -27,8 +27,8 @@ class Project {
       return; // wow that was easy
     }
 
-    App.canvas.viewport.radius *= scaleFactor;
-    App.canvas.updateTransforms();
+    App.viewport.radius *= scaleFactor;
+    App.viewport.updateTransforms();
     
     // have to go in and update all the units....
     const nodes = App.ecs.getComponents(PhysNode);

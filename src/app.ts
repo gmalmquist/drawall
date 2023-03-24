@@ -7,10 +7,15 @@ class App {
   public static readonly actions = new UserActions();
   public static readonly keybindings = Keybindings.defaults();
   public static readonly ui = new UiState();
+  public static readonly viewport = new Viewport();
   public static readonly canvas = new Canvas2d(
-    document.getElementById('main-canvas') as HTMLCanvasElement)
-  public static readonly background = new VectorCanvas(
-    document.getElementById('background-svg')!);
+    document.getElementById('main-canvas') as HTMLCanvasElement,
+    true,
+  );
+  public static readonly background = new Canvas2d(
+    document.getElementById('back-canvas') as HTMLCanvasElement,
+    false,
+  );
   public static readonly foreground = new VectorCanvas(
     document.getElementById('foreground-svg')!);
   public static readonly settings = new Settings();
@@ -42,22 +47,22 @@ class App {
   }
 
   static init() {
+    App.viewport.setup();
     App.background.setup();
+    App.canvas.setup();
     App.foreground.setup();
     App.tools.setup();
     App.actions.setup();
     App.gui.setup();
     App.ui.setup();
-    setupCanvas();
 
     // register systems
     App.ecs.registerSystem(Recycler);
 
-    // this renderer has to come before
-    // the other ones, bc it clears the
-    // canvas.
-    App.ecs.registerSystem(RenderCanvas);
+    App.ecs.registerSystem(GridRenderer);
 
+    // nb: order matters for these; it determines the
+    // draw order
     App.ecs.registerSystem(AxisConstraintRenderer);
     App.ecs.registerSystem(AngleRenderer);
     App.ecs.registerSystem(WallRenderer);
@@ -77,12 +82,12 @@ class App {
     Time.tick();
     // nb: order matters, mostly bc it affects draw order
     // for things like tool actions.
+    App.background.update();
+    App.canvas.update();
+    App.foreground.update();
     App.ecs.update();
     App.ui.update();
     App.tools.update();
-
-    App.background.update();
-    App.foreground.update();
   }
 
   static start() {

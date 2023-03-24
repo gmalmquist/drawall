@@ -26,15 +26,15 @@ class PanTool extends Tool {
         });
         // have to save original transformations
         return ({
-          origin: App.canvas.viewport.origin,
-          project: App.canvas.viewport.project,
-          unproject: App.canvas.viewport.unproject,
+          origin: App.viewport.origin,
+          project: App.viewport.project,
+          unproject: App.viewport.unproject,
         });
       },
       onUpdate: (e, context) => {
         const { origin, project, unproject } = context;
-        App.canvas.viewport.origin = origin.minus(unproject.vec(e.delta.get('screen')));
-        App.canvas.updateTransforms();
+        App.viewport.origin = origin.minus(unproject.vec(e.delta.get('screen')));
+        App.viewport.updateTransforms();
         return context;
       },
       onEnd: (e, context) => {
