@@ -20,19 +20,18 @@ class Keybindings {
     const kb = new Keybindings();
     // bind common "default tool" hotkeys from various
     // other cad and graphical apps
-    kb.bind('s').to('pointer tool');
-    kb.bind('a').to('pointer tool');
-    kb.bind(' ').to('pointer tool');
-    kb.bind('Escape').to('pointer tool');
+    kb.bind('s').to('pointer tool'); // matches inkscape hotkey
+    kb.bind(' ').to('pointer tool'); // matches sketchup hotkey
+    kb.bind('Escape').to('pointer tool'); // nearly universal convention
+    kb.bind('h').to('pan tool'); // matches sketchup hotkey
     kb.bind('r').to('room tool');
-    kb.bind('p').to('pan tool');
+    kb.bind('t').to('ruler tool'); // 't' as in tape measure, matches sketchup
     kb.bind('j').to('joint tool');
+    kb.bind('n').to('joint tool'); // matches inkscape hotkey
     kb.bind('Shift', '%').to('toggle-snap');
     kb.bind('k').to('toggle-kinematics');
-    kb.bind('L').to('loop-select');
-    kb.bind('Control', 'l').to('loop-select');
-    kb.bind('A').to('select-all');
-    kb.bind('Control', 'a').to('select-all');
+    kb.bind('Control', 'l').to('loop-select'); // matches blender
+    kb.bind('Control', 'a').to('select-all'); // nearly universal convention lol
     return kb;
   }
 

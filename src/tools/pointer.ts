@@ -108,18 +108,17 @@ class PointerTool extends SnappingTool {
     this.events.onMouse('move', e => {
       if (App.ui.dragging) return;
 
-      const clickable = App.ui.getHandleAt(e.position, h => h.clickable && h.hoverable);
-      if (clickable !== null) {
-        const c = clickable.getContextualCursor() || this.cursor;
-        App.pane.style.cursor = clickable.getContextualCursor() || this.cursor;
-        this.setHovered(clickable);
+      const handle = App.ui.getHandleAt(e.position, h => h.selectable && h.hoverable);
+      if (handle?.clickable) {
+        const c = handle.getContextualCursor() || this.cursor;
+        App.pane.style.cursor = handle.getContextualCursor() || this.cursor;
+        this.setHovered(handle);
         return;
       }
 
-      const draggable = App.ui.getHandleAt(e.position, h => h.draggable && h.hoverable);
-      if (draggable !== null) {
-        App.pane.style.cursor = draggable.getContextualCursor() || this.cursor;
-        this.setHovered(draggable);
+      if (handle?.draggable) {
+        App.pane.style.cursor = handle.getContextualCursor() || this.cursor;
+        this.setHovered(handle);
         return;
       }
 

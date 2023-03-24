@@ -2,7 +2,9 @@ type ToolName = 'none'
   | 'pointer tool'
   | 'room tool'
   | 'joint tool'
-  | 'pan tool';
+  | 'pan tool'
+  | 'ruler tool'
+;
 
 abstract class Tool {
   public readonly events = new UiEventDispatcher(
@@ -137,6 +139,7 @@ class Tools {
     .addSingle('pointer tool')
     .addSingle('pan tool')
     .addSingle('room tool')
+    .addSingle('ruler tool')
     .addSingle('joint tool')
   ;
 
@@ -216,6 +219,7 @@ class Tools {
     });
 
     if (tools.length === 1) {
+      button.tooltip = this.getTooltip(group.tools[0]!);
       return; // don't need to add group options.
     }
   }
@@ -223,6 +227,15 @@ class Tools {
   private createToolButton(tool: Tool): HTMLElement {
     const button = new IconButton(tool.name, tool.icon);
     return button.element;
+  }
+
+  private getTooltip(tool: ToolName): string {
+    const keybinds = App.keybindings.values()
+      .filter(kb => kb.action === tool)
+      .map(kb => kb.stroke.keys.join('+'))
+      .join(' or ');
+    if (keybinds.length === 0) return tool;
+    return `${tool} (${keybinds})`;
   }
 }
 

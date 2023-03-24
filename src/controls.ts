@@ -148,6 +148,7 @@ class AutoForm {
     form.verticalAlign = 'stretch';
     for (const field of this.fields) {
       const inflated = this.inflateField(field);
+      inflated.element.tooltip = field.tooltip || field.label || field.name;
       const id = AutoForm.fieldId(field);
       this.uiMap.set(id, inflated);
       this.updateUi(field);
@@ -361,6 +362,7 @@ interface AutoFieldBase<V> {
   label?: string;
   value: Ref<V>;
   enabled?: Ref<boolean>;
+  tooltip?: string;
 }
 
 interface AutoFieldNumber extends AutoFieldBase<number> {

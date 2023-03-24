@@ -11,6 +11,8 @@ const Icons = {
   panTool: iconUrl('grab.svg'),
   roomTool: iconUrl('draw-room.svg'),
   jointTool: iconUrl('joint.svg'),
+  rulerTool: iconUrl('ruler.svg'),
+  rulerCursor: iconUrl('ruler-cursor.svg'),
   angleLocked: iconUrl('angle-locked.svg'),
   angleUnlocked: iconUrl('angle-unlocked.svg'),
   posLocked: iconUrl('pos-locked.svg'),

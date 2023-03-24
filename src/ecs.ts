@@ -231,10 +231,21 @@ class Entity {
 }
 
 class EntityRefImpl<T> {
+  private readonly _entities: () => readonly Entity[];
+
   constructor(
     private readonly getter: () => T,
-    private readonly entities: readonly Entity[],
+    entities: (readonly Entity[]) | (() => readonly Entity[]),
   ) {
+    if (typeof entities === 'function') {
+      this._entities = entities;
+    } else {
+      this._entities = () => entities;
+    }
+  }
+
+  private get entities(): readonly Entity[] {
+    return this._entities();
   }
 
   get isAlive(): boolean {
@@ -257,6 +268,13 @@ class EntityRefImpl<T> {
     return new EntityRefImpl(
       () => f(this.getter()),
       this.entities,
+    );
+  }
+
+  flatMap<U>(f: (x: T) => EntityRef<U>): EntityRef<U> {
+    return new EntityRefImpl(
+      () => f(this.getter()).unwrap()!,
+      () => [...this.entities, ...(this.isAlive ? f(this.getter()).entities : [])],
     );
   }
 

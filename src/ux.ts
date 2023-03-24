@@ -33,7 +33,7 @@ interface HandleProps {
   onDelete?: () => 'keep' | 'kill';
 }
 
-type Cursor = 'default' | 'none' | 'help' | 'context-menu'
+type CursorBuiltin = 'default' | 'none' | 'help' | 'context-menu'
   | 'pointer' | 'progress' | 'wait' | 'cell' | 'crosshair'
   | 'text' | 'vertical-text' | 'alias' | 'copy' | 'move'
   | 'no-drop' | 'grab' | 'grabbing' | 'all-scroll' | 'col-resize'
@@ -41,6 +41,16 @@ type Cursor = 'default' | 'none' | 'help' | 'context-menu'
   | 'ne-resize' | 'nw-resize' | 'se-resize' | 'sw-resize'
   | 'ew-resize' | 'ns-resize' | 'nesw-resize' | 'nwse-resize'
   | 'zoom-in' | 'zoom-out';
+
+type CursorCustom = `url('${string}')` | `url('${string}') ${number} ${number}`;
+
+type CursorSingle = CursorBuiltin | CursorCustom; 
+
+type CursorWithFallback = `${CursorSingle}, ${CursorSingle}`;
+
+type Cursor = CursorSingle | CursorWithFallback;
+
+
 
 const getResizeCursor = (direction: Vector, bidirectional: boolean = true): Cursor => {
   const dir = direction.get('screen');
@@ -71,9 +81,10 @@ const getResizeCursor = (direction: Vector, bidirectional: boolean = true): Curs
 
 
 class Form extends Component {
-  private factory: (() => AutoForm) | null = null;
-
-  constructor(entity: Entity) {
+  constructor(
+    entity: Entity,
+    private factory: (() => AutoForm) | null = null,
+  ) {
     super(entity);
   }
 
@@ -295,7 +306,7 @@ interface UiKeyEvent {
   preventDefault: () => void;
 }
 
-interface UiDragListener<C> {
+interface UiDragListener<C extends Not<unknown, null | undefined>> {
   onStart: (event: UiDragEvent) => C;
   onUpdate: (event: UiDragEvent, context: C) => void;
   onEnd: (event: UiDragEvent, context: C) => void;
@@ -470,7 +481,6 @@ class UiState {
     distanceDragged: Distance(0, 'screen'),
   };
 
-  private _selection: Set<Handle> = new Set();
   private keysPressed = new DefaultMap<string, boolean>(() => false);
   private swappedTool: ToolName | null = null;
   private snapAxes: SnapAxes | null = null;
@@ -561,6 +571,15 @@ class UiState {
     this.updateForms();
   }
 
+  select(...handles: Handle[]) {
+    if (handles.every(h => h.isSelected)) return;
+    if (this.multiSelecting) {
+      this.addSelection(...handles);
+    } else {
+      this.setSelection(...handles);
+    }
+  }
+
   loopSelect() {
     const collected = new Set<Handle>();
     const frontier = [...this.selection];
@@ -587,7 +606,7 @@ class UiState {
   }
 
   deleteSelected() {
-    const selected = new Set(this._selection);
+    const selected = this.selection;
     if (selected.size === 0) {
       return;
     }

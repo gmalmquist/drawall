@@ -248,7 +248,6 @@ class Wall extends Component implements Solo {
     entity.add(LengthConstraint,
       () => this.src.entity.only(PhysNode),
       () => this.dst.entity.only(PhysNode),
-      100,
     );
 
     entity.add(MinLengthConstraint,
@@ -443,7 +442,7 @@ class WallJoint extends Component {
         this.pos = p;
         entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
       },
-      priority: 1,
+      priority: 2,
       snapping: {
         snapByDefault: false,
         allowLocal: true,
@@ -740,10 +739,8 @@ class LengthConstraint extends Constraint {
     entity: Entity,
     private readonly getSrc: () => PhysNode,
     private readonly getDst: () => PhysNode,
-    length: number,
   ) {
     super(entity);
-    this.targetLength.set(length);
     this.enabled = false;
 
     this.entity.add(Form).setFactory(() => {
