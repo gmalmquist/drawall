@@ -19,6 +19,7 @@ class RulerTool extends Tool {
     this.events.addDragListener<Ruler>({
       onStart: (e) => {
         const ruler = App.ecs.createEntity().add(Ruler);
+        App.ui.setSelection(ruler.entity.only(Handle));
         ruler.start.with(s => s.dragTo(e.start));
         ruler.end.with(s => s.dragTo(e.position));
         return ruler;
@@ -72,11 +73,39 @@ class RulerEndpoint extends PhysNode implements Solo {
       position: entity.ecs.createEntity().add(PhysNode).ref(),
     };
     
-    entity.add(Handle, {
-      priority: 1,
-      clickable: false,
+    const handle = entity.add(Handle, {
+      priority: 2,
       getPos: () => this.pos,
       setPos: p => this.dragTo(p),
+      distance: p => {
+        const attach = this.attachment;
+        const position = this.posRef.unwrap();
+        if (position === null) return Distance(Number.POSITIVE_INFINITY, 'screen');
+        if (attach.kind === 'vertex') {
+          return Vectors.between(p, position).mag()
+            .minus(this.handleRingRadius).abs();
+        }
+        if (attach.kind === 'edge') {
+          return attach.edge.flatMap(e => e.edge).map(edge => {
+            const w = this.handlebarWidth;
+            const offset = this.handlebarOffset;
+            return new SpaceEdge(
+              position.splus(w.scale(0.5), edge.tangent).plus(offset),
+              position.splus(w.scale(-0.5), edge.tangent).plus(offset),
+            ).distance(p);
+          }).or(Vectors.between(p, position).mag());
+        }
+        if (attach.kind === 'canvas') {
+          return this.ruler.flatMap(r => r.edge).map(edge => {
+            const w = this.handlebarWidth;
+            return new SpaceEdge(
+              position.splus(w.scale(0.5), edge.normal),
+              position.splus(w.scale(-0.5), edge.normal)
+            ).distance(p);
+          }).or(Vectors.between(p, position).mag());
+        }
+        return impossible(attach);
+      },
       onDelete: () => {
         this.ruler.map(x => x.entity).with(x => x.destroy());
         this.twin.map(x => x.entity).with(x => x.destroy());
@@ -84,15 +113,41 @@ class RulerEndpoint extends PhysNode implements Solo {
         return 'kill';
       },
     });
+
+    handle.events.onMouse('down', e => {
+      this.ruler.with(r => {
+        const h = r.entity.only(Handle);
+        h.selected = true;
+      });
+    });
+
+    handle.events.onMouse('move', e => {
+      this.ruler.with(r => {
+        const h = r.entity.only(Handle);
+        h.hovered = true;
+      });
+    });
   }
 
   override addForce(force: Vector) {
     const attach = this.attachment;
-    if (attach.kind === 'canvas' || attach.kind === 'vertex') {
+    if (attach.kind === 'canvas') {
+      attach.position.with(p => p.addForce(force));
+      return;
+    }
+    if (attach.kind === 'vertex') {
+      if (this.twin.map(twin => twin.attachment.kind === 'canvas').or(false)) {
+        this.twin.with(twin => twin.addForce(force.neg()));
+        return;
+      }
       attach.position.with(p => p.addForce(force));
       return;
     }
     if (attach.kind === 'edge') {
+      if (this.twin.map(twin => twin.attachment.kind === 'canvas').or(false)) {
+        this.twin.with(twin => twin.addForce(force.neg()));
+        return;
+      }
       attach.edge.with(e => e.addForce(force));
       return;
     }
@@ -110,17 +165,48 @@ class RulerEndpoint extends PhysNode implements Solo {
     return pos;
   }
 
+  get handlebarOffset(): Vector {
+    if (this.attachment.kind !== 'edge') {
+      return Vector(Vec.ZERO, 'screen');
+    }
+    const rulerMidpoint = this.ruler.flatMap(r => r.edge).map(e => e.midpoint).unwrap();
+    if (rulerMidpoint === null) {
+      return Vector(Vec.ZERO, 'screen');
+    }
+
+    const other = this.attachment.edge.flatMap(e => e.edge).unwrap()!;
+    const flip = other.normal.dot(Vectors.between(this.pos, rulerMidpoint)).sign;
+    return other.normal.scale(flip).scale(Distance(7, 'screen'));
+  }
+
+  get handleRingRadius(): Distance {
+    return Distance(20, 'screen');
+  }
+
+  get handlebarWidth(): Distance {
+    const edge = this.ruler.flatMap(ruler => ruler.edge).unwrap();
+    if (edge === null) return Distance(0, 'screen');
+
+    const handlebarWidth = Distance(100, 'screen').to('model')
+      .min(edge.length.scale(0.3));
+
+    if (this.attachment.kind === 'edge') {
+      const other = this.attachment.edge.flatMap(e => e.edge).unwrap();
+      if (other !== null) {
+        return handlebarWidth.min(other.length.scale(0.75));
+      }
+    }
+    return handlebarWidth;
+  }
+
   dragTo(pos: Position) {
     // this is different from just a straightforward set pos = p,
     // because we might attach to a wall something.
 
     const filter = (handle: Handle): boolean => ( 
-      handle.entity !== this.entity
-      && handle.entity !== this.twin.map(t => t.entity).unwrap()
-      && handle.entity !== this.ruler.map(r => r.entity).unwrap()
-      && !this.twin.map(t => t.isAttachedTo(handle.entity)).or(false)
+      !handle.entity.has(RulerEndpoint) && !handle.entity.has(Ruler)
     );
-      
+
     const vertex = App.ui.getHandleAt(
       pos, 
       handle => filter(handle) && handle.entity.has(PhysNode),
@@ -206,11 +292,12 @@ class RulerEndpoint extends PhysNode implements Solo {
               // give up and use our midpoint.
               return edge.midpoint;
             }
-            const ray = new SpaceRay(twinEdge.lerp(twin.attachment.at), twinEdge.normal);
-            const hit = ray.intersection(edge);
-            if (hit === null) return edge.midpoint;
-            const at = clamp01(edge.unlerp(hit.point));
-            return edge.lerp(at); 
+            //const ray = new SpaceRay(twinEdge.lerp(twin.attachment.at), twinEdge.normal);
+            //const hit = ray.intersection(edge);
+            //if (hit === null) return edge.midpoint;
+            //const at = clamp01(edge.unlerp(hit.point));
+            //return edge.lerp(at);
+            return edge.closestPoint(twinEdge.lerp(twin.attachment.at));
           }
           if (twin.attachment.kind === 'vertex' || twin.attachment.kind === 'canvas') {
             const position = twin.attachment.position.map(p => p.pos).unwrap();
@@ -287,21 +374,53 @@ class Ruler extends Component implements Solo {
 
     this.phys = entity.add(PhysEdge, () => this.start, () => this.end).ref();
 
-    entity.add(Handle, {
-      getPos: () => this.phys.flatMap(e => e.edge).map(e => e.midpoint)
-        .or(Position(Point.ZERO, 'screen')),
-      setPos: p => { /* todo */ },
-    });
-
     entity.add(
       LengthConstraint,
       () => this.start.unwrap()!,
       () => this.end.unwrap()!,
     );
+
+    const handle = entity.add(Handle, {
+      getPos: () => this.phys.flatMap(e => e.edge)
+        .map(e => e.midpoint)
+        .or(Position(Point.ZERO, 'screen')),
+      setPos: p => { /* todo */ },
+      distance: p => this.phys.flatMap(e => e.edge)
+        .map(e => e.distance(p))
+        .or(Distance(Number.POSITIVE_INFINITY, 'screen')),
+    });
+
+    handle.events.addDragListener({
+      onStart: e => {
+        const edge = this.phys.flatMap(phys => phys.edge).unwrap();
+        if (edge === null) {
+          return null;
+        }
+        const start = this.start.unwrap()!;
+        const end = this.end.unwrap()!;
+        return {
+          start,
+          end,
+          srcDelta: Vectors.between(e.start, edge.src),
+          dstDelta: Vectors.between(e.start, edge.dst),
+        };
+      },
+      onUpdate: (e, { start, end, srcDelta, dstDelta }) => {
+        start.dragTo(e.position.plus(srcDelta));
+        end.dragTo(e.position.plus(dstDelta));
+      },
+      onEnd: (e, nodes) => {
+      },
+    });
   }
 
   public get edge(): EntityRef<SpaceEdge> {
     return this.phys.flatMap(e => e.edge);
+  }
+
+  tearDown() {
+    this.start.with(x => x.entity.destroy());
+    this.end.with(x => x.entity.destroy());
   }
 }
 
@@ -314,7 +433,11 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
     if (edge === null) {
       continue;
     }
-   
+  
+    const rulerActive = ruler.entity.ref(r => r.only(Handle))
+      .map(h => h.isActive)
+      .or(false);
+
     const distance = edge.length.get('model');
 
     const roundAmount = (a: Amount): Amount => ({ value: Math.round(a.value), unit: a.unit });
@@ -334,35 +457,86 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
 
     App.canvas.text({
       text: distanceLabel,
-      fill: 'black',
+      fill: rulerActive ? 'black' : 'grey',
       point: edge.midpoint,
       align: 'center',
       baseline: 'middle',
       shadow: hasError ? PINK : undefined,
     });
 
+    const primaryColor = BLUE;
+
     const fontSize = App.settings.fontSize;
     const labelGap = Distance(fontSize, 'screen').to('model');
+    const endpointGap = Distance(14, 'screen').to('model');
 
-    App.canvas.lineWidth = 1;
-    App.canvas.strokeStyle = 'black';
-    App.canvas.setLineDash([10, 10]);
-    App.canvas.strokeLine(edge.src, edge.midpoint.splus(labelGap, edge.tangent.neg()));
-    App.canvas.strokeLine(edge.dst, edge.midpoint.splus(labelGap, edge.tangent));
+    App.canvas.lineWidth = rulerActive ? 2 : 1;
+    App.canvas.strokeStyle = rulerActive ? primaryColor : 'gray';
+    App.canvas.setLineDash(constraint.enabled ? [] : [5, 3]);
+    App.canvas.strokeLine(
+      edge.src.splus(endpointGap, edge.tangent),
+      edge.midpoint.splus(labelGap, edge.tangent.neg()),
+    );
+    App.canvas.strokeLine(
+      edge.dst.splus(endpointGap, edge.tangent.neg()),
+      edge.midpoint.splus(labelGap, edge.tangent),
+    );
+
+    const renderEndpoint = (endpoint: RulerEndpoint) => {
+      const endpointActive = rulerActive || endpoint.entity.ref(r => r.only(Handle))
+        .map(h => h.isActive)
+        .or(false);
+      App.canvas.strokeStyle = endpointActive ? primaryColor : 'gray';
+      const handlebarWidth = endpoint.handlebarWidth;
+
+      const position = endpoint.posRef.unwrap();
+      if (position === null) {
+        return;
+      }
+
+      const attachment = endpoint.attachment;
+
+      if (attachment.kind === 'canvas') {
+        App.canvas.strokeLine(
+          position.splus(handlebarWidth.div(2), edge.normal),
+          position.splus(handlebarWidth.div(2), edge.normal.neg()),
+        );
+        return;
+      }
+
+      if (attachment.kind === 'edge') {
+        const other = attachment.edge.flatMap(e => e.edge).unwrap();
+        if (other === null) return;
+
+        const inward = other.normal.dot(Vectors.between(position, edge.midpoint)).sign < 0
+          ? other.normal.neg() : other.normal;
+
+        const offset1 = inward.scale(endpointGap.scale(0.5));
+        const offset2 = inward.scale(endpointGap.scale(0.5).plus(Distance(3, 'screen')));
+
+        App.canvas.setLineDash([]);
+        App.canvas.strokeLine(
+          position.splus(handlebarWidth.div(2), other.tangent).plus(offset1),
+          position.splus(handlebarWidth.div(2), other.tangent.neg()).plus(offset1),
+        );
+        App.canvas.strokeLine(
+          position.splus(handlebarWidth.div(2.5), other.tangent).plus(offset2),
+          position.splus(handlebarWidth.div(2.5), other.tangent.neg()).plus(offset2),
+        );
+        return;
+      }
+
+      if (attachment.kind === 'vertex') {
+        App.canvas.strokeCircle(position, endpoint.handleRingRadius);
+        return;
+      }
+
+      return impossible(attachment);
+    };
+
+    ruler.start.with(renderEndpoint);
+    ruler.end.with(renderEndpoint);
     App.canvas.setLineDash([]);
-
-    const handlebarWidth = Distance(100, 'screen').to('model')
-      .min(edge.length.scale(0.3));
-
-    const start = ruler.start.unwrap()!;
-    App.canvas.strokeLine(
-      edge.src.splus(handlebarWidth.div(2), edge.normal),
-      edge.src.splus(handlebarWidth.div(2), edge.normal.neg()),
-    );
-    App.canvas.strokeLine(
-      edge.dst.splus(handlebarWidth.div(2), edge.normal),
-      edge.dst.splus(handlebarWidth.div(2), edge.normal.neg()),
-    );
   }
 };
 

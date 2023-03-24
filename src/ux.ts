@@ -135,7 +135,6 @@ class Handle extends Component implements Solo {
   public readonly events = new UiEventDispatcher(Handle);
 
   private readonly distanceFunc: (p: Position) => Distance;
-  private _dragging: boolean = false;
   private _hovered: boolean = false;
   private _cursor: () => Cursor | null;
   private readonly getPos: () => Position;
@@ -237,10 +236,6 @@ class Handle extends Component implements Solo {
     return this._cursor();
   }
 
-  get isDragging(): boolean {
-    return this._dragging;
-  }
-
   get isHovered(): boolean {
     return this._hovered;
   }
@@ -250,7 +245,7 @@ class Handle extends Component implements Solo {
   }
 
   get isActive(): boolean {
-    return this.isDragging || this.isHovered || this.isSelected;
+    return this.isHovered || this.isSelected;
   }
 
   set hovered(h: boolean) {
@@ -307,7 +302,7 @@ interface UiKeyEvent {
 }
 
 interface UiDragListener<C extends Not<unknown, null | undefined>> {
-  onStart: (event: UiDragEvent) => C;
+  onStart: (event: UiDragEvent) => C | null;
   onUpdate: (event: UiDragEvent, context: C) => void;
   onEnd: (event: UiDragEvent, context: C) => void;
 }

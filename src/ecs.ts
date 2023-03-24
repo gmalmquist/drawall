@@ -272,6 +272,10 @@ class EntityRefImpl<T> {
   }
 
   flatMap<U>(f: (x: T) => EntityRef<U>): EntityRef<U> {
+    const collectEntities = (): Entity[] => {
+      const results = new Set(this.entities);
+      return Array.from(results);
+    };
     return new EntityRefImpl(
       () => f(this.getter()).unwrap()!,
       () => [...this.entities, ...(this.isAlive ? f(this.getter()).entities : [])],
