@@ -640,7 +640,11 @@ class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
   }
 
   protected override format(value: Amount): string {
-    return App.project.displayUnit.format(value);
+    const formatted = App.project.displayUnit.format(value);
+    // for feet & inches in particular, we can end up getting
+    // a different unit here than just the display unit.
+    this.lastUnit = Units.distance.get(Units.distance.parse(formatted)!.unit)!;
+    return formatted;
   }
 
   protected override parse(input: string): InputParse<Amount> {
@@ -648,16 +652,22 @@ class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
     if (raw === null) {
       return { error: `Could not parse '${input}'` };
     }
+    const amount: Amount = raw.unit === UNITLESS ? this.inferUnit(raw.value) : raw;
+    this.lastUnit = Units.distance.get(amount.unit)!;
 
-    const amount: Amount = raw.unit === UNITLESS
-      ? App.project.displayUnit.newAmount(raw.value)
-      : raw;
     const au = Units.distance.get(amount.unit)!;
     const min = this.minValue;
     const max = this.maxValue;
     if (min !== null && amount.value < au.from(min).value) return { value: min };
     if (max !== null && amount.value > au.from(max).value) return { value: max };
     return { value: amount };
+  }
+
+  private inferUnit(value: number) {
+    if (this.lastUnit !== null) {
+      return this.lastUnit.newAmount(value);
+    }
+    return App.project.displayUnit.newAmount(value);
   }
 }
 

@@ -65,12 +65,10 @@ class Viewport {
       this.radius = Math.max(10, this.radius + Math.sign(wheel.deltaY) * 10);
       this.updateTransforms();
     });
-    App.settings.fontSizeRef.onChange(_ => {
-      // hmm, this is sort of a hack. when the font size
-      // changes, it doesn't *actually* change the viewport,
-      // but it _does_ require the grid to be redrawn.
-      this._changed = true;
-    });
+    const markDirty = (_: any) => { this._changed = true; };
+    App.settings.fontSizeRef.onChange(markDirty);
+    App.project.gridSpacingRef.onChange(markDirty);
+    App.project.displayUnitRef.onChange(markDirty);
   }
 
  public updateTransforms() {
@@ -295,76 +293,186 @@ interface TextDrawProps {
   baseline?: CanvasTextBaseline;
 }
 
+class Grid extends Component implements Solo {
+  public readonly [SOLO] = true;
+
+  private readonly origin = Position(Point.ZERO, 'model');
+  private _dirty: boolean = true;
+  private _spacing: Distance = Distance(1, 'model');
+  private _horizontal: Vector = Vector(Axis.X, 'model');
+  private _vertical: Vector = Vector(Axis.Y, 'model');
+  private _displayDecimals: number = 0;
+
+  constructor(entity: Entity) {
+    super(entity);
+    App.project.gridSpacingRef.onChange(gs => this.markDirty());
+    App.project.displayUnitRef.onChange(gs => this.markDirty());
+    App.project.modelUnitRef.onChange(gs => this.markDirty());
+  }
+
+  get spacing(): Distance { return this._spacing; }
+  get horizontalSpan(): Vector { return this._horizontal; }
+  get verticalSpan(): Vector { return this._vertical; }
+  get displayDecimals(): number { return this._displayDecimals; }
+
+  get dirty(): boolean {
+    return this._dirty;
+  }
+
+  markDirty() {
+    this._dirty = true;
+  }
+
+  update() {
+    this._dirty = false;
+
+    this._spacing = Distance(
+      App.project.modelUnit.from(App.project.gridSpacing).value,
+      'model',
+    );
+
+    this._horizontal = Vector(Axis.X, 'screen').to('model').unit().scale(this.spacing);
+    this._vertical = Vector(Axis.Y, 'screen').to('model').unit().scale(this.spacing);
+    this._displayDecimals = this.calcDisplayDecimals();
+  }
+
+  snap(position: Position): Position {
+    return position.to('model').trunc(this.spacing);
+  }
+
+  snapDelta(position: Position): Vector {
+    return Vectors.between(position, this.snap(position));
+  }
+
+  snapHorizontal(position: Position): Position {
+    const delta = this.snapDelta(position);
+    return position.plus(delta.onAxis(this._horizontal));
+  }
+
+  snapVertical(position: Position): Position {
+    const delta = this.snapDelta(position);
+    return position.plus(delta.onAxis(this._vertical));
+  }
+
+  getClosestRow(position: Position): number {
+    const delta = Vectors.between(this.origin, position.to('model'));
+    return Math.round(delta.dot(this._vertical.unit()).div(this.spacing));
+  }
+
+  getClosestColumn(position: Position): number {
+    const delta = Vectors.between(this.origin, position.to('model'));
+    return Math.round(delta.dot(this._horizontal.unit()).div(this.spacing));
+  }
+
+  getPointAt(row: number, col: number): Position {
+    return this.origin 
+      .splus(row, this._vertical)
+      .splus(col, this._horizontal);
+  }
+
+  formatLabel(index: number, decimals?: number): string {
+    const { value, unit } = App.project.gridSpacing;
+    return App.project.displayUnit.format(
+      { value: value * index, unit },
+      typeof decimals !== 'undefined' ? decimals : this.displayDecimals,
+    );
+  }
+
+  private calcDisplayDecimals(): number {
+    const du = App.project.displayUnit;
+    const spacing = App.project.gridSpacing;
+    const enough = (decimals: number): boolean => {
+      const multiples = [0, 1, 2, 3];
+      const labels = new Set<string>(
+        multiples.map(m => this.formatLabel(m, decimals)),
+      );
+      return labels.size === multiples.length;
+    };
+    let decimals = 0;
+    while (!enough(decimals) && decimals < 6) {
+      decimals++;
+    }
+    return decimals;
+  }
+
+  static getGrid(): Grid {
+    const grids = App.ecs.getComponents(Grid);
+    if (grids.length === 0) {
+      return App.ecs.createEntity().add(Grid);
+    }
+    if (grids.length > 1) {
+      throw new Error('There should never be more than one grid!');
+    }
+    return grids[0]!;
+  }
+}
+
 const GridRenderer = (ecs: EntityComponentSystem) => {
-  if (!App.settings.showGrid.get()) return;
-  if (!App.viewport.changed) return;
+  const grid = Grid.getGrid();
+
+  if (!App.viewport.changed && !grid.dirty) return;
   App.viewport.resetChanged();
+  grid.update();
+
+  // we still want to make sure to update the grid if necessary,
+  // because it's used for snapping and stuff, even if we're not
+  // rendering it.
+  if (!App.settings.showGrid.get()) return;
 
   const c = App.background;
   c.clear();
 
-  // render grid
-  const gridSpacing = App.project.modelUnit.from(App.project.gridSpacing).value;
-  const left = Vector(new Vec(-1, 0), 'screen').get('model').unit();
-  const right = Vector(new Vec(1, 0), 'screen').get('model').unit();
-  const up = Vector(new Vec(0, -1), 'screen').get('model').unit();
-  const down = Vector(new Vec(0, 1), 'screen').get('model').unit();
 
-  const dirMinus = left.plus(up);
-  const dirPlus = right.plus(down);
-  const topLeft = Position(Point.ZERO, 'screen').get('model')
-    .trunc(gridSpacing)
-    .splus(gridSpacing, dirMinus);
-  const bottomRight = Position(new Point(c.width, c.height), 'screen').get('model')
-    .trunc(gridSpacing)
-    .splus(gridSpacing, dirPlus);
+  const columns = Math.ceil(
+    Distance(App.viewport.screen_width, 'screen').div(grid.spacing)
+  ) + 1;
+  const rows = Math.ceil(
+    Distance(App.viewport.screen_height, 'screen').div(grid.spacing)
+  ) + 1;
 
-  const axisX = Vector(Axis.X, 'screen');
-  const axisY = Vector(Axis.Y, 'screen');
-
-  const gridX = Vec.between(topLeft, bottomRight).onAxis(axisX.get('model'));
-  const gridY = Vec.between(topLeft, bottomRight).onAxis(axisY.get('model'));
-  const steps = Math.floor(Math.max(gridX.mag(), gridY.mag()) / gridSpacing);
+  const screenOrigin = Position(Point.ZERO, 'screen'); // top-left corner
+  const startRow = grid.getClosestRow(screenOrigin) - 1;
+  const startCol = grid.getClosestColumn(screenOrigin) - 1;
+  const endRow = startRow + rows;
+  const endCol = startCol + columns;
 
   c.lineWidth = 1;
-  c.strokeStyle = '#ccc'; 
-  c.fillStyle = 'black'; 
-  c.textAlign = 'center';
-  c.textBaseline = 'top';
-  for (let i = 0; i <= steps; i++) {
-    const s = gridSpacing * i;
-    const x = topLeft.splus(s, dirPlus.onAxis(axisX.get('model')).unit());
-    c.strokeLine(
-      Position(x, 'model'), 
-      Position(x.plus(gridY), 'model'),
-    );
-    const value = App.project.modelUnit.newAmount(x.trunc().x);
-    const label = App.project.displayUnit.format(value);
+  c.setLineDash([]);
+  c.strokeStyle = '#cccccc'; 
+
+  const textMargin = Distance(10, 'screen');
+
+  for (let i = 0; i < rows; i++) {
+    c.strokeLine(grid.getPointAt(startRow + i, startCol), grid.getPointAt(startRow + i, endCol));
+  }
+
+  for (let i = 0; i < columns; i++) {
+    c.strokeLine(grid.getPointAt(startRow, startCol + i), grid.getPointAt(endRow, startCol + i));
+  }
+
+  const rowLabelOrigin = screenOrigin.splus(textMargin, Vector(Axis.X, 'screen'));
+  for (let i = 1; i < rows; i++) {
+    const row = startRow + i;
     c.text({
-      text: label,
-      point: Position(x, 'model')
-        .onLine(Position(new Point(0, 10), 'screen'), axisX),
+      text: grid.formatLabel(row),
+      point: grid.snapVertical(rowLabelOrigin.splus(i, grid.verticalSpan)),
+      align: 'left',
+      baseline: 'middle',
+      fill: 'black',
     });
   }
-  c.textAlign = 'left';
-  c.textBaseline = 'middle';
-  for (let i = 0; i <= steps; i++) {
-    const s = gridSpacing * i;
-    const y = topLeft.splus(s, dirPlus.onAxis(axisY.get('model')).unit());
-    c.strokeLine(
-      Position(y, 'model'),
-      Position(y.plus(gridX), 'model'),
-    );
-    const value = App.project.modelUnit.newAmount(y.trunc().y);
-    const label = App.project.displayUnit.format(value);
-    if (i > 0) {
-      c.text({
-        text: label,
-        point: Position(y, 'model')
-          .onLine(Position(new Point(10, 0), 'screen'), axisY),
-      });
-    }
+
+  const columnLabelOrigin = screenOrigin.splus(textMargin, Vector(Axis.Y, 'screen'));
+  for (let i = 1; i < columns; i++) {
+    const col = startCol + i;
+    c.text({
+      text: grid.formatLabel(col),
+      point: grid.snapHorizontal(columnLabelOrigin.splus(i, grid.horizontalSpan)),
+      align: 'center',
+      baseline: 'top',
+      fill: 'black',
+    });
   }
-  c.strokeStyle = 'black';
 };
+
 

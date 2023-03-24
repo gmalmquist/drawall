@@ -1166,18 +1166,17 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     if (!App.settings.showLengths.get()) continue;
 
-    const roundAmount = (a: Amount): Amount => ({ value: Math.round(a.value), unit: a.unit });
-
     const constraint = wall.entity.only(LengthConstraint);
     const error = constraint?.enabled ? edge.length.get('model') - constraint.length : 0;
+    const decimals = App.project.displayDecimals;
     const dispLength = App.project.displayUnit.from(
-      roundAmount(App.project.modelUnit.newAmount(edge.length.get('model')))
+      App.project.modelUnit.newAmount(edge.length.get('model'))
     );
     const dispError = App.project.modelUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
     const hasError = Math.abs(dispError.value) > 0;
-    const lengthText = App.project.displayUnit.format(dispLength);
-    const errorTextU = App.project.displayUnit.format(dispError);
+    const lengthText = App.project.displayUnit.format(dispLength, decimals);
+    const errorTextU = App.project.displayUnit.format(dispError, decimals);
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = Distance(App.settings.fontSize/2 + 10, 'screen');

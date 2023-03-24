@@ -1,29 +1,49 @@
 class Project {
   // defines what 1 unit of model space is
-  private _modelUnit: Unit = Units.distance.get('in')!;
+  public readonly modelUnitRef = Refs.of<Unit>(Units.distance.get('in')!, (a, b) => (
+    a.name === b.name
+  ));
 
   // defines what unit is used to render UI labels.
-  public displayUnit: Unit = Units.distance.get('ft')!;
+  public readonly displayUnitRef = Refs.of<Unit>(Units.distance.get('ft')!, (a, b) => (
+    a.name === b.name
+  ));
 
-  private _gridSpacing: Amount = { unit: 'feet', value: 1 };
+  public readonly gridSpacingRef = Refs.of<Amount>({ unit: 'feet', value: 1 }, (a, b) => (
+    a.unit === b.unit && a.value === b.value
+  ));
+
+  public get displayUnit() {
+    return this.displayUnitRef.get();
+  }
+
+  public set displayUnit(unit: Unit) {
+    this.displayUnitRef.set(unit);
+  }
 
   public get gridSpacing() {
-    return this._gridSpacing;
+    return this.gridSpacingRef.get();
   }
 
   public set gridSpacing(amount: Amount) {
-    this._gridSpacing = amount;
+    this.gridSpacingRef.set(amount);
     App.gui.project.reset();
   }
 
+  public get displayDecimals(): number {
+    return Math.round(Math.log10(
+      1.0 / App.project.displayUnit.from(App.project.gridSpacing).value
+    )) + 1;
+  }
+
   public get modelUnit(): Unit {
-    return this._modelUnit;
+    return this.modelUnitRef.get();
   }
 
   public set modelUnit(unit: Unit) {
-    const scaleFactor = unit.from(this._modelUnit.newAmount(1)).value;
+    const scaleFactor = unit.from(this.modelUnitRef.get().newAmount(1)).value;
     if (scaleFactor === 1.0) {
-      this._modelUnit = unit;
+      this.modelUnitRef.set(unit);
       return; // wow that was easy
     }
 
@@ -34,7 +54,7 @@ class Project {
     const nodes = App.ecs.getComponents(PhysNode);
     if (nodes.length === 0) {
       // we got off easy
-      this._modelUnit = unit;
+      this.modelUnitRef.set(unit);
       return;
     }
 
@@ -62,7 +82,7 @@ class Project {
       constraint.length *= scaleFactor;
     }
 
-    this._modelUnit = unit;
+    this.modelUnitRef.set(unit);
   }
 }
 

@@ -543,18 +543,17 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
 
     const distance = edge.length.get('model');
 
-    const roundAmount = (a: Amount): Amount => ({ value: Math.round(a.value), unit: a.unit });
-
     const constraint = ruler.entity.only(LengthConstraint);
     const error = constraint?.enabled ? edge.length.get('model') - constraint.length : 0;
     const dispLength = App.project.displayUnit.from(
-      roundAmount(App.project.modelUnit.newAmount(edge.length.get('model')))
+      App.project.modelUnit.newAmount(edge.length.get('model'))
     );
     const dispError = App.project.modelUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
     const hasError = Math.abs(dispError.value) > 0;
-    const lengthText = App.project.displayUnit.format(dispLength);
-    const errorTextU = App.project.displayUnit.format(dispError);
+    const decimals = App.project.displayDecimals;
+    const lengthText = App.project.displayUnit.format(dispLength, decimals);
+    const errorTextU = App.project.displayUnit.format(dispError, decimals);
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const distanceLabel = hasError ? `${lengthText} (${errorText})` : lengthText;
 

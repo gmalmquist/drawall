@@ -13,33 +13,17 @@ class Amount {
   }
 }
 
-const prettyNum = (num: number): string => {
-  if (num === 0) return '0';
-  const negative = num < 0;
-  const integer = Math.floor(Math.abs(num)).toString();
-  if (integer.indexOf('e') >= 0) {
-    return num.toString(); // its so big we're using scientific notation
-  }
-  const parts = [];
-  if (negative) {
-    parts.push('-');
-  }
-  for (let i = 0; i < integer.length; i++) {
-    parts.push(integer.charAt(i));
-    if (i < integer.length - 1 && (integer.length - i - 1) % 3 === 0) {
-      parts.push(',');
-    }
-  }
-  const fractional = Math.abs(num) - Math.floor(Math.abs(num));
-  if (Math.abs(num) < 0.01) {
-    parts.push(fractional.toString().substring(1));
-  } else if (Math.abs(num) < 1000) {
-    parts.push((Math.floor(fractional * 100)/100).toString().substring(1));
-  }
-  return parts.join('');
+const roundBy = (num: number, decimals: number = 1): number => {
+  if (decimals < 1) return Math.round(num);
+  const s = Math.pow(10, Math.round(decimals));
+  return Math.round(num * s) / s;
 };
 
-type FormatUnit = (amount: Amount) => string;
+const prettyNum = (num: number): string => {
+  return num.toLocaleString();
+};
+
+type FormatUnit = (amount: Amount, decimal?: number) => string;
 type ParseUnit = (...arr: number[]) => Amount | null;
 
 type UnitPatternNumeric = Newtype<string, { readonly _: unique symbol; }>;
@@ -209,12 +193,12 @@ class Unit {
 
   format(amount: Amount, decimals: number = 2): string {
     if (!this.aliases.has(amount.unit)) {
-      return this.format(this.from(amount));
+      return this.format(this.from(amount), decimals);
     }
     if (this._format !== null) {
-      return this._format(amount);
+      return this._format(amount, decimals);
     }
-    const value = Math.round(amount.value * Math.pow(10, decimals)) / Math.pow(10, decimals);
+    const value = roundBy(amount.value, decimals);
     return `${prettyNum(value)} ${this.abbrev}`;
   }
 
@@ -405,11 +389,12 @@ class Units {
     throw new Error(`No conversion path found from ${amount.unit} to ${canonicalTarget}.`);
   }
 
-  format(amount: Amount) {
-    if (!this.units.has(amount.unit)) {
+  format(amount: Amount, decimals: number = 2) {
+    const unit = this.get(amount.unit);
+    if (typeof unit === 'undefined') {
       return `${amount.value} ${amount.unit}`;
     }
-    return this.units.get(amount.unit)!.format(amount);
+    return unit.format(amount, decimals);
   }
 }
 
@@ -432,17 +417,30 @@ Units.distance
     .addAlias('foot')
     .addParser('0\'', x => new Amount(x, 'feet'))
     .addParser('0\'0\"', (feet, inches) => new Amount(feet + inches / 12.0, 'feet'))
-    .setFormat(amount => {
+    .setFormat((amount, decimals) => {
       const feet = Math.floor(amount.value);
-      const inches = 12.0 * (amount.value - feet);
+      // we subtract 1 from the rounding, bc we're
+      // displaying in feet and inches, which is more
+      // precision than 1 decimal point already.
+      const inches = roundBy(
+        12.0 * (amount.value - feet),
+        typeof decimals === 'undefined' ? 0 : decimals - 1,
+      );
+      if (inches >= 12) {
+        // lul, rounding is fun
+        return `${prettyNum(feet+1)}'`;
+      }
       if (inches < 0.001) {
         return `${prettyNum(feet)}'`;
       }
-      return `${prettyNum(feet)}'${Math.round(inches*10)/10.0}"`;
+      if (feet === 0) {
+        return `${prettyNum(inches)}"`;
+      }
+      return `${prettyNum(feet)}'${inches}"`;
     }))
   .add(new Unit('inch', 'in', 'imperial')
     .addParser('0\"', x => new Amount(x, 'inch'))
-    .setFormat(amount => `${prettyNum(amount.value)}"`))
+    .setFormat((amount, decimals) => `${prettyNum(roundBy(amount.value, decimals))}"`))
   .add(new Unit('yard', 'y', 'imperial'))
   .add(new Unit('mile', 'mi', 'imperial'))
   .add(new Unit('light-year', 'ly', 'esoteric'))
@@ -463,9 +461,10 @@ Units.distance
   .add(new Unit('parsec', 'pc', 'esoteric'))
   .add(new Unit('astronomical unit', 'au', 'esoteric'))
   .add(new Unit('smoot', 'smoot', 'esoteric')
-     .setFormat(a => a.value === 1 ? '1 smoot' : `${prettyNum(a.value)} smoots`))
-  .add(new Unit('gwen', 'gwen', 'esoteric')
-     .setFormat(a => a.value === 1 ? '1 gwen' : `${prettyNum(a.value)} gwens`))
+     .setFormat((a, d) => a.value === 1 ? '1 smoot' : `${prettyNum(roundBy(a.value, d))} smoots`))
+  .add(new Unit('gwen', 'gwen', 'esoteric').setFormat((a, d) => {
+    return a.value === 1 ? '1 gwen' : `${prettyNum(roundBy(a.value, d))} gwens`;
+  }))
   .add(UnitConversions.scaling('km', 'm', 1e3))
   .add(UnitConversions.scaling('hm', 'm', 1e2))
   .add(UnitConversions.scaling('dam', 'm', 10))
