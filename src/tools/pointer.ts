@@ -157,12 +157,19 @@ class PointerTool extends SnappingTool {
   override update() {
     const rect = this.selectionRect.get();
     if (rect === null) return;
-    App.foreground.rect(rect, {
-      fill: BLUE,
-      stroke: BLUE,
-      fillOpacity: 0.3,
-      strokeOpacity: 0.6,
-    });
+
+    const palette = this.strictSelect.get() 
+      ? ['hsla(348,79%,81%,0.3)', 'hsla(348,79%,20%,0.3)'] 
+      : ['hsla(196,94%,66%,0.3)', 'hsla(196,94%,20%,0.3)'];
+
+    const [fill, stroke] = palette;
+
+    App.canvas.fillStyle = fill;
+    App.canvas.strokeStyle = stroke;
+    App.canvas.lineWidth = 1;
+    App.canvas.rect(rect);
+    App.canvas.fill();
+    App.canvas.stroke();
   }
 
   private getDrawSelectDispatcher(): UiEventDispatcher {

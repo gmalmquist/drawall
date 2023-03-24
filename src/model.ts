@@ -1166,17 +1166,19 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       active ? -((Time.now * 10) % tickSpacingPx) + tickSpacingPx/2 : 0,
       'screen'
     );
+ 
+    if(active) {
+      for (let i = 0; i < ticks; i++) {
+        const s = 1.0 * i / ticks;
+        const p = edge.lerp(s).splus(offset, edge.tangent).splus(tickHeight.div(-2), edge.normal);
+        const v = edge.vector.unit().scale(tickSize).rotate(tickAngle);
 
-    for (let i = 0; i < ticks; i++) {
-      const s = 1.0 * i / ticks;
-      const p = edge.lerp(s).splus(offset, edge.tangent).splus(tickHeight.div(-2), edge.normal);
-      const v = edge.vector.unit().scale(tickSize).rotate(tickAngle);
-
-      if (active) {
-        const hue = 360 * s;
-        canvas.strokeStyle = `hsl(${hue},100%,50%)`;
+        if (active) {
+          const hue = 360 * s;
+          canvas.strokeStyle = `hsl(${hue},100%,50%)`;
+        }
+        canvas.strokeLine(p, p.plus(v));
       }
-      canvas.strokeLine(p, p.plus(v));
     }
 
     if (!App.settings.showLengths.get()) continue;
