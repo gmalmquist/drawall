@@ -116,6 +116,24 @@ class VectorCanvas implements CanvasApi {
     this.render(path);
   }
 
+  text(text: TextDrawProps) {
+    const element = this.element('text');
+    element.innerHTML = text.text;
+    element.setXY(text.point);
+    element.set('stroke', text.stroke);
+    element.set('fill', text.fill);
+    element.set('font-size', App.settings.fontSize); 
+    const cssStyles = {
+      'text-align': text.align,
+      'text-baseline': text.baseline,
+    };
+
+    element.set('style', Object.entries(cssStyles)
+      .filter(([_, v]) => typeof v !== 'undefined')
+      .map(([k, v]) => `${k}: ${v};`).join(' '));
+    this.render(element);
+  }
+
   private fmtp(point: Position): string {
     const p = point.get('screen').trunc();
     return `${p.x} ${p.y}`;
@@ -170,6 +188,14 @@ class SvgElementWrap {
   constructor(public readonly element: Element) {
   }
 
+  get innerHTML(): string {
+    return this.attributes.get('') || '';
+  }
+
+  set innerHTML(v: string) {
+    this.attributes.set('', v);
+  }
+
   public recycle() {
     this.dirty.clear();
     for (const key of this.attributes.keys()) {
@@ -201,14 +227,29 @@ class SvgElementWrap {
       return;
     }
     this.attributes.set(name, v);
-    this.element.setAttribute(name, v);
+    if (name === '') {
+      // inner html marker
+      this.element.innerHTML = v;
+    } else {
+      this.element.setAttribute(name, v);
+    }
+  }
+
+  public setXY(pos: Position) {
+    const p = pos.get('screen').trunc();
+    this.set('x', p.x);
+    this.set('y', p.y);
   }
 
   public clear(name: string) {
     this.dirty.delete(name);
     if (this.attributes.has(name) && this.attributes.get(name)!.length > 0) {
       this.attributes.delete(name);
-      this.element.removeAttribute(name);
+      if (name === '') {
+        this.element.innerHTML = '';
+      } else {
+        this.element.removeAttribute(name);
+      }
     }
   }
 
