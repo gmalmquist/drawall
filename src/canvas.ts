@@ -65,11 +65,11 @@ class Canvas2d {
     this.g.clearRect(0, 0, this.width + 1, this.height + 1);
   }
 
-  set strokeStyle(style: string) {
+  set strokeStyle(style: string | CanvasGradient) {
     this.g.strokeStyle = style;
   }
 
-  set fillStyle(style: string) {
+  set fillStyle(style: string | CanvasGradient) {
     this.g.fillStyle = style;
   }
 
@@ -203,6 +203,12 @@ class Canvas2d {
     }
     this.g.rotate(-unwrap(angle));
     this.g.translate(-p.x, -p.y);
+  }
+
+  createLinearGradient(src: Position, dst: Position): CanvasGradient {
+    const a = src.get('screen');
+    const b = dst.get('screen');
+    return this.g.createLinearGradient(a.x, a.y, b.x, b.y);
   }
 
   handleResize() {

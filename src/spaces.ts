@@ -190,6 +190,10 @@ class SpaceDistance extends BaseSpaceValue<number> {
     return this.map((a: number, b: number) => a * b, f);
   }
 
+  inverse(): Distance {
+    return this.map(x => 1.0 / x);
+  }
+
   neg(): Distance {
     return this.scale(-1);
   }
@@ -583,6 +587,18 @@ class SpaceEdge {
 
   get midpoint(): Position {
     return this.lerp(0.5);
+  }
+
+  public scale(amount: number | Distance): SpaceEdge {
+    const mid = this.midpoint;
+    const half = Vectors.between(mid, this.dst).scale(amount);
+    return new SpaceEdge(mid.minus(half), mid.plus(half));
+  }
+
+  public rotate(angle: Angle) {
+    const mid = this.midpoint;
+    const half = Vectors.between(mid, this.dst).rotate(angle);
+    return new SpaceEdge(mid.minus(half), mid.plus(half));
   }
 
   public lerp(s: number): Position {

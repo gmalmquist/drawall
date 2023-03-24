@@ -1121,8 +1121,23 @@ const AxisConstraintRenderer = (ecs: EntityComponentSystem) => {
   }
 };
 
+const createRainbow = (edge: SpaceEdge): CanvasGradient => {
+  const gradient = App.canvas.createLinearGradient(edge.src, edge.dst);
+  new Array(100).fill(0).forEach((_, i, arr) => {
+    const s = 1.0 * i / (arr.length - 1);
+    const hue = ((360 * s * 10) + (Time.now * 100.)) % 360; 
+    gradient.addColorStop(s, `hsl(${hue},100%,50%)`)
+  });
+  return gradient;
+};
+
 const WallRenderer = (ecs: EntityComponentSystem) => {
   const canvas = App.canvas;
+
+  const rainbow = createRainbow(new SpaceEdge(
+    Position(Point.ZERO, 'screen'),
+    Position(new Point(canvas.width, canvas.height), 'screen'),
+  ));
 
   const walls = ecs.getComponents(Wall);
   for (const wall of walls) {
@@ -1130,8 +1145,13 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const active = wall.entity.get(Handle).some(h => h.isActive);
    
     const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
+    const wallColor = active ? rainbow : 'black'; 
 
-    const strokeWall = (width: number, color: string, offset: Distance | number = 0) => {
+    const strokeWall = (
+      width: number,
+      offset: Distance | number = 0,
+      color: string | CanvasGradient = wallColor,
+    ) => {
       canvas.strokeStyle = color;
       canvas.lineWidth = width;
       canvas.strokeLine(
@@ -1140,46 +1160,9 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       );
     };
 
-    const tickSpacingPx = 10;
-    const tickSpacing = Distance(tickSpacingPx, 'screen');
-    const tickSize = Distance(10, 'screen');
-    const tickAngle = Angles.fromDegrees(Degrees(30), 'model');
-    const ticks = Math.floor(
-     edge.length.get('screen') / tickSpacing.get('screen')
-    );
-
-    const tickHeight = tickSize.scale(Math.sin(unwrap(tickAngle.get('model'))));
-
-    if (active) {
-      const off = 0;
-      const thpx = tickHeight.get('screen');
-      strokeWall(thpx + 1, BLUE, off);
-      strokeWall(thpx/2 + 1, PINK, off);
-      strokeWall(2, 'white', off);
-    } else {
-      strokeWall(3, 'black', tickHeight.scale(0.5));
-      strokeWall(1, 'black', tickHeight.scale(-0.5));
-      }
-
-    canvas.strokeStyle = 'black';
-    const offset = Distance(
-      active ? -((Time.now * 10) % tickSpacingPx) + tickSpacingPx/2 : 0,
-      'screen'
-    );
- 
-    if(active) {
-      for (let i = 0; i < ticks; i++) {
-        const s = 1.0 * i / ticks;
-        const p = edge.lerp(s).splus(offset, edge.tangent).splus(tickHeight.div(-2), edge.normal);
-        const v = edge.vector.unit().scale(tickSize).rotate(tickAngle);
-
-        if (active) {
-          const hue = 360 * s;
-          canvas.strokeStyle = `hsl(${hue},100%,50%)`;
-        }
-        canvas.strokeLine(p, p.plus(v));
-      }
-    }
+    const thickness = Distance(6, 'screen');
+    strokeWall(3, thickness.scale(0.5));
+    strokeWall(1, thickness.scale(-0.5));
 
     if (!App.settings.showLengths.get()) continue;
 
