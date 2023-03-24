@@ -42,7 +42,6 @@ class App {
   }
 
   static init() {
-    App.tools.setup();
     App.background.setup();
     App.foreground.setup();
     App.tools.setup();
