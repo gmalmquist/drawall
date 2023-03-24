@@ -622,6 +622,7 @@ class SliderInput extends MiniFormInput<number, HTMLInputElement> {
 class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
   public minValue: Amount | null = null;
   public maxValue: Amount | null = null;
+  private lastUnit: Unit | null = null;
 
   constructor() {
     super(document.createElement('input') as HTMLInputElement);
@@ -639,7 +640,7 @@ class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
   }
 
   protected override format(value: Amount): string {
-    return Units.distance.format(value);
+    return App.project.displayUnit.format(value);
   }
 
   protected override parse(input: string): InputParse<Amount> {
@@ -649,7 +650,7 @@ class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
     }
 
     const amount: Amount = raw.unit === UNITLESS
-      ? App.project.modelUnit.newAmount(raw.value)
+      ? App.project.displayUnit.newAmount(raw.value)
       : raw;
     const au = Units.distance.get(amount.unit)!;
     const min = this.minValue;
