@@ -69,6 +69,7 @@ class GUI {
     form.add({
       name: 'Kinematics',
       kind: 'toggle',
+      tooltip: 'Kinematic Constraints',
       value: App.settings.kinematics,
       icons: { on: Icons.kinematicsOn, off: Icons.kinematicsOff },
     });

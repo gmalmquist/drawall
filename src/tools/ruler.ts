@@ -1,4 +1,6 @@
 class RulerTool extends SnappingTool {
+  private hoveredPhysHandle: Handle | null = null;
+
   constructor() {
     super('ruler tool');
   }
@@ -21,21 +23,24 @@ class RulerTool extends SnappingTool {
 
       const handle = App.ui.getHandleAt(e.position);
 
+
       if (handle === null) {
         App.ui.clearHovered();
         App.pane.style.cursor = this.cursor;
+        this.hoveredPhysHandle = null;
         return;
       }
 
       if (this.isRulerHandle(handle)) {
         App.ui.setHovered(handle);
         App.pane.style.cursor = 'grab';
+        this.hoveredPhysHandle = null;
         return;
       }
 
       if (handle.entity.has(PhysEdge) || handle.entity.has(PhysNode)) {
-        App.ui.setHovered(handle);
         App.pane.style.cursor = this.cursor;
+        this.hoveredPhysHandle = handle;
       }
     });
 
@@ -49,7 +54,7 @@ class RulerTool extends SnappingTool {
       }
 
       if (this.isRulerHandle(handle)) {
-        App.ui.setSelection(handle);
+        App.ui.select(handle);
         return;
       }
     });
@@ -66,7 +71,6 @@ class RulerTool extends SnappingTool {
 
         App.pane.style.cursor = this.cursor;
         const ruler = App.ecs.createEntity().add(Ruler);
-        App.ui.setSelection(ruler.entity.only(Handle));
         ruler.start.with(s => s.dragTo(e.start));
         ruler.end.with(s => s.dragTo(e.start.plus(e.delta)));
         return { ruler };
@@ -78,12 +82,51 @@ class RulerTool extends SnappingTool {
       onEnd: (e, { ruler, handle }) => {
         ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
         handle?.events?.handleDrag(e);
+        if (ruler) {
+          App.ui.setSelection(ruler.entity.only(Handle));
+        }
         App.pane.style.cursor = this.cursor;
       },
     });
   }
 
   override update() {
+    const handle = this.hoveredPhysHandle;
+    if (handle === null || App.ui.dragging) {
+      return;
+    }
+
+    if (handle.entity.has(PhysEdge)) {
+      const edge = handle.entity.only(PhysEdge).edge.unwrap();
+      if (edge === null) return;
+      const point = edge.closestPoint(App.ui.mousePos);
+      const flip = edge.normal.dot(Vectors.between(point, App.ui.mousePos)).sign;
+      const offsetX = edge.tangent.to('screen').unit()
+        .scale(Distance(50, 'screen').min(edge.length.scale(0.75)))
+        .scale(0.5);
+      const offsetY = edge.normal.to('screen').unit()
+        .scale(Distance(7, 'screen')).scale(flip);
+      App.canvas.setLineDash([5, 3]);
+      App.canvas.lineWidth = 2;
+      App.canvas.strokeStyle = BLUE;
+      App.canvas.strokeLine(
+        point.plus(offsetY).plus(offsetX),
+        point.plus(offsetY).minus(offsetX),
+      );
+      App.canvas.lineWidth = 1;
+      App.canvas.setLineDash([]);
+      return;
+    }
+
+    if (handle.entity.has(PhysNode)) {
+      const vertex = handle.entity.only(PhysNode).pos;
+      App.canvas.setLineDash([5, 3]);
+      App.canvas.lineWidth = 2;
+      App.canvas.strokeStyle = BLUE;
+      App.canvas.strokeCircle(vertex, Distance(20, 'screen'));
+      App.canvas.lineWidth = 1;
+      App.canvas.setLineDash([]);
+    }
   }
 
   private isRulerHandle(handle: Handle): boolean {
@@ -129,6 +172,7 @@ class RulerEndpoint extends PhysNode implements Solo {
     
     const handle = entity.add(Handle, {
       priority: 2,
+      visible: Ruler.areRulersVisible,
       getPos: () => this.pos,
       setPos: p => this.dragTo(p),
       distance: p => {
@@ -406,6 +450,10 @@ class RulerEndpoint extends PhysNode implements Solo {
 
 
 class Ruler extends Component implements Solo {
+  public static readonly areRulersVisible = (): boolean => {
+    return App.tools.current.name === 'ruler tool' || App.settings.showLengths.get();
+  };
+
   public readonly [SOLO] = true;
   public readonly start: EntityRef<RulerEndpoint>;
   public readonly end: EntityRef<RulerEndpoint>;
@@ -442,6 +490,7 @@ class Ruler extends Component implements Solo {
       distance: p => this.phys.flatMap(e => e.edge)
         .map(e => e.distance(p))
         .or(Distance(Number.POSITIVE_INFINITY, 'screen')),
+      visible: Ruler.areRulersVisible,
     });
 
     handle.events.addDragListener({
@@ -480,9 +529,8 @@ class Ruler extends Component implements Solo {
 }
 
 const RulerRenderer = (ecs: EntityComponentSystem) => {
-  if (App.tools.current.name !== 'ruler tool' && !App.settings.showLengths) {
-    return;
-  }
+  if (!Ruler.areRulersVisible()) return;
+
   for (const ruler of ecs.getComponents(Ruler)) {
     const edge = ruler.edge.unwrap();
     if (edge === null) {

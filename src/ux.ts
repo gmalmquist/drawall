@@ -31,6 +31,7 @@ interface HandleProps {
   cursor?: () => Cursor;
   snapping?: Snapping;
   onDelete?: () => 'keep' | 'kill';
+  visible?: () => boolean;
 }
 
 type CursorBuiltin = 'default' | 'none' | 'help' | 'context-menu'
@@ -150,6 +151,7 @@ class Handle extends Component implements Solo {
   private _cursor: () => Cursor | null;
   private readonly getPos: () => Position;
   private readonly _onDelete: (() => 'keep' | 'kill') | undefined;
+  private readonly _visible: () => boolean;
 
   public clickable: boolean = true;
   public draggable: boolean = true;
@@ -168,6 +170,7 @@ class Handle extends Component implements Solo {
     this.hoverable = typeof props.hoverable === 'undefined' ? true : props.hoverable;
     this.selectable = typeof props.selectable === 'undefined' ? true : props.selectable;
     this._cursor = typeof props.cursor === 'undefined' ? () => null : props.cursor;
+    this._visible = typeof props.visible === 'undefined' ? (() => true) : props.visible;
 
     this.getPos = props.getPos;
     this._onDelete = props.onDelete; 
@@ -241,6 +244,10 @@ class Handle extends Component implements Solo {
       return this.entity.only(Surfaced).containedBy(sdf);
     }
     return sdf.contains(this.getPos());
+  }
+
+  get visible(): boolean {
+    return this._visible();
   }
 
   get cursor(): Cursor | null {
@@ -647,6 +654,9 @@ class UiState {
     let choice: Handle | null = null;
     let choiceDistance = 0;
     for (const handle of handles) {
+      if (!handle.visible) {
+        continue;
+      }
       if (typeof filter !== 'undefined' && !filter(handle)) {
         continue;
       }

@@ -25,8 +25,9 @@ class DrawRoomTool extends Tool {
         const negH = horizontal.get('screen').dot(Axis.X) < 0;
         const negV = vertical.get('screen').dot(Axis.Y) < 0;
 
-        // need to flip the walls around to keep the outsides on the outside. 
-        const reversed = negH !== negV;
+        // allow drawing walls inside-out (for e.g. interior partitions) if
+        // the mouse is dragged to the up-left. 
+        const reversed = negH && negV;
 
         for (let i = 0; i < room.walls.length; i++) {
           let pos = e.start;
@@ -34,7 +35,11 @@ class DrawRoomTool extends Tool {
           const bottomEdge = (i >= 2);
           if (rightEdge !== negH) pos = pos.plus(horizontal);
           if (bottomEdge !== negV) pos = pos.plus(vertical);
-          room.walls[i].src.pos = pos;
+          if (reversed) {
+            room.walls[room.walls.length - i - 1].dst.pos = pos;
+          } else {
+            room.walls[i].src.pos = pos;
+          }
         }
       },
       onEnd: (e, room) => {
