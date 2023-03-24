@@ -7,8 +7,12 @@ class PanTool extends Tool {
     return Icons.panTool;
   }
 
-  get cursor(): Cursor {
+  override get cursor(): Cursor {
     return 'grab';
+  }
+
+  override get description(): string {
+    return 'you can also right or middle click-and-drag with any tool selected.';
   }
 
   override setup() {

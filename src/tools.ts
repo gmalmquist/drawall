@@ -230,12 +230,19 @@ class Tools {
   }
 
   private getTooltip(tool: ToolName): string {
+    const parts: string[] = [tool];
     const keybinds = App.keybindings.values()
       .filter(kb => kb.action === tool)
       .map(kb => kb.stroke.keys.join('+'))
       .join(' or ');
-    if (keybinds.length === 0) return tool;
-    return `${tool} (${keybinds})`;
+    if (keybinds.length > 0) {
+      parts.push(`(${keybinds})`);
+    }
+    const description = this.registry.get(tool)!.description;
+    if (description.length > 0) {
+      parts.push(`— ${description}`);
+    }
+    return parts.join(' ');
   }
 }
 

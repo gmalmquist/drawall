@@ -41,9 +41,9 @@ const Icons = {
   snapLocalOff: iconUrl('snap-local-off.svg'),
   snapGlobalOn: iconUrl('snap-global-on.svg'),
   snapGlobalOff: iconUrl('snap-global-off.svg'),
-  snapGuidesOn: iconUrl('snap-guides-on.svg'),
+  //snapGuidesOn: iconUrl('snap-guides-on.svg'),
+  //snapGuidesOff: iconUrl('snap-guides-off.svg'),
   snapGeomOff: iconUrl('snap-geom-off.svg'),
   snapGeomOn: iconUrl('snap-geom-on.svg'),
-  snapGuidesOff: iconUrl('snap-guides-off.svg'),
 };
 

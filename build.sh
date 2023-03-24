@@ -6,6 +6,7 @@ HTML_HEAD=$(cat <<EOF
 <head>
   <meta charset="utf-8">
   <title>drawall</title>
+  <link rel="icon" type="image/svg+xml" href="/icons/axis-locked.svg"></link>
   <link rel="stylesheet" type="text/css" href="main.css"></link>
   <link rel="stylesheet" type="text/css" href="gui.css"></link>
   <link rel="stylesheet" type="text/css" href="popup.css"></link>
