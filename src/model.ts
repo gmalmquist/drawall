@@ -233,8 +233,24 @@ class Wall extends Component implements Solo {
           const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
           this.src.pos = dst.plus(Vectors.between(dst, src).rotate(angle));
         } else {
-          this.src.pos = src.plus(delta);
-          this.dst.pos = dst.plus(delta);
+          if (App.ui.selection.size === 1) {
+            // TODO: figure out a cleaner / more general way to apply this snapping,
+            // this feels pretty gross.
+            // Maybe we need some notion of a like, primary dragged object for multisection?
+            // like the one that the mouse is over probably should be the one used to snap
+            // to stuff, in cases where it's ambiguous. but we might also just want to
+            // consider the full set of geometry we're dragging and snap all of it, ugh,
+            // this is a complicated problem.
+            const edge = new SpaceEdge(src, dst);
+            const closest = edge.closestPoint(e.start);
+            const closestDragged = App.ui.snapPoint(closest.plus(delta));
+            const snappedDelta = Vectors.between(closest, closestDragged).onAxis(edge.normal);
+            this.src.pos = src.plus(snappedDelta);
+            this.dst.pos = dst.plus(snappedDelta);
+          } else {
+            this.src.pos = src.plus(delta);
+            this.dst.pos = dst.plus(delta);
+          }
         }
         if (srcLocked && dstLocked) {
           this.src.entity.get(FixedConstraint).forEach(c => c.updateTargets([src.plus(delta)]));
