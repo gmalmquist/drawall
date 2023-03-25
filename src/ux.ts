@@ -677,6 +677,13 @@ class UiState {
     return choice;
   }
 
+  public snapPoint(pos: Position) {
+    if (App.settings.snapGrid.get()) {
+      return Grid.getGrid().snap(pos);
+    }
+    return pos;
+  }
+
   private updateForms() {
     const forms = Array.from(this.selection)
       .map(handle => handle.entity.get(Form))
@@ -768,7 +775,7 @@ class UiState {
     }
   }
 
-  private snap(delta: Vector): Vector {
+  private snapVector(delta: Vector): Vector {
     const axis = this.getSnapAxis(this.mouse.position, delta);
     if (axis === null) return delta;
 
@@ -948,7 +955,7 @@ class UiState {
       kind,
       start: this.mouse.start,
       position: e.position,
-      delta: this.snap(Vectors.between(this.mouse.start, e.position)),
+      delta: this.snapVector(Vectors.between(this.mouse.start, e.position)),
       primary: e.primary,
       setSnapping: (snapping?: Snapping) => {
         this.updateSnapping(snapping);

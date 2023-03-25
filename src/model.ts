@@ -438,7 +438,8 @@ class WallJoint extends Component {
 
     const handle = entity.add(Handle, {
       getPos: () => this.pos,
-      setPos: p => {
+      setPos: point => {
+        const p = App.ui.selection.size === 1 ? App.ui.snapPoint(point) : point;
         this.pos = p;
         entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
       },

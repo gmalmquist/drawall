@@ -337,7 +337,12 @@ class Grid extends Component implements Solo {
   }
 
   snap(position: Position): Position {
-    return position.to('model').trunc(this.spacing);
+    const point = position.get('model');
+    const spacing = this.spacing.get('model');
+    return Position(new Point(
+      Math.round(point.x / spacing) * spacing,
+      Math.round(point.y / spacing) * spacing,
+    ), 'model');
   }
 
   snapDelta(position: Position): Vector {

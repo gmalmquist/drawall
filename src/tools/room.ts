@@ -6,10 +6,11 @@ class DrawRoomTool extends Tool {
 
     this.events.addDragListener<Room>({
       onStart: e => {
+        const start = App.ui.snapPoint(e.start);
         const walls: Wall[] = Array(4).fill(0)
           .map(_ => App.ecs.createEntity().add(Wall));
         for (let i = 0; i < walls.length; i++) {
-          walls[i].src.pos = e.start;
+          walls[i].src.pos = start;
           walls[i].dst = walls[(i + 1) % walls.length].src;
         }
         const room = App.ecs.createEntity().add(Room);
@@ -18,7 +19,10 @@ class DrawRoomTool extends Tool {
         return room;
       },
       onUpdate: (e, room) => {
-        const diagonal = new SpaceEdge(e.start, e.position);
+        const diagonal = new SpaceEdge(
+          App.ui.snapPoint(e.start),
+          App.ui.snapPoint(e.position),
+        );
         const horizontal = diagonal.vector.onAxis(Vector(Axis.X, 'screen'));
         const vertical = diagonal.vector.onAxis(Vector(Axis.Y, 'screen'));
 
@@ -30,7 +34,7 @@ class DrawRoomTool extends Tool {
         const reversed = negH && negV;
 
         for (let i = 0; i < room.walls.length; i++) {
-          let pos = e.start;
+          let pos = diagonal.src;
           const rightEdge = (i === 1 || i === 2);
           const bottomEdge = (i >= 2);
           if (rightEdge !== negH) pos = pos.plus(horizontal);

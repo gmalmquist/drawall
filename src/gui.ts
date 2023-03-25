@@ -37,7 +37,16 @@ class GUI {
     const form = new AutoForm();
 
     form.add({
-      name: 'Grid',
+      name: 'Snap to Grid',
+      kind: 'toggle',
+      value: App.settings.snapGrid,
+      icons: { on: Icons.snapGridOn, off: Icons.snapGridOff },
+    });
+
+    form.addSeparator();
+
+    form.add({
+      name: 'Show Grid',
       kind: 'toggle',
       value: App.settings.showGrid,
       icons: { on: Icons.showGrid, off: Icons.hideGrid },

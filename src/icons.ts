@@ -45,5 +45,6 @@ const Icons = {
   //snapGuidesOff: iconUrl('snap-guides-off.svg'),
   snapGeomOff: iconUrl('snap-geom-off.svg'),
   snapGeomOn: iconUrl('snap-geom-on.svg'),
+  snapGridOff: iconUrl('grid-snap-off.svg'),
+  snapGridOn: iconUrl('grid-snap-on.svg'),
 };
-
