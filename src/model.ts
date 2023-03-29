@@ -1276,6 +1276,9 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
   }
 };
 
+const RoomRenderer = (ecs: EntityComponentSystem) => {
+};
+
 const AngleRenderer = (ecs: EntityComponentSystem) => {
   if (!App.settings.showAngles.get()) return;
 

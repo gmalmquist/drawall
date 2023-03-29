@@ -777,6 +777,20 @@ class Rect extends SDF {
     return more.reduce((a, b) => a.max(b), first);
   }
 
+  get top(): SpaceEdge {
+    return new SpaceEdge(
+      this.corners[0],
+      this.corners[1],
+    );
+  }
+
+  get bottom(): SpaceEdge {
+    return new SpaceEdge(
+      this.corners[3],
+      this.corners[2],
+    );
+  }
+
   get edges(): readonly SpaceEdge[] {
     return this.corners.map((c, i) => 
       new SpaceEdge(c, this.corners[(i + 1) % this.corners.length]));
@@ -788,6 +802,139 @@ class Rect extends SDF {
 
   eq(rect: Rect) {
     return this.corners.every((c, i) => c.eq(rect.corners[i]));
+  }
+}
+
+class Polygon extends SDF {
+  private readonly _vertices: Position[];
+
+  constructor(
+    vertices: Position[],
+  ) {
+    super();
+    this._vertices = [...vertices];
+  }
+
+  get vertices(): Position[] {
+    return [...this._vertices];
+  }
+
+  get edges(): SpaceEdge[] {
+    return this._vertices.map((v, i, arr) =>
+      new SpaceEdge(v, arr[(i + 1) % arr.length]));
+  }
+
+  get isDegenerate(): boolean {
+    return this._vertices.length < 3;
+  }
+
+  get isConvex(): boolean {
+    if (this.isDegenerate) return false;
+    for (let i = 0; i < this._vertices.length; i++) {
+      const a = this._vertices[i];
+      const b = this._vertices[(i + 1) % this._vertices.length];
+      const c = this._vertices[(i + 2) % this._vertices.length];
+      const ab = Vectors.between(a, b);
+      const bc = Vectors.between(b, c);
+      if (ab.r90().dot(bc).sign > 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  get bounds(): Rect {
+    let minX = 0;
+    let maxX = 0;
+    let minY = 0;
+    let maxY = 0;
+    for (let i = 0; i < this._vertices.length; i++) {
+      const v = this._vertices[i].get('model');
+      if (i === 0) {
+        minX = v.x;
+        minY = v.y;
+        maxX = v.x;
+        maxY = v.y;
+        continue;
+      }
+      minX = Math.min(minX, v.x);
+      minY = Math.min(minY, v.y);
+      maxX = Math.max(maxX, v.x);
+      maxY = Math.max(maxY, v.y);
+    }
+    return new Rect(
+      Position(new Point(minX, minY), 'model'),
+      Position(new Point(maxX, maxY), 'model'),
+    );
+  }
+
+  public override sdist(point: Position): Distance {
+    const inside = this.contains(point);
+    let closest = Distance(Number.POSITIVE_INFINITY, 'model');
+    for (const edge of this.edges) {
+      const d = edge.distance(point);
+      if (d.lt(closest)) {
+        closest = d;
+      }
+    }
+    return inside ? closest.neg() : closest;
+  }
+
+  public override contains(point: Position): boolean {
+    if (this.isConvex) return this.containsConvex(point);
+    return this.containsConcave(point);
+  }
+
+  public containsConvex(point: Position): boolean {
+    for (const edge of this.edges) {
+      const vec = Vectors.between(edge.midpoint, point);
+      if (vec.dot(edge.vector.r90()).sign > 0) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  public containsConcave(point: Position): boolean {
+    const edges = this.edges;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const ray = attempt === 0
+        ? new SpaceRay(point, Vector(Axis.X, 'model'))
+        : new SpaceRay(point, Vector(new Vec(
+          0.5, Math.random() * 2 - 1), 'model').unit())
+      ;
+      const check = this.raycastCheck(ray, edges);
+      if (check === 'inside') return true;
+      if (check === 'outside') return false;
+    }
+    // oh no, rngesus has failed us
+    return false;
+  }
+
+  private raycastCheck(
+    ray: SpaceRay,
+    edges: SpaceEdge[],
+  ): 'inside' | 'outside' | 'indeterminate' {
+    const eps = 0.001;
+    let hits = 0;
+    for (const edge of edges) {
+      const hit = ray.intersection(edge);
+      if (hit === null) continue;
+      const s = edge.unlerp(hit.point);
+      if (Math.abs(s) < eps || Math.abs(1 - s) < eps) {
+        return 'indeterminate';
+      }
+      if (s < 0 || s > 1) {
+        continue;
+      }
+      if (Math.abs(hit.time) < eps) {
+        return 'indeterminate';
+      }
+      if (hit.time > 0) {
+        hits += 1;
+      }
+    }
+    return hits % 2 === 0 ? 'outside' : 'inside';
   }
 }
 

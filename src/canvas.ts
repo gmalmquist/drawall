@@ -192,6 +192,18 @@ class Canvas2d {
     this.g.bezierCurveTo(b.x, b.y, c.x, c.y, d.x, d.y);
   }
 
+  polygon(polygon: Polygon) {
+    this.beginPath();
+    polygon.vertices.forEach((v, i) => {
+      if (i === 0) {
+        this.moveTo(v);
+      } else {
+        this.lineTo(v);
+      }
+    });
+    this.closePath();
+  }
+
   arc(
     center: Position,
     radius: Distance,
