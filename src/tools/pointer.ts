@@ -102,46 +102,9 @@ class PointerTool extends SnappingTool {
         const overHandle = App.ui.getHandleAt(e.start, h => h.draggable) !== null;
         const selection = App.ui.selection;
         if (selection.size > 0 && overHandle) {
-          const snaps = Array.from(selection)
-            .filter(s => typeof s.snapping !== 'undefined')
-            .map(s => s.snapping as Snapping);
-          const getPreferred = (arr:  NamedAxisP[]): NamedAxisP => {
-            if (true) return arr.length === 1 ? arr[0] : undefined;
-            // this isn't working
-            const cmp = (fa: NamedAxisP, fb: NamedAxisP): boolean => {
-              if (typeof fa === 'undefined' || typeof fb === 'undefined') return false;
-              const [a, b] = [fa(), fb()];
-              const one = a.direction.unit();
-              const two = b.direction.unit().to(one.space);
-              const negate = one.dot(two).sign < 0 ? -1 : 1;
-              const delta = Angles.shortestDelta(one.angle(), two.neg().angle());
-              return unwrap(toDegrees(delta.get(delta.space))) < 1;
-            };
-            return arr.every(el => cmp(arr[0], el)) ? arr[0] : undefined;
-          };
-          const preferredAxis = getPreferred(snaps.map(s => s.preferredAxis));
-          const snapping: Snapping = {
-            snapByDefault: snaps.every(s => s.snapByDefault) && typeof preferredAxis !== 'undefined',
-            localAxes: () => snaps
-              .map(s => s.localAxes)
-              .map(a => typeof a === 'undefined' ? [] : a())
-              .reduce((arr, a) => [...arr, ...a], []),
-            preferredAxis,
-            allowLocal: snaps.some(s => s.allowLocal !== false),
-            allowGlobal: snaps.some(s => s.allowGlobal !== false),
-            allowGeometry: snaps.some(s => s.allowGeometry !== false),
-          };
-          const cursors = new Set<Cursor>();
-          const dispatcher = new UiEventDispatcher(PointerTool);
-          for (const handle of selection) {
-            dispatcher.forward(handle.events);
-            cursors.add(handle.getContextualCursor());
-          }
-          const cursor = cursors.size === 1 ? Array.from(cursors)[0]! : 'grabbing';
-          App.pane.style.cursor = cursor;
-          dispatcher.handleDrag(e);
-          e.setSnapping(snapping);
-          return dispatcher;
+          const handler = App.ui.defaultDragHandler;
+          handler.handleDrag(e);
+          return handler;
         }
         drawSelect.handleDrag(e);
         return drawSelect;

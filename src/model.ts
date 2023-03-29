@@ -232,23 +232,32 @@ class Wall extends Component implements Solo {
       },
       distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
-      snapping: {
-        snapByDefault: true,
-        preferredAxis: () => ({
-          name: 'wall normal',
-          direction: this.outsideNormal,
-          points: [
-            this.src.pos,
-            this.dst.pos,
-          ],
-        }),
-        localAxes: () => {
-          return [
-            { name: 'wall normal', direction: this.outsideNormal, points: [ this.midpoint ], },
-            { name: 'wall tangent', direction: this.tangent, points: [ this.midpoint ], },
-          ];
-        },
-      },
+      drag: () => ({
+        kind: 'group',
+        aggregate: 'first',
+        name: this.name,
+        items: [
+          {
+            kind: 'point',
+            name: 'midpoint',
+            get: () => this.getEdge().midpoint,
+            set: (midpoint) => {
+              const wing = this.getEdge().vector.scale(0.5);
+              this.src.pos = midpoint.minus(wing);
+              this.dst.pos = midpoint.plus(wing);
+            },
+          },
+          {
+            kind: 'group',
+            name: 'endpoints',
+            aggregate: 'all',
+            items: [
+              this.src.entity.only(Handle).getDragItem(),
+              this.dst.entity.only(Handle).getDragItem(),
+            ],
+          },
+        ],
+      }),
       cursor: () => getResizeCursor(this.outsideNormal),
       onDelete: () => {
         this.elideWall();
@@ -504,33 +513,16 @@ class WallJoint extends Component {
         this.pos = p;
         entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
       },
-      priority: 2,
-      snapping: {
-        snapByDefault: false,
-        allowLocal: true,
-        allowGlobal: true,
-        allowGeometry: true,
-        localAxes: () => {
-          const incoming = this.incoming;
-          const outgoing = this.outgoing;
-          const axes: NamedAxis[] = [];
-          if (incoming !== null) {
-            axes.push({
-              name: 'right wall',
-              direction: Vectors.between(this.pos, incoming.src.pos),
-              points: [ this.pos ],
-            });
-          }
-          if (outgoing !== null) {
-            axes.push({
-              name: 'left wall',
-              direction: Vectors.between(this.pos, outgoing.dst.pos),
-              points: [ this.pos ],
-            });
-          }
-          return axes;
+      drag: () => ({
+        kind: 'point',
+        name: this.name,
+        get: () => this.pos,
+        set: p => {
+          this.pos = p;
+          entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
         },
-      },
+      }),
+      priority: 2,
       onDelete: () => {
         this.elideJoint();
         return 'kill';

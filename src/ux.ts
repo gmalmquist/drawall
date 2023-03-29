@@ -10,26 +10,17 @@ interface NamedAxis {
   points?: Position[];
 }
 
-interface Snapping {
-  snapByDefault: boolean;
-  localAxes?: () => NamedAxis[];
-  preferredAxis?: () => NamedAxis;
-  allowLocal?: boolean;
-  allowGlobal?: boolean;
-  allowGeometry?: boolean;
-}
-
 interface HandleProps {
   getPos: () => Position;
   setPos?: (p: Position) => void;
   distance?: (p: Position) => Distance;
+  drag?: () => DragItem;
   clickable?: boolean;
   draggable?: boolean;
   hoverable?: boolean;
   selectable?: boolean;
   priority?: number;
   cursor?: () => Cursor;
-  snapping?: Snapping;
   onDelete?: () => 'keep' | 'kill';
   visible?: () => boolean;
 }
@@ -152,6 +143,7 @@ class Handle extends Component implements Solo {
   private readonly getPos: () => Position;
   private readonly _onDelete: (() => 'keep' | 'kill') | undefined;
   private readonly _visible: () => boolean;
+  private readonly _drag: () => DragItem;
 
   public clickable: boolean = true;
   public draggable: boolean = true;
@@ -159,7 +151,6 @@ class Handle extends Component implements Solo {
   public selectable: boolean = true;
   public ignoreNonPrimary: boolean = true;
   public priority: number = 0;
-  public readonly snapping: Snapping | undefined;
 
   constructor(entity: Entity, private readonly props: HandleProps) {
     super(entity);
@@ -171,11 +162,10 @@ class Handle extends Component implements Solo {
     this.selectable = typeof props.selectable === 'undefined' ? true : props.selectable;
     this._cursor = typeof props.cursor === 'undefined' ? () => null : props.cursor;
     this._visible = typeof props.visible === 'undefined' ? (() => true) : props.visible;
+    this._drag = typeof props.drag === 'undefined' ? Drags.empty : props.drag;
 
     this.getPos = props.getPos;
     this._onDelete = props.onDelete; 
-
-    this.snapping = props.snapping;
 
     const defaultDistanceFunc = (p: Position) => Distances.between(props.getPos(), p);
     this.distanceFunc = typeof props.distance === 'undefined'
@@ -183,6 +173,7 @@ class Handle extends Component implements Solo {
 
     if (typeof props.setPos !== 'undefined') {
       const setPos = props.setPos!;
+      if (false)
       this.events.addDragListener({
         onStart: (e) => {
           return props.getPos();
@@ -196,6 +187,14 @@ class Handle extends Component implements Solo {
         },
       });
     }
+  }
+
+  getDragClosure(type: 'minimal' | 'complete'): DragClosure {
+    return Drags.closure(type, this.getDragItem());
+  }
+
+  getDragItem(): DragItem {
+    return this._drag();
   }
 
   getContextualCursor(): Cursor {
@@ -313,7 +312,6 @@ interface UiDragEvent {
   start: Position;
   delta: Vector;
   primary: boolean;
-  setSnapping: (snapping?: Snapping) => void;
 }
 
 interface UiKeyEvent {
@@ -427,19 +425,16 @@ interface MouseState {
   distanceDragged: Distance; 
 }
 
-interface SnapAxes {
-  local: NamedAxis[],
-  global: NamedAxis[],
-  geometry: NamedAxis[],
-  preferred: NamedAxis | null,
-}
-
 class SnapState {
   public readonly enableByDefaultRef: Ref<boolean> = Refs.of(false);
   public readonly enabledRef: Ref<boolean> = Refs.of(false);
   public readonly snapToLocalRef: Ref<boolean> = Refs.of(true);
   public readonly snapToGlobalRef: Ref<boolean> = Refs.of(true);
   public readonly snapToGeometryRef: Ref<boolean> = Refs.of(false);
+  public readonly snapRadius: Ref<Distance> = Refs.of(Distance(25, 'screen'));
+  public readonly angleThreshold: Ref<Degrees> = Refs.of(
+    Degrees(10), (a, b) => unwrap(a) === unwrap(b)
+  );
 
   public get enabled(): boolean {
     return this.enabledRef.get();
@@ -486,7 +481,6 @@ class UiState {
   };
 
   public readonly events = new UiEventDispatcher(UiState);
-  public axisSnap: boolean = false;
   public grabRadius: Distance = Distance(10, 'screen');
 
   private readonly mouse: MouseState = {
@@ -500,14 +494,15 @@ class UiState {
 
   private keysPressed = new DefaultMap<string, boolean>(() => false);
   private swappedTool: ToolName | null = null;
-  private snapAxes: SnapAxes | null = null;
+  private currentSnapResult: SnapResult | null = null;
+  private preferredSnap: string | null = null;
   public readonly snapping = new SnapState();
 
   update() {
     App.tools.current.update();
 
     if (this.dragging) {
-      this.renderSnapAxes();
+      this.renderSnap();
     }
   }
 
@@ -541,7 +536,6 @@ class UiState {
       position: this.mouse.start,
       delta: Vector(Vec.ZERO, 'screen'),
       primary: true,
-      setSnapping: (snapping?: Snapping) => this.updateSnapping(snapping),
     };
     this.events.handleDrag({ kind: 'update', ...base });
     this.events.handleDrag({ kind: 'end', ...base });
@@ -634,6 +628,165 @@ class UiState {
     App.ecs.getComponents(Hovered).forEach(h => h.unhover());
   }
 
+  getDragClosure(
+    type: 'minimal' | 'complete' = 'minimal',
+    ...primarySelection: Handle[]
+  ): DragClosure {
+    const selection: Array<Handle> = [];
+    const seen = new Set<Handle>();
+    const collect = (h: Handle) => {
+      if (seen.has(h)) return;
+      seen.add(h);
+      selection.push(h);
+    };
+    primarySelection.forEach(collect);
+    this.selection.forEach(collect);
+
+    const closure = Drags.closure(type, ...selection.map(s => s.getDragItem()));
+    closure.snaps.push({
+      kind: 'point',
+      category: 'grid',
+      name: 'grid',
+      func: pos => Grid.getGrid().snap(pos),
+      closeEnough: drag => {
+        const grid = Grid.getGrid();
+        const delta = Distances.between(grid.snap(drag.end), drag.end);
+        return delta.le(grid.spacing.scale(0.5));
+      },
+    });
+    const theta = unwrap(this.snapping.angleThreshold.get());
+    closure.snaps.push({
+      kind: 'axis',
+      category: 'global',
+      name: 'X-Axis',
+      direction: Vector(Axis.X, 'screen'),
+      closeEnough: drag => {
+        const angle = Math.abs(unwrap(toDegrees(drag.tangent.angle().get('screen'))));
+        return Math.abs(angle) < theta || Math.abs(angle - 180) < theta;
+      },
+    });
+    closure.snaps.push({
+      kind: 'axis',
+      category: 'global',
+      name: 'Y-Axis',
+      direction: Vector(Axis.Y, 'screen'),
+      closeEnough: drag => {
+        const angle = Math.abs(unwrap(toDegrees(drag.tangent.angle().get('screen'))));
+        return Math.abs(angle - 90) < theta || Math.abs(angle - 270) < theta;
+      },
+    });
+    return closure;
+  }
+
+  isSnapEnabled(snap: DragSnap): boolean {
+    if (!this.snapping.enabled) {
+      return false;
+    }
+    if (snap.category === 'grid') {
+      return App.settings.snapGrid.get();
+    }
+    if (snap.category === 'local') {
+      return this.snapping.snapToLocalRef.get();
+    }
+    if (snap.category === 'guide') {
+      return this.snapping.snapToGeometryRef.get();
+    }
+    if (snap.category === 'geometry') {
+      return this.snapping.snapToGeometryRef.get();
+    }
+    if (snap.category === 'global') {
+      return this.snapping.snapToGlobalRef.get();
+    }
+    return impossible(snap.category);
+  }
+
+  getDefaultDragHandler(filter: (handle: Handle) => boolean): UiEventDispatcher {
+    const dispatcher = new UiEventDispatcher(UiState, 'default drag handler');
+    dispatcher.addDragListener({
+      onStart: e => {
+        const hovering = this.getHandleAt(e.start, filter);
+        const primarySelection = hovering ? [ hovering ] : [];
+        const closure = this.getDragClosure('minimal', ...primarySelection);
+        const starts = closure.points.map(point => point.get());
+        return { closure, starts };
+      },
+      onUpdate: (e, { closure, starts }) => {
+        const drag = new Drag(e.start, e.position);
+        const preferred = this.preferredSnap !== null
+          ? closure.snaps.filter(s => s.name === this.preferredSnap)[0]
+          : undefined;
+        const result = preferred ? {
+          snap: preferred,
+          item: closure.points[0],
+          snapped: drag.snapped(preferred),
+          original: drag,
+          distance: Distances.between(drag.snapped(preferred).end, drag.end),
+        } : Drags.chooseSnap(
+          { drag, starts, closure },
+          snap => this.isSnapEnabled(snap),
+        );
+        this.currentSnapResult = result;
+        const delta = (result?.snapped || drag).delta;
+        closure.points.forEach((point, i) => point.set(starts[i].plus(delta)));
+      },
+      onEnd: (_e, _context) => {
+        this.currentSnapResult = null;
+        this.preferredSnap = null;
+      },
+    });
+    return dispatcher;
+  }
+
+  get defaultDragHandler(): UiEventDispatcher {
+    return this.getDefaultDragHandler(h => h.draggable);
+  }
+
+  renderSnap() {
+    const result = this.currentSnapResult;
+    if (result === null) return;
+    const color = this.getSnapColor(result.snap);
+    
+    if (result.snap.kind === 'axis' || result.snap.kind === 'vector') {
+      const screenSize = Distance(Math.max(
+        App.viewport.screen_width,
+        App.viewport.screen_height,
+      ), 'screen');
+      const axis = new SpaceEdge(
+        result.snapped.end.splus(screenSize, result.snapped.delta.neg()),
+        result.snapped.end.splus(screenSize, result.snapped.delta),
+      );
+      App.canvas.strokeStyle = color;
+      App.canvas.strokeLine(axis.src, axis.dst);
+      App.canvas.text({
+        text: `${result.item.name} to ${result.snap.name}`,
+        fill: color,
+        point: axis.midpoint.splus(
+          Distance(App.settings.fontSize, 'screen'),
+          axis.normal,
+        ),
+        axis: axis.tangent,
+        keepUpright: true,
+        align: 'center',
+        baseline: 'bottom',
+      });
+    } else {
+      App.canvas.arrow(result.original.end, result.snapped.end);
+      App.canvas.fillStyle = color;
+      App.canvas.fill();
+      App.canvas.text({
+        text: `${result.item.name} to ${result.snap.name}`,
+        point: result.snapped.end.splus(
+          Distance(20, 'screen'),
+          Vector(Axis.X, 'screen'),
+        ),
+        keepUpright: true,
+        align: 'left',
+        baseline: 'middle',
+        fill: color,
+      });
+    }
+  }
+
   setHovered(...handles: Handle[]) {
     const set = new Set(handles);
     handles.forEach(h => { h.hovered = true; });
@@ -693,190 +846,11 @@ class UiState {
     form.inflate(App.gui.selection);
   }
 
-  private getAxisColor(axis: NamedAxis): string {
-    if (axis.name === 'X-Axis') return BLUE;
-    if (axis.name === 'Y-Axis') return PINK;
-    const axes = this.snapAxes;
-    if (axes === null) {
-      return 'gray';
-    }
-    if (axis.name === axes.preferred?.name) {
-      return BLUE;
-    }
-    
-    const indexIn = (arr: NamedAxis[]): number => {
-      for (let i = 0; i < arr.length; i++) {
-        if (arr[i].name === axis.name) {
-          return i; 
-        }
-      }
-      return -1;
-    };
-
-    const colors = [
-      BLUE,
-      PINK,
-      'purple',
-      'orange',
-      'green',
-      'brown',
-      'cyan',
-    ];
-
-    const li = indexIn(axes.local);
-    if (li >= 0) return colors[li % colors.length];
-
-    const gi = indexIn(axes.geometry);
-    if (gi >= 0) return colors[(gi + axes.local.length) % colors.length];
-
-    return 'gray';
-  }
-
-  private renderSnapAxes() {
-    const axis = this.getSnapAxis(
-      this.mouse.position,
-      Vectors.between(this.mouse.start, this.mouse.position),
-    );
-    if (axis === null) {
-      return;
-    }
-
-    const points = axis.points || [ this.mouse.start ];
-
-    for (let i = 0; i < points.length; i++) {
-      const origin = points[i];
-      const renderLine = new SpaceEdge(
-        origin.minus(axis.direction.scale(Distance(2000, 'screen'))),
-        origin.plus(axis.direction.scale(Distance(2000, 'screen'))),
-      );
-      const labelPoint = renderLine.closestPoint(this.mouse.position);
-
-      App.canvas.strokeStyle = this.getAxisColor(axis);
-      App.canvas.lineWidth = 1;
-      App.canvas.strokeLine(renderLine.src, renderLine.dst);
-
-      if (i === 0) {
-        App.canvas.text({
-          text: `${axis.name}`,
-          point: labelPoint.plus(axis.direction.r90()
-            .to('screen').unit().scale(15)),
-          fill: this.getAxisColor(axis),
-          shadow: 'black',
-          axis: axis.direction,
-          keepUpright: true,
-          align: 'center',
-          baseline: 'bottom',
-        });
-      }
-    }
-
-    if (axis.points) {
-      App.canvas.strokeLine(this.mouse.start, this.mouse.position);
-    }
-  }
-
-  private snapVector(delta: Vector): Vector {
-    const axis = this.getSnapAxis(this.mouse.position, delta);
-    if (axis === null) return delta;
-
-    return delta.onAxis(axis.direction);
-  }
-
-  private updateSnapping(snapping?: Snapping) {
-    this.snapAxes = this.getSnapAxes(snapping);
-    this.snapping.enabled = !!snapping?.snapByDefault || this.snapping.enableByDefaultRef.get();
-  }
-
-  private getSnapAxes(snapping?: Snapping): SnapAxes {
-    const snapAxes: SnapAxes = {
-      local: [],
-      global: [],
-      geometry: [],
-      preferred: null,
-    };
-
-    if (snapping?.preferredAxis) {
-      snapAxes.preferred = snapping!.preferredAxis();
-    }
-
-    if (snapping?.allowLocal !== false) {
-      // don't add tons of axes that are right next to each other.
-      snapAxes.local = Array.from(this.selection)
-        .map(h => h.snapping?.localAxes || (() => []))
-        .map(axes => axes())
-        .reduce((a, b) => [...a, ...b], []);
-    }
-
-    if (snapping?.allowGlobal !== false) {
-      snapAxes.global = [UiState.GLOBAL_X, UiState.GLOBAL_Y];
-    }
-
-    if (snapping?.allowGeometry !== false) {
-      // we can probably add an axis-defining component
-      // to do this less ad-hoc.
-      for (const wall of App.ecs.getComponents(Wall)) {
-        if (wall.entity.get(Handle).some(handle => handle.isSelected)) {
-          continue;
-        }
-        snapAxes.geometry.push({
-          name: wall.name,
-          direction: wall.tangent,
-          points: [ wall.midpoint ],
-        });
-      }
-    }
-
-    return snapAxes;
-  }
-
-  private elideAxes(axes: NamedAxis[]): NamedAxis[] {
-    const epsilon = Degrees(30);
-    const angles = new Set<Degrees>();
-    const results: NamedAxis[] = [];
-    for (const axis of axes) {
-      const angle = normalizeRadians(axis.direction.angle().get('screen'));
-      const degrees = unwrap(toDegrees(angle));
-      // we only care about the axial alignment, not the sign.
-      const halved = degrees >= 180 ? degrees - 180 : degrees;
-      // divide out to coarser precision
-      const rounded = Degrees(Math.round(halved / unwrap(epsilon)));
-      if (angles.has(rounded)) continue;
-      angles.add(rounded);
-      results.push(axis);
-    }
-    return axes;
-  }
-
-  private getSnapAxis(pos: Position, delta: Vector): NamedAxis | null {
-    if (!this.snapping.enabled || this.snapAxes === null || !App.tools.current.allowSnap) return null;
-    if (this.snapAxes.preferred) {
-      return this.snapAxes.preferred;
-    }
-    const options = new Array<NamedAxis>();
-    if (this.snapping.snapToLocal) {
-      this.snapAxes.local.forEach(a => options.push(a));
-    }
-    if (this.snapping.snapToGlobal) {
-      this.snapAxes.global.forEach(a => options.push(a));
-    }
-    if (this.snapping.snapToGeometry) {
-      this.snapAxes.geometry.forEach(a => options.push(a));
-    }
-    const elided = this.elideAxes(options);
-
-    if (elided.length === 0) return null;
-    const alignments = elided.map(axis => Spaces.getCalc(
-      'screen',
-      (a: Vec, b: Vec) => Math.abs(a.unit().dot(b.unit())),
-      delta, axis.direction
-    ));
-    let best = -1;
-    for (let i = 0; i < alignments.length; i++) {
-      if (best < 0 || alignments[i] > alignments[best]) {
-        best = i;
-      }
-    }
-    return best >= 0 ? elided[best] : null;
+  private getSnapColor(snap: DragSnap): string {
+    if (snap.name === 'X-Axis') return BLUE;
+    if (snap.name === 'Y-Axis') return PINK;
+    if (snap.name === 'grid') return 'gray';
+    return 'orange';
   }
 
   setup() {
@@ -895,16 +869,13 @@ class UiState {
       if (this.dragging) {
         if (e.key === 'Control') {
           this.snapping.enabled = !this.snapping.enabled;
+          if (!this.snapping.enabled) {
+            this.preferredSnap = null;
+          }
         } else if (e.key === 'x') {
-          this.updateSnapping({
-            snapByDefault: true,
-            preferredAxis: () => UiState.GLOBAL_X,
-          });
+          this.preferredSnap = 'X-Axis';
         } else if (e.key === 'y') {
-          this.updateSnapping({
-            snapByDefault: true,
-            preferredAxis: () => UiState.GLOBAL_Y,
-          });
+          this.preferredSnap = 'Y-Axis';
         }
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -955,11 +926,8 @@ class UiState {
       kind,
       start: this.mouse.start,
       position: e.position,
-      delta: this.snapVector(Vectors.between(this.mouse.start, e.position)),
+      delta: Vectors.between(this.mouse.start, e.position),
       primary: e.primary,
-      setSnapping: (snapping?: Snapping) => {
-        this.updateSnapping(snapping);
-      },
     });
 
     const ignoreKeyEventsFrom = new Set([
@@ -1054,7 +1022,6 @@ class UiState {
 
       this.mouse.dragging = false;
       this.mouse.pressed = false;
-      this.updateSnapping();
     });
   }
 }

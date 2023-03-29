@@ -22,7 +22,6 @@ class Viewport {
       new Vec(screen_size/2., 0),
       new Vec(0, -screen_size/2),
     );
-
   }
 
   get project(): Transform2  {
