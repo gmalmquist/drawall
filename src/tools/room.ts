@@ -145,22 +145,24 @@ class DrawRoomTool extends Tool {
       connect(a0, b1);
       connect(b0, a1);
 
-      const arrow = (w: Wall, l: string, c: string) => {
-        const offset = w.outsideNormal.unit()
-          .scale(Distance(5 * (1 + splitDepth.get(w.name)), 'screen'));
-        const tangent = w.tangent.unit();
-        const shrink = Distance(10, 'screen')
-          .min(w.length.scale(0.25));
-        const src = w.src.pos.splus(shrink, tangent).plus(offset);
-        const dst = w.dst.pos.splus(shrink.neg(), tangent).plus(offset);
-        App.ecs.createEntity().add(Arrow, src, dst, c, `${spliceCount.val}.${l}`);
-      };
+      if (App.debug) {
+        const arrow = (w: Wall, l: string, c: string) => {
+          const offset = w.outsideNormal.unit()
+            .scale(Distance(5 * (1 + splitDepth.get(w.name)), 'screen'));
+          const tangent = w.tangent.unit();
+          const shrink = Distance(10, 'screen')
+            .min(w.length.scale(0.25));
+          const src = w.src.pos.splus(shrink, tangent).plus(offset);
+          const dst = w.dst.pos.splus(shrink.neg(), tangent).plus(offset);
+          App.ecs.createEntity().add(Arrow, src, dst, c, `${spliceCount.val}.${l}`);
+        };
 
-      arrow(a0, 'a0', 'blue');
-      arrow(b1, 'b1', 'blue');
+        arrow(a0, 'a0', 'blue');
+        arrow(b1, 'b1', 'blue');
 
-      arrow(b0, 'b0', 'red');
-      arrow(a1, 'a1', 'red');
+        arrow(b0, 'b0', 'red');
+        arrow(a1, 'a1', 'red');
+      }
     };
 
     const verticesOverlap = (one: Wall[], two: Wall[]): boolean => {
