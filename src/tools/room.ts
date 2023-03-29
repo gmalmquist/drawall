@@ -109,26 +109,55 @@ class DrawRoomTool extends Tool {
     return results;
   }
 
-  private mergeLoops(loopA: Wall[], loopB: Wall[]): LoopMergeResult {
-    const polyB = new Polygon(loopB.map(w => w.src.pos));
-    const insideB = new Set(loopA.filter(w => polyB.contains(w.src.pos)));
+  private mergeRooms(roomA: Room, roomB: Room): RoomMergeResult {
+    const eps = 0.001;
+    const loopA = roomA.loop;
+    const loopB = roomB.loop;
+    const polyA = roomA.polygon;
+    const polyB = roomB.polygon;
+    if (loopA === null || polyA === null) {
+      return { outcome: 'keep b', room: roomB };
+    }
+    if (loopB === null || polyB === null) {
+      return { outcome: 'keep a', room: roomA };
+    }
+    const wallSetA = new Set(loopA);
+    const wallSetB = new Set(loopB);
+
+    const outsideWallsA = new Set(loopA.filter(w => !polyB.contains(w.src.pos)));
+    const outsideWallsB = new Set(loopB.filter(w => !polyA.contains(w.src.pos)));
 
     const frontier = [...loopA];
-    const loopAWalls = new Set<Wall>(loopA);
-    const loopBWalls = new Set<Wall>(loopB);
 
     let intersectionCount = 0;
 
+    const connect = (a: Wall, b: Wall) => {
+      a.dst = b.src.shallowDup();
+      b.src = a.dst;
+    };
+
+    const splice = (a0: Wall, a1: Wall, b0: Wall, b1: Wall) => {
+      connect(a0, b1);
+      connect(b0, a1);
+    };
+
     while (frontier.length > 0) {
       const wa = frontier.pop()!;
-      loopAWalls.add(wa);
+      wallSetA.add(wa);
       const ea = wa.getEdge();
 
-      for (const wb of new Set(loopBWalls)) {
-        const hit = ea.intersection(wb.getEdge());
+      for (const wb of new Set(wallSetB)) {
+        const eb = wb.getEdge();
+        const hit = ea.intersection(eb);
         if (hit === null) {
           continue;
         }
+
+        const sa = ea.unlerp(hit);
+        if (sa < eps || sa > 1-eps) continue;
+
+        const sb = eb.unlerp(hit);
+        if (sb < eps || sb > 1-eps) continue;
 
         const splitA = wa.splitWall(hit);
         if (splitA === null) continue;
@@ -144,26 +173,13 @@ class DrawRoomTool extends Tool {
 
         intersectionCount++;
 
-        loopAWalls.delete(wa);
-        // splits of `wa` will be added
-        // in next loop of the frontier
-
-        loopBWalls.delete(wb);
-        loopBWalls.add(wb0);
-        loopBWalls.add(wb1);
-
-        if (insideB.has(wa)) {
-          insideB.add(wa0);
-          wb0.dst = wa1.src;
-          wa0.dst = wb1.src;
-        } else {
-          insideB.add(wa1);
-          wa0.dst = wb1.src;
-          wb0.dst = wa1.src;
-        }
+        splice(wa0, wa1, wb0, wb1);
 
         frontier.push(wa0);
         frontier.push(wa1);
+
+        wallSetB.add(wb0);
+        wallSetB.add(wb1);
 
         // don't break more than one wall
         // at a time this way
@@ -172,60 +188,70 @@ class DrawRoomTool extends Tool {
     }
 
     if (intersectionCount === 0) {
-      if (insideB.size === loopA.length) {
-        // A is fully inside B
-        console.log('A fully inside B');
-        loopA.forEach(w => w.entity.destroy());
-        return { outcome: 'keep b', walls: loopB, };
-      }
-      const polyA = new Polygon(loopA.map(w => w.src.pos));
-      if (loopB.every(w => polyA.contains(w.src.pos))) {
-        // B is fully inside A
-        console.log('B fully inside A');
-        loopB.forEach(w => w.entity.destroy());
-        return { outcome: 'keep a', walls: loopA, };
-      }
-      console.log('fully disjoint');
-      // no intersection 
-      return { outcome: 'keep both', walls: [] };
+      return { outcome: 'keep both', room: roomB };
     }
 
-    const rootAWalls = [...loopAWalls].filter(a => !insideB.has(a));
+    const loops: Array<Wall[]> = [];
+    const allWalls = [...wallSetA, ...wallSetB].filter(w => w.entity.isAlive);
+    const seen = new Set<Wall>();
 
-    // only choose the first loop
-    const loop = rootAWalls[0]!.getConnectedLoop();
-    const chosen = new Set(loop);
-    for (const w of loopAWalls) {
-      if (!chosen.has(w)) {
-        w.entity.destroy();
+    for (const wall of allWalls) {
+      if (seen.has(wall)) continue;
+      const loop = wall.getConnectedLoop();
+      loop.forEach(w => seen.add(w));
+      loops.push(loop);
+    }
+    if (loops.length === 0) {
+      // how ??? should be handled by intersections = 0 above.
+      roomB.entity.destroy();
+      return { outcome: 'keep a', room: roomA };
+    }
+    if (loops.length === 1) {
+      loops[0].forEach(w => roomA.addWall(w));
+      roomB.entity.destroy();
+      return { outcome: 'keep a', room: roomA };
+    }
+    let iA = -1;
+    let iB = -1;
+    for (let i = 0; i < loops.length; i++) {
+      if (loops[i].some(w => outsideWallsA.has(w))) {
+        iA = i;
       }
     }
-    for (const w of loopBWalls) {
-      if (!chosen.has(w)) {
-        w.entity.destroy();
+    for (let i = 0; i < loops.length; i++) {
+      if (i !== iA && loops[i].some(w => outsideWallsB.has(w))) {
+        iB = i;
       }
     }
-    console.log('loop:', loop);
-    return { outcome: 'keep a', walls: loop };
-  }
+    if (iA < 0) {
+      iA = iB === 0 ? 1 : 0;
+    }
+    if (iB < 0) {
+      iB = iA === 0 ? 1 : 0;
+    }
+    
+    for (let i = 0; i < loops.length; i++) {
+      if (i === iA) {
+        loops[i].forEach(w => roomA.addWall(w));
+      } else if (i === iB) {
+        loops[i].forEach(w => roomB.addWall(w));
+      } else {
+        loops[i].forEach(w => w.entity.destroy());
+      }
+    }
 
-  private mergeRooms(one: Room, two: Room): RoomMergeResult {
-    console.log(`mergeRooms(${one.name}, ${two.name})`);
-    const { outcome, walls } = this.mergeLoops(one.loop, two.loop);
-    if (outcome === 'keep both') {
-      return { outcome, room: two };
+    // TODO: to get the subtractive thing working, instead of deleting
+    // all "extra" loops as above, we need to convert them all into
+    // their own rooms *if* they are not degenerate and do not overlap
+    // with other rooms.
+    const dEps = Distance(eps, 'model');
+    if (loops[iB].some(w => loops[iA].some(
+      v => Distances.between(w.src.pos, v.src.pos).lt(dEps)))) {
+      roomB.entity.destroy();
+      return { outcome: 'keep a', room: roomA };
     }
-    if (outcome === 'keep a') {
-      walls.forEach(w => one.addWall(w));
-      two.entity.destroy();
-      return { outcome, room: one };
-    }
-    if (outcome === 'keep b') {
-      walls.forEach(w => two.addWall(w));
-      one.entity.destroy();
-      return { outcome, room: two };
-    }
-    return impossible(outcome);
+
+    return { outcome: 'keep both', room: roomA };
   }
 
   wallClosure(starting: Wall[]): Set<Wall> {

@@ -91,6 +91,9 @@ class Room extends Component implements Solo {
     if (wall.room === this) {
       wall.room = null;
     }
+    if (this._walls.length === 0) {
+      this.entity.destroy();
+    }
   }
 
   containsPoint(point: Position): boolean {
