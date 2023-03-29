@@ -93,16 +93,38 @@ class Room extends Component implements Solo {
     }
   }
 
-  containsConvex(position: Position): boolean {
-    // checks if the given point is in this room, assuming
-    // this room's walls form a convex polygon.
-    for (const wall of this.walls) {
-      const vec = Vectors.between(wall.midpoint, position);
-      if (vec.dot(wall.insideNormal).sign < 0) {
-        return false;
-      }
+  containsPoint(point: Position): boolean {
+    return !!this.polygon?.contains(point);
+  }
+
+  get polygon(): Polygon | null {
+    for (const wall of this._walls) {
+      return new Polygon(
+        wall.getConnectedLoop().map(w => w.src.pos)
+      );
     }
-    return true;
+    return null;
+  }
+
+  get loop(): Wall[] {
+    const walls = this._walls;
+    if (walls.length === 0) {
+      return [];
+    }
+    return walls[0]!.getConnectedLoop();
+  }
+
+  get centroid(): Position {
+    const zerop = Position(Point.ZERO, 'model');
+    const loop = this.loop;
+    if (loop.length === 0) {
+      return zerop;
+    }
+    const zerov = Vector(Vec.ZERO, 'model');
+    const sum = this.loop.map(w => w.src.pos)
+      .map(w => Vectors.between(zerop, w))
+      .reduce((a, b) => a.plus(b), zerov)!;
+    return zerop.splus(1.0 / loop.length, sum);
   }
 
   tearDown() {
@@ -1277,6 +1299,15 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const RoomRenderer = (ecs: EntityComponentSystem) => {
+  ecs.getComponents(Room).forEach(room => {
+    App.canvas.text({
+      text: room.name,
+      point: room.centroid,
+      fill: 'black',
+      align: 'center',
+      baseline: 'middle',
+    });
+  });
 };
 
 const AngleRenderer = (ecs: EntityComponentSystem) => {

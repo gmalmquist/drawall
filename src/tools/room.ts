@@ -82,9 +82,14 @@ class DrawRoomTool extends Tool {
   }
 
   private mergeIntersectingRooms(room: Room) {
+    let operand = room;
     for (const other of App.ecs.getComponents(Room)) {
-      if (other === room) continue;
-      this.mergeRooms(other, room);
+      if (other === operand) continue;
+      const result = this.mergeRooms(other, operand);
+      operand = result.room;
+      if (operand === null) {
+        return;
+      }
     }
   }
 
@@ -104,120 +109,123 @@ class DrawRoomTool extends Tool {
     return results;
   }
 
-  private mergeRooms(one: Room, two: Room) {
-    // find wall joints that are guaranteed to be part of the new boundary.
-    // NB: the second room will be the one we just drew, which is
-    // conveniently guaranteed to be convex, so we just find all the points
-    // in the first room that stick outside of the second one.
-    const keepJoints = one.walls.map(wall => wall.src)
-      .filter(joint => !two.containsConvex(joint.pos));
-    if (keepJoints.length === 0) {
-      // second room completely encloses the first one
-      // (do we want to delete the first one in this case?)
-      return; 
-    }
+  private mergeLoops(loopA: Wall[], loopB: Wall[]): LoopMergeResult {
+    const polyB = new Polygon(loopB.map(w => w.src.pos));
+    const insideB = new Set(loopA.filter(w => polyB.contains(w.src.pos)));
 
-    const norm = (w: Wall): Vector => w.getEdge().normal.to('screen').unit();
-    const tan = (w: Wall): Vector => w.getEdge().vector.to('screen').unit();
-    const intersections = this.getIntersections(one, two);
-    if (intersections.length === 0) return;
+    const frontier = [...loopA];
+    const loopAWalls = new Set<Wall>(loopA);
+    const loopBWalls = new Set<Wall>(loopB);
 
-    const splits = new DefaultMap<string, Set<Wall>>(() => new Set());
+    let intersectionCount = 0;
 
-    const spliceWalls = (wall1: Wall, wall2: Wall, position: Position): boolean => {
-      const split1 = wall1.splitWall(position);
-      const split2 = wall2.splitWall(position);
-      if (split1 === null || split2 === null) {
-        return false;
-      }
-      const [a1, a2] = split1;
-      const [b1, b2] = split2;
+    while (frontier.length > 0) {
+      const wa = frontier.pop()!;
+      loopAWalls.add(wa);
+      const ea = wa.getEdge();
 
-      [a1, a2].forEach(w => splits.get(wall1.name).add(w));
-      [b1, b2].forEach(w => splits.get(wall2.name).add(w));
-
-      // oke this is gonna be some indecipherable math to see how things
-      // are oriented to know which things to connect to what.
-      if (norm(a1).dot(tan(b2)).sign > 0) {
-        // what we care about
-        a1.dst = b2.src; 
-
-        // leftovers
-        b1.dst = b1.dst.shallowDup();
-        a2.src = b1.dst;
-      } else {
-        // what we care about
-        b1.dst = a2.src;
-
-        // leftovers
-        a1.dst = a1.dst.shallowDup();
-        b2.src = a1.dst;
-      }
-
-      return true;
-    };
-
-    const spliceWallSplices = (wall1: Wall, wall2: Wall): boolean => {
-      const wallsA = splits.has(wall1.name) ? splits.get(wall1.name) : [wall1];
-      const wallsB = splits.has(wall2.name) ? splits.get(wall2.name) : [wall2];
-      for (const wallA of wallsA) {
-        for (const wallB of wallsB) {
-          const e1 = wallA.getEdge();
-          const e2 = wallB.getEdge();
-          const point = e1.intersection(e2);
-          if (point === null) continue;
-          return spliceWalls(wallA, wallB, point);
+      for (const wb of new Set(loopBWalls)) {
+        const hit = ea.intersection(wb.getEdge());
+        if (hit === null) {
+          continue;
         }
-      }
-      return false;
-    };
 
-    for (const hit of intersections) {
-      if (splits.has(hit.wall1.name) || splits.has(hit.wall2.name)) {
-        // have to retry the splitting the cross product of the previous splits.
-        spliceWallSplices(hit.wall1, hit.wall2);
-        continue;
-      }
-      spliceWalls(hit.wall1, hit.wall2, hit.position);
-    }
+        const splitA = wa.splitWall(hit);
+        if (splitA === null) continue;
+        const [wa0, wa1] = splitA;
 
-    // this will have created a couple loops; find the outer one, and discard the
-    // other.
-    const loops: Array<Array<Wall>> = [];
-    const goodWalls = new Set<Wall>();
-    for (const joint of keepJoints) {
-      if (joint.incoming === null || joint.outgoing === null) {
-        console.warn('cannot keep bad joint:', joint);
-        continue;
-      }
-      if (goodWalls.has(joint.incoming) || goodWalls.has(joint.outgoing)) {
-        continue; // already found this joint in another loop.
-      }
-      const loop = joint.outgoing!.getConnectedLoop();
-      loops.push(loop);
-      loop.forEach(wall => goodWalls.add(wall));
-    }
+        const splitB = wb.splitWall(hit);
+        if (splitB === null) {
+          // awkwardly, we have to un-split A now.
+          wa0.dst.elideJoint();
+          continue;
+        }
+        const [wb0, wb1] = splitB;
 
-    const allWalls = new Set<Wall>();
-    one.walls.forEach(w => allWalls.add(w));
-    two.walls.forEach(w => allWalls.add(w));
+        intersectionCount++;
 
-    // discard extraneous walls
-    for (const wall of allWalls) {
-      if (!goodWalls.has(wall)) {
-        wall.entity.destroy(); // >:3
-      }
-    }
+        loopAWalls.delete(wa);
+        // splits of `wa` will be added
+        // in next loop of the frontier
 
-    // make sure all walls are associated with the first room.
-    for (const loop of loops) {
-      for (const wall of loop) {
-        one.addWall(wall);
+        loopBWalls.delete(wb);
+        loopBWalls.add(wb0);
+        loopBWalls.add(wb1);
+
+        if (insideB.has(wa)) {
+          insideB.add(wa0);
+          wb0.dst = wa1.src;
+          wa0.dst = wb1.src;
+        } else {
+          insideB.add(wa1);
+          wa0.dst = wb1.src;
+          wb0.dst = wa1.src;
+        }
+
+        frontier.push(wa0);
+        frontier.push(wa1);
+
+        // don't break more than one wall
+        // at a time this way
+        break;
       }
     }
 
-    // destroy the now-empty second room.
-    two.entity.destroy();
+    if (intersectionCount === 0) {
+      if (insideB.size === loopA.length) {
+        // A is fully inside B
+        console.log('A fully inside B');
+        loopA.forEach(w => w.entity.destroy());
+        return { outcome: 'keep b', walls: loopB, };
+      }
+      const polyA = new Polygon(loopA.map(w => w.src.pos));
+      if (loopB.every(w => polyA.contains(w.src.pos))) {
+        // B is fully inside A
+        console.log('B fully inside A');
+        loopB.forEach(w => w.entity.destroy());
+        return { outcome: 'keep a', walls: loopA, };
+      }
+      console.log('fully disjoint');
+      // no intersection 
+      return { outcome: 'keep both', walls: [] };
+    }
+
+    const rootAWalls = [...loopAWalls].filter(a => !insideB.has(a));
+
+    // only choose the first loop
+    const loop = rootAWalls[0]!.getConnectedLoop();
+    const chosen = new Set(loop);
+    for (const w of loopAWalls) {
+      if (!chosen.has(w)) {
+        w.entity.destroy();
+      }
+    }
+    for (const w of loopBWalls) {
+      if (!chosen.has(w)) {
+        w.entity.destroy();
+      }
+    }
+    console.log('loop:', loop);
+    return { outcome: 'keep a', walls: loop };
+  }
+
+  private mergeRooms(one: Room, two: Room): RoomMergeResult {
+    console.log(`mergeRooms(${one.name}, ${two.name})`);
+    const { outcome, walls } = this.mergeLoops(one.loop, two.loop);
+    if (outcome === 'keep both') {
+      return { outcome, room: two };
+    }
+    if (outcome === 'keep a') {
+      walls.forEach(w => one.addWall(w));
+      two.entity.destroy();
+      return { outcome, room: one };
+    }
+    if (outcome === 'keep b') {
+      walls.forEach(w => two.addWall(w));
+      one.entity.destroy();
+      return { outcome, room: two };
+    }
+    return impossible(outcome);
   }
 
   wallClosure(starting: Wall[]): Set<Wall> {
@@ -240,6 +248,16 @@ class DrawRoomTool extends Tool {
     }
     return visited;
   }
+}
+
+interface RoomMergeResult {
+  outcome: 'keep a' | 'keep b' | 'keep both';
+  room: Room;
+}
+
+interface LoopMergeResult {
+  outcome: 'keep a' | 'keep b' | 'keep both';
+  walls: Wall[];
 }
 
 interface RoomIntersectionPoint {
