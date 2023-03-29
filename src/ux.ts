@@ -651,7 +651,7 @@ class UiState {
       closeEnough: drag => {
         const grid = Grid.getGrid();
         const delta = Distances.between(grid.snap(drag.end), drag.end);
-        return delta.le(grid.spacing.scale(0.5));
+        return delta.le(grid.spacing.scale(0.25));
       },
     });
     const theta = unwrap(this.snapping.angleThreshold.get());

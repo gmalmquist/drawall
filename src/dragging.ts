@@ -48,20 +48,24 @@ const Drags = {
     let best: SnapResult | null = null;
     let index = 0;
     for (const point of closure.points) {
+      const pointDrag = new Drag(
+        starts[index],
+        starts[index].plus(drag.delta),
+      );
       for (const snap of closure.snaps) {
         if (!filter(snap)) continue;
-        if (typeof snap.closeEnough !== 'undefined' && !snap.closeEnough(drag)) {
+        if (typeof snap.closeEnough !== 'undefined' && !snap.closeEnough(pointDrag)) {
           continue;
         }
-        const snapped = drag.snapped(snap);
-        const distance = Distances.between(drag.end, snapped.end);
+        const snapped = pointDrag.snapped(snap);
+        const distance = Distances.between(pointDrag.end, snapped.end);
         if (best === null || distance.lt(best.distance)) {
           best = {
             snap,
             item: closure.points[index],
             distance,
             snapped,
-            original: drag,
+            original: pointDrag,
           };
         }
       }
