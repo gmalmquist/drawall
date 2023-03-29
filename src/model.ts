@@ -71,6 +71,22 @@ class Room extends Component implements Solo {
     super(entity);
   }
 
+  get isInverted(): boolean {
+    const poly = this.polygon;
+    if (poly === null || poly.isDegenerate) return false;
+    const vertices = poly.vertices;
+    let inversity = 0;
+    for (let i = 0; i < vertices.length; i++) {
+      const a = vertices[i];
+      const b = vertices[(i + 1) % vertices.length];
+      const c = vertices[(i + 2) % vertices.length];
+      const ab = Vectors.between(a, b);
+      const bc = Vectors.between(b, c);
+      inversity += ab.r90().dot(bc).sign > 0 ? 1 : -1;
+    }
+    return inversity > 0;
+  }
+
   get walls(): Wall[] {
     return this._walls.map(x => x);
   }
@@ -1304,7 +1320,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 const RoomRenderer = (ecs: EntityComponentSystem) => {
   ecs.getComponents(Room).forEach(room => {
     App.canvas.text({
-      text: room.name,
+      text: room.isInverted ? 'interior wall' : room.name,
       point: room.centroid,
       fill: 'black',
       align: 'center',

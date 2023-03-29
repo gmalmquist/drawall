@@ -67,6 +67,7 @@ class Viewport {
     });
     const markDirty = (_: any) => { this._changed = true; };
     App.settings.fontSizeRef.onChange(markDirty);
+    App.settings.showGrid.onChange(markDirty);
     App.project.gridSpacingRef.onChange(markDirty);
     App.project.displayUnitRef.onChange(markDirty);
   }
@@ -431,14 +432,10 @@ const GridRenderer = (ecs: EntityComponentSystem) => {
   App.viewport.resetChanged();
   grid.update();
 
-  // we still want to make sure to update the grid if necessary,
-  // because it's used for snapping and stuff, even if we're not
-  // rendering it.
-  if (!App.settings.showGrid.get()) return;
-
   const c = App.background;
   c.clear();
 
+  if (!App.settings.showGrid.get()) return;
 
   const columns = Math.ceil(
     Distance(App.viewport.screen_width, 'screen').div(grid.spacing)
