@@ -1383,8 +1383,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
     });
 
     canvas.beginPath();
-    canvas.moveTo(center);
-    canvas.lineTo(center.splus(arcRadius, rightVec.unit()));
+    canvas.moveTo(center.splus(arcRadius, rightVec.unit()));
     canvas.arc(
       center,
       arcRadius,
@@ -1392,8 +1391,6 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       leftAngle,
       true,
     );
-    canvas.closePath();
-
     canvas.strokeStyle = color;
     canvas.setLineDash(constraint.enabled ? [] : [2, 2]);
     canvas.lineWidth = 1;
