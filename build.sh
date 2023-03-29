@@ -74,6 +74,7 @@ canvas.js
 tools.js
 actions.js
 hotkeys.js
+dragging.js
 ux.js
 model.js
 popups.js
