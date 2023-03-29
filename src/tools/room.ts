@@ -136,9 +136,38 @@ class DrawRoomTool extends Tool {
       b.src = a.dst;
     };
 
+    const splitDepth = new Counter();
+    const spliceCount = { val: 0 };
+
     const splice = (a0: Wall, a1: Wall, b0: Wall, b1: Wall) => {
+      spliceCount.val++;
+
       connect(a0, b1);
       connect(b0, a1);
+
+      const arrow = (w: Wall, l: string, c: string) => {
+        const offset = w.outsideNormal.unit()
+          .scale(Distance(5 * (1 + splitDepth.get(w.name)), 'screen'));
+        const tangent = w.tangent.unit();
+        const shrink = Distance(10, 'screen')
+          .min(w.length.scale(0.25));
+        const src = w.src.pos.splus(shrink, tangent).plus(offset);
+        const dst = w.dst.pos.splus(shrink.neg(), tangent).plus(offset);
+        App.ecs.createEntity().add(Arrow, src, dst, c, `${spliceCount.val}.${l}`);
+      };
+
+      arrow(a0, 'a0', 'blue');
+      arrow(b1, 'b1', 'blue');
+
+      arrow(b0, 'b0', 'red');
+      arrow(a1, 'a1', 'red');
+    };
+
+    const verticesOverlap = (one: Wall[], two: Wall[]): boolean => {
+      const dEps = Distance(eps, 'screen');
+      return one.some(w => two.some(
+        v => Distances.between(w.src.pos, v.src.pos).lt(dEps)
+      ));
     };
 
     while (frontier.length > 0) {
@@ -163,6 +192,8 @@ class DrawRoomTool extends Tool {
         if (splitA === null) continue;
         const [wa0, wa1] = splitA;
 
+        splitDepth.add(wa1.name, splitDepth.inc(wa0.name));  
+
         const splitB = wb.splitWall(hit);
         if (splitB === null) {
           // awkwardly, we have to un-split A now.
@@ -170,6 +201,8 @@ class DrawRoomTool extends Tool {
           continue;
         }
         const [wb0, wb1] = splitB;
+
+        splitDepth.add(wb1.name, splitDepth.inc(wb0.name));  
 
         intersectionCount++;
 
@@ -216,11 +249,13 @@ class DrawRoomTool extends Tool {
     for (let i = 0; i < loops.length; i++) {
       if (loops[i].some(w => outsideWallsA.has(w))) {
         iA = i;
+        break;
       }
     }
     for (let i = 0; i < loops.length; i++) {
       if (i !== iA && loops[i].some(w => outsideWallsB.has(w))) {
         iB = i;
+        break;
       }
     }
     if (iA < 0) {
@@ -229,24 +264,24 @@ class DrawRoomTool extends Tool {
     if (iB < 0) {
       iB = iA === 0 ? 1 : 0;
     }
-    
+  
+    const keepB = !verticesOverlap(loops[iA], loops[iB]);
+
     for (let i = 0; i < loops.length; i++) {
       if (i === iA) {
         loops[i].forEach(w => roomA.addWall(w));
       } else if (i === iB) {
         loops[i].forEach(w => roomB.addWall(w));
-      } else {
+      } else if (verticesOverlap(loops[i], loops[iA]) 
+        || (keepB && verticesOverlap(loops[i], loops[iB]))) {
         loops[i].forEach(w => w.entity.destroy());
+      } else {
+        const room = App.ecs.createEntity().add(Room);
+        loops[i].forEach(w => room.addWall(w));
       }
     }
 
-    // TODO: to get the subtractive thing working, instead of deleting
-    // all "extra" loops as above, we need to convert them all into
-    // their own rooms *if* they are not degenerate and do not overlap
-    // with other rooms.
-    const dEps = Distance(eps, 'model');
-    if (loops[iB].some(w => loops[iA].some(
-      v => Distances.between(w.src.pos, v.src.pos).lt(dEps)))) {
+    if (!keepB) {
       roomB.entity.destroy();
       return { outcome: 'keep a', room: roomA };
     }

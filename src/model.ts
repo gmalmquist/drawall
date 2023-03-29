@@ -424,6 +424,10 @@ class Wall extends Component implements Solo {
     return this.src.pos.lerp(0.5, this.dst.pos);
   }
 
+  get length(): Distance {
+    return Distances.between(this.src.pos, this.dst.pos);
+  }
+
   // split this wall into two walls, creating a new
   // wall joint between them.
   splitWall(at: Position): readonly [Wall, Wall] | null {

@@ -69,6 +69,7 @@ class App {
     App.ecs.registerSystem(WallRenderer);
     App.ecs.registerSystem(WallJointRenderer);
     App.ecs.registerSystem(RulerRenderer);
+    App.ecs.registerSystem(MarkupRenderer);
 
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);

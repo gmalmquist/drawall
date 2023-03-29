@@ -193,6 +193,33 @@ class Canvas2d {
     this.g.bezierCurveTo(b.x, b.y, c.x, c.y, d.x, d.y);
   }
 
+  arrow(
+    src: Position,
+    dst: Position,
+    width: Distance = Distance(1, 'screen'),
+  ) {
+    const headWidth = width.scale(5);
+    const headHeight = width.scale(10);
+    const vector = Vectors.between(src, dst);
+    const tangent = vector.unit();
+    const shaftLength = vector.mag().minus(headHeight)
+      .max(Distance(0, 'model'));
+    const normal = tangent.r90();
+    this.beginPath();
+    this.moveTo(src.splus(width.scale(0.5), normal));
+    this.lineTo(src.splus(width.scale(0.5), normal)
+      .splus(shaftLength, tangent));
+    this.lineTo(src.splus(headWidth.scale(0.5), normal)
+      .splus(shaftLength, tangent));
+    this.lineTo(dst);
+    this.lineTo(src.splus(headWidth.scale(-0.5), normal)
+      .splus(shaftLength, tangent));
+    this.lineTo(src.splus(width.scale(-0.5), normal)
+      .splus(shaftLength, tangent));
+    this.lineTo(src.splus(width.scale(-0.5), normal));
+    this.closePath();
+  }
+
   polygon(polygon: Polygon) {
     this.beginPath();
     polygon.vertices.forEach((v, i) => {
@@ -296,8 +323,8 @@ class Canvas2d {
 interface TextDrawProps {
   text: string;
   point: Position;
-  fill?: string;
-  stroke?: string;
+  fill?: string | CanvasGradient;
+  stroke?: string | CanvasGradient;
   lineWidth?: number;
   shadow?: string;
   axis?: Vector;
@@ -305,6 +332,63 @@ interface TextDrawProps {
   align?: CanvasTextAlign;
   baseline?: CanvasTextBaseline;
 }
+
+class Arrow extends Component {
+  public readonly src: Ref<Position>;
+  public readonly dst: Ref<Position>;
+
+  constructor(
+    entity: Entity,
+    src: Position,
+    dst: Position,
+    public readonly color: string | CanvasGradient,
+    public readonly label: string = '',
+  ) {
+    super(entity);
+
+    this.src = Refs.of(src);
+    this.dst = Refs.of(dst);
+
+    entity.add(Handle, {
+      getPos: () => this.src.get(),
+      setPos: p => {
+        this.dst.set(p.plus(this.vector));
+        this.src.set(p);
+      },
+      distance: p => new SpaceEdge(
+        this.src.get(), this.dst.get(),
+      ).distance(p),
+    });
+  }
+
+  get vector(): Vector {
+    return Vectors.between(this.src.get(), this.dst.get());
+  }
+}
+
+const MarkupRenderer = (ecs: EntityComponentSystem) => {
+  for (const arrow of ecs.getComponents(Arrow)) {
+    App.canvas.arrow(arrow.src.get(), arrow.dst.get());
+    App.canvas.fillStyle = arrow.color;
+    App.canvas.lineWidth = 1;
+    App.canvas.fill();
+
+    if (arrow.label) {
+      App.canvas.text({
+        text: arrow.label,
+        fill: arrow.color,
+        point: arrow.src.get().splus(0.5, arrow.vector).splus(
+          Distance(App.settings.fontSize, 'screen'),
+          arrow.vector.unit(),
+        ),
+        align: 'center',
+        baseline: 'bottom',
+        axis: arrow.vector,
+        keepUpright: true,
+      });
+    }
+  }
+};
 
 class Grid extends Component implements Solo {
   public readonly [SOLO] = true;

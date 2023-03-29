@@ -120,8 +120,8 @@ class VectorCanvas implements CanvasApi {
     const element = this.element('text');
     element.innerHTML = text.text;
     element.setXY(text.point);
-    element.set('stroke', text.stroke);
-    element.set('fill', text.fill);
+    element.set('stroke', `${text.stroke}`);
+    element.set('fill', `${text.fill}`);
     element.set('font-size', App.settings.fontSize); 
     const cssStyles = {
       'text-align': text.align,
