@@ -35,14 +35,8 @@ class PointerTool extends SnappingTool {
         e.position, 
         h => h.clickable || h.draggable || h.selectable
       );
-      if (handle === null) {
-        if (!App.ui.multiSelecting) {
-          App.ui.clearSelection();
-        }
-      } else if (App.ui.selection.size > 1 || App.ui.multiSelecting || handle.selected) {
-        App.ui.addSelection(handle);
-      } else {
-        App.ui.setSelection(handle);
+      if (handle === null && !App.ui.multiSelecting) {
+        App.ui.clearSelection();
       }
     });
 
@@ -71,7 +65,11 @@ class PointerTool extends SnappingTool {
 
       if (handle.selectable) {
         if (App.ui.multiSelecting) {
-          App.ui.addSelection(handle);
+          if (handle.isSelected) {
+            handle.selected = false;
+          } else {
+            App.ui.addSelection(handle);
+          }
         } else {
           App.ui.setSelection(handle);
         }
