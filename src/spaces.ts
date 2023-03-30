@@ -265,6 +265,7 @@ type Distance = SpaceDistance;
 const Distance = SpaceDistance.of;
 const Distances = {
   between: SpaceDistance.between,
+  zero: (space: SpaceName) => Distance(0, space),
 };
 
 class SpaceAngle extends BaseSpaceValue<Radians> {
@@ -540,6 +541,23 @@ class SpacePos extends BaseSpaceValue<Point> {
     return SpacePos.of(Point.ZERO, space);
   }
 
+  public static centroid(points: Array<Spaced<Point>>): SpacePos {
+    if (points.length === 0) {
+      throw new Error('cannot compute the centroid of an empty array.');
+    }
+    const space = points[0]!.space;
+    if (points.length === 1) {
+      return SpacePos.of(points[0]!.get(space), space);
+    }
+    const sum = { x: 0, y: 0 };
+    points.map(p => p.get(space)).forEach(p => {
+      sum.x += p.x;
+      sum.y += p.y;
+    });
+    const n = 1.0 * points.length;
+    return SpacePos.of(new Point(sum.x / n, sum.y / n), space);
+  }
+
   public static of(point: Point, space: SpaceName): SpacePos {
     return new SpacePos(new SpaceValue(
       point,
@@ -553,6 +571,7 @@ type Position = SpacePos;
 const Position = SpacePos.of;
 const Positions = {
   zero: SpacePos.zero,
+  centroid: SpacePos.centroid,
 };
 
 class SpaceEdge {
@@ -825,6 +844,10 @@ class Polygon extends SDF {
       new SpaceEdge(v, arr[(i + 1) % arr.length]));
   }
 
+  get centroid(): Position {
+    return Positions.centroid(this._vertices);
+  }
+
   get isDegenerate(): boolean {
     return this._vertices.length < 3;
   }
@@ -882,7 +905,9 @@ class Polygon extends SDF {
   }
 
   public override contains(point: Position): boolean {
-    if (this.isConvex) return this.containsConvex(point);
+    if (this.isConvex) {
+      return this.containsConvex(point);
+    }
     return this.containsConcave(point);
   }
 
@@ -897,6 +922,12 @@ class Polygon extends SDF {
   }
 
   public containsConcave(point: Position): boolean {
+    // first do a cheap OOB test to avoid raycasting where possible
+    const bounds: Rect = this.bounds;
+    if (!bounds.contains(point)) {
+      return false;
+    }
+
     const edges = this.edges;
     for (let attempt = 0; attempt < 10; attempt++) {
       const ray = attempt === 0
@@ -936,6 +967,25 @@ class Polygon extends SDF {
       }
     }
     return hits % 2 === 0 ? 'outside' : 'inside';
+  }
+
+  public static arrow(src: Position, dst: Position, width: Distance): Polygon {
+    const headWidth = width.scale(5);
+    const headHeight = width.scale(10);
+    const vector = Vectors.between(src, dst);
+    const tangent = vector.unit();
+    const shaftLength = vector.mag().minus(headHeight)
+      .max(Distances.zero(src.space));
+    const normal = tangent.r90();
+    return new Polygon([
+      src.splus(width.scale(0.5), normal),
+      src.splus(width.scale(0.5), normal).splus(shaftLength, tangent),
+      src.splus(headWidth.scale(0.5), normal).splus(shaftLength, tangent),
+      dst,
+      src.splus(headWidth.scale(-0.5), normal).splus(shaftLength, tangent),
+      src.splus(width.scale(-0.5), normal).splus(shaftLength, tangent),
+      src.splus(width.scale(-0.5), normal),
+    ]);
   }
 }
 

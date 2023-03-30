@@ -133,11 +133,11 @@ class Canvas2d {
     this.g.clearRect(0, 0, this.width + 1, this.height + 1);
   }
 
-  set strokeStyle(style: string | CanvasGradient) {
+  set strokeStyle(style: CanvasColor) {
     this.g.strokeStyle = style;
   }
 
-  set fillStyle(style: string | CanvasGradient) {
+  set fillStyle(style: CanvasColor) {
     this.g.fillStyle = style;
   }
 
@@ -197,26 +197,7 @@ class Canvas2d {
     dst: Position,
     width: Distance = Distance(1, 'screen'),
   ) {
-    const headWidth = width.scale(5);
-    const headHeight = width.scale(10);
-    const vector = Vectors.between(src, dst);
-    const tangent = vector.unit();
-    const shaftLength = vector.mag().minus(headHeight)
-      .max(Distance(0, 'model'));
-    const normal = tangent.r90();
-    this.beginPath();
-    this.moveTo(src.splus(width.scale(0.5), normal));
-    this.lineTo(src.splus(width.scale(0.5), normal)
-      .splus(shaftLength, tangent));
-    this.lineTo(src.splus(headWidth.scale(0.5), normal)
-      .splus(shaftLength, tangent));
-    this.lineTo(dst);
-    this.lineTo(src.splus(headWidth.scale(-0.5), normal)
-      .splus(shaftLength, tangent));
-    this.lineTo(src.splus(width.scale(-0.5), normal)
-      .splus(shaftLength, tangent));
-    this.lineTo(src.splus(width.scale(-0.5), normal));
-    this.closePath();
+    this.polygon(Polygon.arrow(src, dst, width));
   }
 
   polygon(polygon: Polygon) {
@@ -319,11 +300,13 @@ class Canvas2d {
   }
 }
 
+type CanvasColor = string | CanvasGradient;
+
 interface TextDrawProps {
   text: string;
   point: Position;
-  fill?: string | CanvasGradient;
-  stroke?: string | CanvasGradient;
+  fill?: CanvasColor;
+  stroke?: CanvasColor;
   lineWidth?: number;
   shadow?: string;
   axis?: Vector;
@@ -340,7 +323,7 @@ class Arrow extends Component {
     entity: Entity,
     src: Position,
     dst: Position,
-    public readonly color: string | CanvasGradient,
+    public readonly color: CanvasColor,
     public readonly label: string = '',
   ) {
     super(entity);

@@ -4,10 +4,17 @@
 const PINK = '#F5A9B8';
 const BLUE = '#5BCEFA';
 
+// TODO obsolete; delete
 interface NamedAxis {
   name: string;
   direction: Vector;
   points?: Position[];
+}
+
+interface KnobProps {
+  poly: () => Polygon;
+  fill?: CanvasColor;
+  stroke?: CanvasColor;
 }
 
 interface HandleProps {
@@ -23,6 +30,7 @@ interface HandleProps {
   cursor?: () => Cursor;
   onDelete?: () => 'keep' | 'kill';
   visible?: () => boolean;
+  knob?: KnobProps;
 }
 
 type CursorBuiltin = 'default' | 'none' | 'help' | 'context-menu'
@@ -144,6 +152,8 @@ class Handle extends Component implements Solo {
   private readonly _onDelete: (() => 'keep' | 'kill') | undefined;
   private readonly _visible: () => boolean;
   private readonly _drag: () => DragItem;
+  private readonly _knob: KnobProps | undefined;
+  private readonly knobs: Handle[] = [];
 
   public clickable: boolean = true;
   public draggable: boolean = true;
@@ -165,7 +175,8 @@ class Handle extends Component implements Solo {
     this._drag = typeof props.drag === 'undefined' ? Drags.empty : props.drag;
 
     this.getPos = props.getPos;
-    this._onDelete = props.onDelete; 
+    this._onDelete = props.onDelete;
+    this._knob = props.knob;
 
     const defaultDistanceFunc = (p: Position) => Distances.between(props.getPos(), p);
     this.distanceFunc = typeof props.distance === 'undefined'
@@ -187,6 +198,29 @@ class Handle extends Component implements Solo {
         },
       });
     }
+  }
+
+  get knob(): KnobProps | null {
+    const k = this._knob;
+    if (typeof k === 'undefined') {
+      return null;
+    }
+    return { ...k };
+  }
+
+  createKnob(props: KnobProps): Handle {
+    const knob = this.entity.ecs.createEntity().add(Handle, {
+      ...props,
+      distance: p => props.poly().sdist(p).max(Distance(0, 'model')),
+      getPos: () => props.poly().centroid,
+      setPos: _ => { /* noop */ },
+    });
+    this.addKnob(knob);
+    return knob;
+  }
+
+  addKnob(knob: Handle) {
+    this.knobs.push(knob);
   }
 
   getDragClosure(type: 'minimal' | 'complete'): DragClosure {
@@ -296,6 +330,12 @@ class Handle extends Component implements Solo {
 
   distanceFrom(p: Position): Distance {
     return this.distanceFunc(p);
+  }
+
+  override tearDown() {
+    for (const knob of this.knobs) {
+      knob.entity.destroy();
+    }
   }
 }
 
@@ -739,6 +779,25 @@ class UiState {
 
   get defaultDragHandler(): UiEventDispatcher {
     return this.getDefaultDragHandler(h => h.draggable);
+  }
+
+  public renderKnob(handle: Handle) {
+    const knob = handle.knob;
+    if (knob === null) {
+      return;
+    }
+    const poly = knob.poly();
+    App.canvas.polygon(poly);
+    
+    if (typeof knob.fill !== 'undefined') {
+      App.canvas.fillStyle = knob.fill;
+      App.canvas.fill();
+    }
+    if (typeof knob.stroke !== 'undefined') {
+      App.canvas.lineWidth = 1;
+      App.canvas.strokeStyle = knob.stroke;
+      App.canvas.stroke();
+    }
   }
 
   renderSnap() {

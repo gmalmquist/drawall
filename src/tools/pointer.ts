@@ -116,6 +116,8 @@ class PointerTool extends SnappingTool {
   }
 
   override update() {
+    this.renderNearbyKnobs();
+
     const rect = this.selectionRect.get();
     if (rect === null) return;
 
@@ -131,6 +133,19 @@ class PointerTool extends SnappingTool {
     App.canvas.rect(rect);
     App.canvas.fill();
     App.canvas.stroke();
+  }
+
+  private renderNearbyKnobs() {
+    const selectionSize = App.ui.selection.size;
+    const handleDrawRadius = Distance(100, 'screen');
+    const shouldRender = (h: Handle): boolean => {
+      if (h.knob === null) return false;
+      if (selectionSize === 1 && h.isSelected) return true;
+      if (h.knob.poly().sdist(App.ui.mousePos).lt(handleDrawRadius)) return true;
+      return false;
+    };
+    const handles = App.ecs.getComponents(Handle).filter(shouldRender);
+    handles.forEach(h => App.ui.renderKnob(h));
   }
 
   private getDrawSelectDispatcher(): UiEventDispatcher {
