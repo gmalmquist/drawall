@@ -15,10 +15,12 @@ interface KnobProps {
   poly: () => Polygon;
   fill?: CanvasColor;
   stroke?: CanvasColor;
+  parent: Entity,
 }
 
 interface HandleProps {
   getPos: () => Position;
+  // TODO obsolete; delete
   setPos?: (p: Position) => void;
   distance?: (p: Position) => Distance;
   drag?: () => DragItem;
@@ -49,8 +51,6 @@ type CursorSingle = CursorBuiltin | CursorCustom;
 type CursorWithFallback = `${CursorSingle}, ${CursorSingle}`;
 
 type Cursor = CursorSingle | CursorWithFallback;
-
-
 
 const getResizeCursor = (direction: Vector, bidirectional: boolean = true): Cursor => {
   const dir = direction.get('screen');
@@ -181,23 +181,6 @@ class Handle extends Component implements Solo {
     const defaultDistanceFunc = (p: Position) => Distances.between(props.getPos(), p);
     this.distanceFunc = typeof props.distance === 'undefined'
       ? defaultDistanceFunc : props.distance;
-
-    if (typeof props.setPos !== 'undefined') {
-      const setPos = props.setPos!;
-      if (false)
-      this.events.addDragListener({
-        onStart: (e) => {
-          return props.getPos();
-        },
-        onUpdate: (e, start: Position) => {
-          setPos(start.plus(e.delta));
-        },
-        onEnd: (e, start: Position) => {
-          setPos(start.plus(e.delta));
-          return start;
-        },
-      });
-    }
   }
 
   get knob(): KnobProps | null {
@@ -208,12 +191,17 @@ class Handle extends Component implements Solo {
     return { ...k };
   }
 
-  createKnob(props: KnobProps): Handle {
+  createKnob(
+    props: Omit<KnobProps, 'parent'>,
+    handleProps: Partial<HandleProps>,
+  ): Handle {
     const knob = this.entity.ecs.createEntity().add(Handle, {
-      ...props,
+      ...handleProps,
+      knob: { ...props, parent: this.entity, },
       distance: p => props.poly().sdist(p).max(Distance(0, 'model')),
       getPos: () => props.poly().centroid,
       setPos: _ => { /* noop */ },
+      priority: 3,
     });
     this.addKnob(knob);
     return knob;
@@ -670,18 +658,8 @@ class UiState {
 
   getDragClosure(
     type: 'minimal' | 'complete' = 'minimal',
-    ...primarySelection: Handle[]
+    selection: Handle[],
   ): DragClosure {
-    const selection: Array<Handle> = [];
-    const seen = new Set<Handle>();
-    const collect = (h: Handle) => {
-      if (seen.has(h)) return;
-      seen.add(h);
-      selection.push(h);
-    };
-    primarySelection.forEach(collect);
-    this.selection.forEach(collect);
-
     const closure = Drags.closure(type, ...selection.map(s => s.getDragItem()));
     closure.snaps.push({
       kind: 'point',
@@ -745,8 +723,25 @@ class UiState {
     dispatcher.addDragListener({
       onStart: e => {
         const hovering = this.getHandleAt(e.start, filter);
-        const primarySelection = hovering ? [ hovering ] : [];
-        const closure = this.getDragClosure('minimal', ...primarySelection);
+        const selection: Array<Handle> = [];
+
+        if (hovering !== null) {
+          selection.push(hovering);
+
+          if (hovering.selectable) {
+            const seen = new Set<Handle>(selection);
+            const collect = (h: Handle) => {
+              if (seen.has(h)) return;
+              seen.add(h);
+              selection.push(h);
+            };
+            this.selection.forEach(collect);
+          }
+        } else {
+          this.selection.forEach(s => selection.push(s));
+        }
+        
+        const closure = this.getDragClosure('minimal', selection);
         const starts = closure.points.map(point => point.get());
         return { closure, starts };
       },
@@ -792,6 +787,7 @@ class UiState {
     if (typeof knob.fill !== 'undefined') {
       App.canvas.fillStyle = knob.fill;
       App.canvas.fill();
+      App.canvas.fillCircle(poly.centroid, Distance(5, 'screen'));
     }
     if (typeof knob.stroke !== 'undefined') {
       App.canvas.lineWidth = 1;

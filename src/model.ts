@@ -232,56 +232,62 @@ class Wall extends Component implements Solo {
       },
       distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
+      drag: () => ({
+        kind: 'group',
+        name: 'endpoints',
+        aggregate: 'all',
+        items: [
+          this.src.entity.only(Handle).getDragItem(),
+          this.dst.entity.only(Handle).getDragItem(),
+        ],
+      }),
+      onDelete: () => {
+        this.elideWall();
+        return 'kill';
+      },
+    });
+
+    handle.createKnob({
+      poly: () => Polygon.arrow(
+        this.midpoint.splus(Distance(10, 'screen'), this.getEdge().normal),
+        this.midpoint.splus(Distance(30, 'screen'), this.getEdge().normal),
+        Distance(10, 'screen'),
+      ),
+      fill: BLUE,
+    }, {
+      clickable: false,
+      selectable: false,
+      draggable: true,
+      cursor: () => getResizeCursor(this.outsideNormal, false),
       drag: () => {
         const srcpos = this.src.pos;
         const dstpos = this.dst.pos;
         const srctan = this.src.incoming?.tangent;
         const dsttan = this.dst.outgoing?.tangent;
         return {
-          kind: 'group',
-          aggregate: 'first',
-          name: this.name,
-          items: [
-            {
-              kind: 'point',
-              name: 'midpoint',
-              get: () => this.getEdge().midpoint,
-              set: (midpoint) => {
-                if (typeof srctan !== 'undefined' && typeof dsttan !== 'undefined') {
-                  const tangent = Vectors.between(srcpos, dstpos);
-                  const ray = new SpaceRay(midpoint, tangent);
-                  const srchit = ray.intersection(new SpaceRay(srcpos, srctan));
-                  const dsthit = ray.intersection(new SpaceRay(dstpos, dsttan));
-                  if (srchit === null || dsthit === null) {
-                    // shouldn't happen unless the edge is degenerate or smth.
-                    return; 
-                  }
-                  this.src.pos = srchit.point;
-                  this.dst.pos = dsthit.point;
-                } else {
-                  const wing = Vectors.between(srcpos, dstpos).scale(0.5);
-                  this.src.pos = midpoint.minus(wing);
-                  this.dst.pos = midpoint.plus(wing);
-                }
-              },
-              disableWhenMultiple: true,
-            },
-            {
-              kind: 'group',
-              name: 'endpoints',
-              aggregate: 'all',
-              items: [
-                this.src.entity.only(Handle).getDragItem(),
-                this.dst.entity.only(Handle).getDragItem(),
-              ],
-            },
-          ],
+          kind: 'point',
+          name: 'midpoint',
+          get: () => this.getEdge().midpoint,
+          set: (midpoint) => {
+            if (typeof srctan !== 'undefined' && typeof dsttan !== 'undefined') {
+              const tangent = Vectors.between(srcpos, dstpos);
+              const ray = new SpaceRay(midpoint, tangent);
+              const srchit = ray.intersection(new SpaceRay(srcpos, srctan));
+              const dsthit = ray.intersection(new SpaceRay(dstpos, dsttan));
+              if (srchit === null || dsthit === null) {
+                // shouldn't happen unless the edge is degenerate or smth.
+                return; 
+              }
+              this.src.pos = srchit.point;
+              this.dst.pos = dsthit.point;
+            } else {
+              const wing = Vectors.between(srcpos, dstpos).scale(0.5);
+              this.src.pos = midpoint.minus(wing);
+              this.dst.pos = midpoint.plus(wing);
+            }
+          },
+          disableWhenMultiple: true,
         };
-      },
-      cursor: () => getResizeCursor(this.outsideNormal),
-      onDelete: () => {
-        this.elideWall();
-        return 'kill';
       },
     });
 

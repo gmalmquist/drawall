@@ -79,7 +79,7 @@ class PointerTool extends SnappingTool {
     this.events.onMouse('move', e => {
       if (App.ui.dragging) return;
 
-      const handle = App.ui.getHandleAt(e.position, h => h.selectable && h.hoverable);
+      const handle = App.ui.getHandleAt(e.position, h => h.clickable || h.draggable);
 
       if (handle?.clickable || handle?.draggable) {
         App.pane.style.cursor = handle.getContextualCursor() || this.cursor;
@@ -98,8 +98,7 @@ class PointerTool extends SnappingTool {
     this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
         const overHandle = App.ui.getHandleAt(e.start, h => h.draggable) !== null;
-        const selection = App.ui.selection;
-        if (selection.size > 0 && overHandle) {
+        if (overHandle) {
           const handler = App.ui.defaultDragHandler;
           handler.handleDrag(e);
           return handler;
@@ -140,7 +139,7 @@ class PointerTool extends SnappingTool {
     const handleDrawRadius = Distance(100, 'screen');
     const shouldRender = (h: Handle): boolean => {
       if (h.knob === null) return false;
-      if (selectionSize === 1 && h.isSelected) return true;
+      if (selectionSize === 1 && h.knob.parent.only(Handle).isSelected) return true;
       if (h.knob.poly().sdist(App.ui.mousePos).lt(handleDrawRadius)) return true;
       return false;
     };
