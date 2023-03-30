@@ -15,6 +15,7 @@ class RulerTool extends SnappingTool {
 
   override onToolSelected() {
     App.ui.clearSelection();
+    App.ui.snapping.enabled = false;
   }
 
   override setup() {
@@ -59,14 +60,14 @@ class RulerTool extends SnappingTool {
       }
     });
 
-    type DragState = { handle?: Handle, ruler?: Ruler };
+    type DragState = { events?: UiEventDispatcher, ruler?: Ruler };
     this.events.addDragListener<DragState>({
       onStart: (e) => {
         const handle = App.ui.getHandleAt(e.start);
         if (handle !== null && this.isRulerHandle(handle)) {
-          handle.events.handleDrag(e);
-          App.pane.style.cursor = 'grabbed';
-          return { handle };
+          const events = App.ui.getDefaultDragHandler(h => this.isRulerHandle(h));
+          events.handleDrag(e);
+          return { events };
         }
 
         App.pane.style.cursor = this.cursor;
@@ -75,13 +76,13 @@ class RulerTool extends SnappingTool {
         ruler.end.with(s => s.dragTo(e.start.plus(e.delta)));
         return { ruler };
       },
-      onUpdate: (e, { ruler, handle }) => {
+      onUpdate: (e, { ruler, events }) => {
         ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
-        handle?.events?.handleDrag(e);
+        events?.handleDrag(e);
       },
-      onEnd: (e, { ruler, handle }) => {
+      onEnd: (e, { ruler, events }) => {
         ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
-        handle?.events?.handleDrag(e);
+        events?.handleDrag(e);
         if (ruler) {
           App.ui.setSelection(ruler.entity.only(Handle));
         }
@@ -204,6 +205,12 @@ class RulerEndpoint extends PhysNode implements Solo {
         }
         return impossible(attach);
       },
+      drag: () => ({
+        kind: 'point',
+        name: this.name,
+        get: () => this.pos,
+        set: p => this.dragTo(p),
+      }),
       onDelete: () => {
         this.ruler.map(x => x.entity).with(x => x.destroy());
         this.twin.map(x => x.entity).with(x => x.destroy());
@@ -491,6 +498,15 @@ class Ruler extends Component implements Solo {
         .map(e => e.distance(p))
         .or(Distance(Number.POSITIVE_INFINITY, 'screen')),
       visible: Ruler.areRulersVisible,
+      drag: () => ({
+        kind: 'group',
+        aggregate: 'all',
+        name: this.name,
+        items: [ this.start, this.end ]
+          .map(ref => ref.unwrap())
+          .filter(r => r !== null)
+          .map(e => e!.entity.only(Handle).getDragItem()),
+      }),
     });
 
     handle.events.addDragListener({

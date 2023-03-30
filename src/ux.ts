@@ -437,11 +437,11 @@ class SnapState {
   );
 
   public get enabled(): boolean {
-    return this.enabledRef.get();
+    return this.enableByDefaultRef.get();
   }
 
   public set enabled(v: boolean) {
-    this.enabledRef.set(v);
+    this.enableByDefaultRef.set(v);
   }
 
   public get snapToLocal(): boolean {
