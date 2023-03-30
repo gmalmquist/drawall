@@ -831,6 +831,7 @@ class UiState {
   }
 
   public snapPoint(pos: Position) {
+    // TODO: should prob plug into formalized snapping system
     if (App.settings.snapGrid.get()) {
       return Grid.getGrid().snap(pos);
     }

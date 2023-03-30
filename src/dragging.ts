@@ -18,6 +18,10 @@ const Drags = {
       if (seenItems.has(item)) continue;
       seenItems.add(item);
 
+      if (roots.length > 1 && item.disableWhenMultiple) {
+        continue;
+      }
+
       item.snaps?.forEach(s => {
         if (seenSnaps.has(s)) return;
         seenSnaps.add(s);
@@ -32,12 +36,17 @@ const Drags = {
         continue;
       }
       if (item.kind === 'group') {
-        for (let i = 0; i < 1 || type === 'complete'; i++) {
-          frontier.push(item.items[i]);
+        for (const x of item.items) {
+          if (roots.length > 1 && x.disableWhenMultiple) {
+            continue;
+          }
+          frontier.push(x);
+          if (type === 'minimal' && item.aggregate !== 'all') {
+            break;
+          }
         }
       }
     }
-
     return closure;
   },
   chooseSnap: (
@@ -94,6 +103,7 @@ interface DragBase<K extends string> {
   kind: K;
   name: string;
   snaps?: DragSnap[];
+  disableWhenMultiple?: boolean;
 }
 
 interface DragPoint extends DragBase<'point'> {

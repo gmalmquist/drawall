@@ -232,82 +232,56 @@ class Wall extends Component implements Solo {
       },
       distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
-      drag: () => ({
-        kind: 'group',
-        aggregate: 'first',
-        name: this.name,
-        items: [
-          {
-            kind: 'point',
-            name: 'midpoint',
-            get: () => this.getEdge().midpoint,
-            set: (midpoint) => {
-              const wing = this.getEdge().vector.scale(0.5);
-              this.src.pos = midpoint.minus(wing);
-              this.dst.pos = midpoint.plus(wing);
+      drag: () => {
+        const srcpos = this.src.pos;
+        const dstpos = this.dst.pos;
+        const srctan = this.src.incoming?.tangent;
+        const dsttan = this.dst.outgoing?.tangent;
+        return {
+          kind: 'group',
+          aggregate: 'first',
+          name: this.name,
+          items: [
+            {
+              kind: 'point',
+              name: 'midpoint',
+              get: () => this.getEdge().midpoint,
+              set: (midpoint) => {
+                if (typeof srctan !== 'undefined' && typeof dsttan !== 'undefined') {
+                  const tangent = Vectors.between(srcpos, dstpos);
+                  const ray = new SpaceRay(midpoint, tangent);
+                  const srchit = ray.intersection(new SpaceRay(srcpos, srctan));
+                  const dsthit = ray.intersection(new SpaceRay(dstpos, dsttan));
+                  if (srchit === null || dsthit === null) {
+                    // shouldn't happen unless the edge is degenerate or smth.
+                    return; 
+                  }
+                  this.src.pos = srchit.point;
+                  this.dst.pos = dsthit.point;
+                } else {
+                  const wing = Vectors.between(srcpos, dstpos).scale(0.5);
+                  this.src.pos = midpoint.minus(wing);
+                  this.dst.pos = midpoint.plus(wing);
+                }
+              },
+              disableWhenMultiple: true,
             },
-          },
-          {
-            kind: 'group',
-            name: 'endpoints',
-            aggregate: 'all',
-            items: [
-              this.src.entity.only(Handle).getDragItem(),
-              this.dst.entity.only(Handle).getDragItem(),
-            ],
-          },
-        ],
-      }),
+            {
+              kind: 'group',
+              name: 'endpoints',
+              aggregate: 'all',
+              items: [
+                this.src.entity.only(Handle).getDragItem(),
+                this.dst.entity.only(Handle).getDragItem(),
+              ],
+            },
+          ],
+        };
+      },
       cursor: () => getResizeCursor(this.outsideNormal),
       onDelete: () => {
         this.elideWall();
         return 'kill';
-      },
-    });
-    handle.events.addDragListener({
-      onStart: (e): [Position, Position] => {
-        return [this.src.pos, this.dst.pos];
-      },
-      onUpdate: (e, [src, dst]) => {
-        const delta = e.delta;
-        const srcLocked = this.src.entity.get(FixedConstraint).some(f => f.enabled);
-        const dstLocked = this.dst.entity.get(FixedConstraint).some(f => f.enabled);
-        if (srcLocked && !dstLocked) {
-          const initial = Vectors.between(src, e.start);
-          const current = Vectors.between(src, e.position);
-          const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
-          this.dst.pos = src.plus(Vectors.between(src, dst).rotate(angle));
-        } else if (!srcLocked && dstLocked) {
-          const initial = Vectors.between(dst, e.start);
-          const current = Vectors.between(dst, e.position);
-          const angle = Angles.counterClockwiseDelta(initial.angle(), current.angle());
-          this.src.pos = dst.plus(Vectors.between(dst, src).rotate(angle));
-        } else {
-          if (App.ui.selection.size === 1) {
-            // TODO: figure out a cleaner / more general way to apply this snapping,
-            // this feels pretty gross.
-            // Maybe we need some notion of a like, primary dragged object for multisection?
-            // like the one that the mouse is over probably should be the one used to snap
-            // to stuff, in cases where it's ambiguous. but we might also just want to
-            // consider the full set of geometry we're dragging and snap all of it, ugh,
-            // this is a complicated problem.
-            const edge = new SpaceEdge(src, dst);
-            const closest = edge.closestPoint(e.start);
-            const closestDragged = App.ui.snapPoint(closest.plus(delta));
-            const snappedDelta = Vectors.between(closest, closestDragged).onAxis(edge.normal);
-            this.src.pos = src.plus(snappedDelta);
-            this.dst.pos = dst.plus(snappedDelta);
-          } else {
-            this.src.pos = src.plus(delta);
-            this.dst.pos = dst.plus(delta);
-          }
-        }
-        if (srcLocked && dstLocked) {
-          this.src.entity.get(FixedConstraint).forEach(c => c.updateTargets([src.plus(delta)]));
-          this.dst.entity.get(FixedConstraint).forEach(c => c.updateTargets([dst.plus(delta)]));
-        }
-      },
-      onEnd: (e, [src, dst]) => {
       },
     });
 

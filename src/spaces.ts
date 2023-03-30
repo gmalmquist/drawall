@@ -669,7 +669,8 @@ class SpaceRay {
     // t = (q-o)N / (d*N)
     const denominator = this.direction.dot(line.normal);
     if (denominator.sign === 0) return null;
-    const time = Vectors.between(this.origin, line.origin).dot(line.normal).div(denominator);
+    const time = Vectors.between(this.origin, line.origin)
+      .dot(line.normal).div(denominator);
     return {
       time,
       point: this.at(time),
