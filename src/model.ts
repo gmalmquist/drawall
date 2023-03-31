@@ -59,7 +59,24 @@ class PhysNode extends Component implements Solo, Surface {
   containedBy(sdf: SDF): boolean {
     return sdf.contains(this.pos);
   }
+
+  toJson(): SavedComponent | null {
+    if (this.getPos || this.setPos) return null;
+    return {
+      factory: this.constructor.name,
+      arguments: [ MoreJson.position.to(this.pos) ],
+    };
+  }
 }
+
+ComponentFactories.register(PhysNode, (
+  entity: Entity,
+  pos: JsonObject,
+) => {
+  const node = entity.getOrCreate(PhysNode);
+  node.pos = MoreJson.position.from(pos);
+  return node;
+});
 
 class Room extends Component implements Solo {
   public readonly [SOLO] = true;

@@ -339,7 +339,7 @@ const EntityRef = <T, E extends readonly Entity[]>(
   return new EntityRefImpl(() => getter(...entities), entities);
 };
 
-type ComponentInflateResult = Component | 'not ready';
+type ComponentInflateResult = Component | 'not ready' | 'skip';
 
 type ComponentFactory<A extends JsonArray>
   = (entity: Entity, ...args: A) => ComponentInflateResult;
@@ -465,7 +465,7 @@ class EntityComponentSystem {
       `${entity.id}<-'${comp.name}' ${comp.factory}(${JSON.stringify(comp.arguments)})`;
 
     let futile: boolean = false;
-    while (!futile) {
+    while (!futile && toInflate.length > 0) {
       futile = true;
       const tryAgain = [];
       while (toInflate.length > 0) {
@@ -478,17 +478,21 @@ class EntityComponentSystem {
           tryAgain.push(item);
           continue;
         }
+        if (result === 'skip') {
+          App.log('SKIP', describe(entity, savedComponent));
+          continue;
+        }
         result.name = savedComponent.name;
-        console.log('I', describe(entity, savedComponent));
+        App.log('LOAD', describe(entity, savedComponent));
         // made progress
         futile = false;
       }
       tryAgain.forEach(item => toInflate.push(item));
     }
     if (toInflate.length > 0) {
-      console.log('failed to inflate', toInflate.length, 'components.');
+      console.warn('failed to inflate', toInflate.length, 'components.');
       for (const [entity, component] of toInflate) {
-        console.log('F', describe(entity, component));
+        console.warn('FAIL', describe(entity, component));
       }
     }
 

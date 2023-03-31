@@ -459,6 +459,7 @@ class RulerEndpoint extends PhysNode implements Solo {
   }
 }
 
+ComponentFactories.register(RulerEndpoint, (entity: Entity) => 'skip');
 
 class Ruler extends Component implements Solo {
   public static readonly areRulersVisible = (): boolean => {
@@ -542,11 +543,105 @@ class Ruler extends Component implements Solo {
     return this.phys.flatMap(e => e.edge);
   }
 
+  override toJson(): SavedComponent {
+    const attach = (end: RulerEndpoint): JsonObject => {
+      const attach = end.attachment;
+      if (attach.kind === 'canvas') {
+        return {
+          kind: attach.kind,
+          position: MoreJson.position.to(
+            attach.position.map(p => p.pos).or(Positions.zero('model'))
+          ),
+        };
+      }
+      if (attach.kind === 'vertex') {
+        return {
+          kind: attach.kind,
+          position: attach.position.map(p => p.entity.id).or(-1),
+        };
+      }
+      if (attach.kind === 'edge') {
+        return {
+          kind: attach.kind,
+          edge: attach.edge.map(e => e.entity.id).or(-1),
+          at: typeof attach.at !== 'undefined' ? attach.at : false,
+        };
+      }
+      return impossible(attach);
+    };
+    const lc = this.entity.only(LengthConstraint);
+    return {
+      factory: this.constructor.name,
+      arguments: [
+        this.start.map(attach).or(false),
+        this.end.map(attach).or(false),
+        lc.enabled 
+          ? MoreJson.distance.to(Distance(lc.length, 'model'))
+          : false,
+      ],
+    };
+  }
+
   tearDown() {
     this.start.with(x => x.entity.destroy());
     this.end.with(x => x.entity.destroy());
   }
 }
+
+ComponentFactories.register(Ruler, (
+  entity: Entity,
+  startJson: JsonObject,
+  endJson: JsonObject,
+  length: JsonObject | false,
+) => {
+  const ruler = entity.getOrCreate(Ruler);
+
+  const load = (end: RulerEndpoint, a: JsonObject): boolean => {
+    const kind = a.kind! as string;
+    if (kind === 'canvas') {
+      const pos = MoreJson.position.from(a.position! as JsonObject);
+      end.dragTo(pos);
+      return true;
+    }
+    if (kind === 'vertex') {
+      const v = entity.ecs.getEntity(a.position! as Eid)?.maybe(PhysNode);
+      if (!v) return false;
+      end.dragTo(v.pos);
+      return true;
+    }
+    if (kind === 'edge') {
+      const edge = entity.ecs.getEntity(a.edge as Eid)
+        ?.maybe(PhysEdge)?.edge?.unwrap();
+      if (!edge || edge.length.get('model') === 0) return false;
+      if (a.at === false) {
+        end.dragTo(edge.midpoint);
+        return true;
+      }
+      end.dragTo(edge.lerp(a.at! as number));
+      return true;
+    }
+    throw new Error(`unrecognized ruler endpoint kind: '${kind}'`);
+  };
+
+  const start = ruler.start.unwrap();
+  const end = ruler.end.unwrap();
+
+  if (start !== null && !load(start, startJson)) {
+    return 'not ready';
+  }
+
+  if (end !== null && !load(end, endJson)) {
+    return 'not ready';
+  }
+
+  const lc = entity.only(LengthConstraint);
+  if (length !== false) {
+    lc.length = MoreJson.distance.from(length).get('model');
+  }
+  lc.enabled = length !== false; 
+
+  return ruler;
+});
 
 const RulerRenderer = (ecs: EntityComponentSystem) => {
   if (!Ruler.areRulersVisible()) return;
