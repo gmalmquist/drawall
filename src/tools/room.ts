@@ -57,6 +57,10 @@ class DrawRoomTool extends Tool {
     return Icons.roomTool;
   }
 
+  override get allowSnap(): boolean {
+    return true;
+  }
+
   override onToolSelected() {
     App.ui.clearSelection();
   }

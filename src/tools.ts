@@ -43,48 +43,6 @@ abstract class Tool {
   abstract setup(): void;
 }
 
-abstract class SnappingTool extends Tool {
-  constructor(name: ToolName) {
-    super(name);
-  }
-
-  override get allowSnap(): boolean {
-    return true;
-  }
-
-  override createUi(form: AutoForm) {
-    form.add({
-      name: 'Local Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToLocalRef,
-      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
-    });
-
-    form.add({
-      name: 'Global Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToGlobalRef,
-      icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
-    });
-
-    form.add({
-      name: 'Geometry Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToGeometryRef,
-      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
-    });
-
-    form.addSeparator();
-
-    form.add({
-      name: 'Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.enableByDefaultRef,
-      icons: { on: Icons.snapOn, off: Icons.snapOff },
-    });
-  }
-}
-
 interface ToolGroup {
   readonly name: string;
   readonly tools: ToolName[];
@@ -133,7 +91,10 @@ class Tools {
   private readonly registry = new Map<ToolName, Tool>();
   private readonly toolListeners = new Array<(tool: ToolName) => void>();
 
-  private _current: Tool = new NoopTool();
+  private _current: Ref<Tool> = Refs.of(
+    new NoopTool(),
+    (a, b) => a.name === b.name,
+  );
 
   public readonly chain = new ToolChain()
     .addSingle('pointer tool')
@@ -144,6 +105,10 @@ class Tools {
   ;
 
   public get current(): Tool {
+    return this._current.get();
+  }
+
+  public get currentRef(): Ref<Tool> {
     return this._current;
   }
 
@@ -175,7 +140,7 @@ class Tools {
     }
     const tool = this.registry.get(name)!;
     this.toolListeners.forEach(listener => listener(name));
-    this._current = tool;
+    this._current.set(tool);
     App.pane.style.cursor = tool.cursor;
     App.gui.tool.clear();
     const ui = new AutoForm();

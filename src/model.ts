@@ -287,6 +287,7 @@ class Wall extends Component implements Solo {
             }
           },
           disableWhenMultiple: true,
+          snapCategories: ['grid', 'guide'],
         };
       },
     });

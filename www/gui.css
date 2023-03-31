@@ -41,7 +41,7 @@
   user-select: none;
 }
 
-.disabled {
+.disabled , .icon-button.disabled {
   pointer-events: none;
   user-select: none;
   cursor: not-allowed;
@@ -51,6 +51,10 @@
   width: 0;
   height: 0;
   opacity: 0;
+
+  padding: 0;
+  margin: 0;
+  border-width: 0;
 }
 
 .icon-button {

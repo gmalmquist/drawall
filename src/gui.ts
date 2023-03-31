@@ -36,11 +36,49 @@ class GUI {
   private setupUx() {
     const form = new AutoForm();
 
+    const snappingSupported = App.tools.currentRef.map<boolean>({
+      to: tool => tool.allowSnap,
+      from: _ => App.tools.current,
+    });
+
+    form.add({
+      name: 'Local Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToLocalRef,
+      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
+      enabled: snappingSupported,
+    });
+
+    form.add({
+      name: 'Global Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToGlobalRef,
+      icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
+      enabled: snappingSupported,
+    });
+
+    form.add({
+      name: 'Geometry Axes Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.snapToGeometryRef,
+      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
+      enabled: snappingSupported,
+    });
+
     form.add({
       name: 'Snap to Grid',
       kind: 'toggle',
       value: App.settings.snapGrid,
       icons: { on: Icons.snapGridOn, off: Icons.snapGridOff },
+      enabled: snappingSupported,
+    });
+
+    form.add({
+      name: 'Snapping',
+      kind: 'toggle',
+      value: App.ui.snapping.enableByDefaultRef,
+      icons: { on: Icons.snapOn, off: Icons.snapOff },
+      enabled: snappingSupported,
     });
 
     form.addSeparator();

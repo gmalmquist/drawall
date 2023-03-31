@@ -1,10 +1,14 @@
-class JointTool extends SnappingTool {
+class JointTool extends Tool {
   constructor() {
     super('joint tool');
   }
 
   override get icon(): URL {
     return Icons.jointTool;
+  }
+
+  override get allowSnap(): boolean {
+    return true;
   }
 
   override get cursor(): Cursor {

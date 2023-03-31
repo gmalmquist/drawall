@@ -1,4 +1,4 @@
-class PointerTool extends SnappingTool {
+class PointerTool extends Tool {
   private readonly selectionRect = Refs.of<Rect | null>(null, (a, b) => {
     if ((a === null) !== (b === null)) {
       return false;
@@ -16,6 +16,10 @@ class PointerTool extends SnappingTool {
 
   override get icon(): URL {
     return Icons.pointerTool;
+  }
+
+  override get allowSnap(): boolean {
+    return true;
   }
 
   override setup() {

@@ -54,6 +54,20 @@ const Drags = {
     filter: ((snap: DragSnap) => boolean) = ((_) => true),
   ): SnapResult | null => {
     const { drag, starts, closure } = context;
+    const validCategories = new Set<SnapCategory>();
+    const allCategories: SnapCategory[] = [
+      'local', 'geometry', 'guide', 'global', 'grid',
+    ];
+    for (const point of closure.points) {
+      if (typeof point.snapCategories === 'undefined') {
+        allCategories.forEach(c => validCategories.add(c));
+        break;
+      }
+      point.snapCategories.forEach(c => validCategories.add(c));
+      if (validCategories.size === allCategories.length) {
+        break;
+      }
+    }
     let best: SnapResult | null = null;
     let index = 0;
     for (const point of closure.points) {
@@ -63,6 +77,7 @@ const Drags = {
       );
       for (const snap of closure.snaps) {
         if (!filter(snap)) continue;
+        if (!validCategories.has(snap.category)) continue;
         if (typeof snap.closeEnough !== 'undefined' && !snap.closeEnough(pointDrag)) {
           continue;
         }
@@ -109,6 +124,7 @@ interface DragBase<K extends string> {
 interface DragPoint extends DragBase<'point'> {
   get: () => Position;
   set: (p: Position) => void;
+  snapCategories?: SnapCategory[];
 }
 
 interface DragGroup extends DragBase<'group'> {

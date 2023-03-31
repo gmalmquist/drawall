@@ -1,4 +1,4 @@
-class RulerTool extends SnappingTool {
+class RulerTool extends Tool {
   private hoveredPhysHandle: Handle | null = null;
 
   constructor() {
@@ -7,6 +7,10 @@ class RulerTool extends SnappingTool {
 
   override get icon(): URL {
     return Icons.rulerTool;
+  }
+
+  override get allowSnap(): boolean {
+    return true;
   }
 
   get cursor(): Cursor {
