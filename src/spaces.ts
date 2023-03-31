@@ -177,6 +177,10 @@ class SpaceDistance extends BaseSpaceValue<number> {
     return signum(this.get(this.space));
   }
 
+  get nonzero(): boolean {
+    return this.get(this.space) !== 0;
+  }
+
   plus(d: Spaced<number>): Distance {
     return this.map((a: number, b: number) => a + b, d);
   }
@@ -989,6 +993,42 @@ class Polygon extends SDF {
       src.splus(headWidth.scale(-0.5), normal).splus(shaftLength, tangent),
       src.splus(width.scale(-0.5), normal).splus(shaftLength, tangent),
       src.splus(width.scale(-0.5), normal),
+    ]);
+  }
+
+  public static lollipop(src: Position, dst: Position, width: Distance): Polygon {
+    const headWidth = width.scale(3);
+    const headHeight = headWidth.scale(1);
+    const vector = Vectors.between(src, dst);
+    const tangent = vector.unit();
+    const shaftLength = vector.mag().minus(headHeight)
+      .max(Distances.zero(src.space));
+    const normal = tangent.r90();
+    const start = [
+      src.splus(width.scale(0.5), normal),
+      src.splus(width.scale(0.5), normal).splus(shaftLength, tangent),
+    ];
+    const end = [ 
+      src.splus(width.scale(-0.5), normal).splus(shaftLength, tangent),
+      src.splus(width.scale(-0.5), normal),
+    ];
+    const n = 16;
+    const middle = new Array(n).fill(0).map((_, i) => i/(n-1.0)).map(s => {
+      // arc from start[2] to dst to end[0]
+      const a = start[1];
+      const b = end[0];
+      const mid = a.lerp(0.5, b);
+      const ma = Vectors.between(mid, a)
+        .unit()
+        .scale(headWidth)
+        .scale(0.5);
+      const angle = Angle(Radians(-s * Math.PI * 1.9 + Math.PI/2), src.space);
+      return mid.plus(ma.rotate(angle));
+    });
+    return new Polygon([
+      ...start,
+      ...middle,
+      ...end,
     ]);
   }
 }

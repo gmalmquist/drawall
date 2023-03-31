@@ -290,18 +290,47 @@ class Wall extends Component implements Solo {
       },
     });
 
+    const arrowDir = (): Vector => {
+      const edge = this.getEdge();
+      const srcpos = this.src.pos;
+      const dstpos = this.dst.pos;
+      const srctan = this.src.incoming?.tangent;
+      const dsttan = this.dst.outgoing?.tangent;
+      if (!srctan
+        || !dsttan
+        || !srctan.mag2().nonzero
+        || !dsttan.mag2().nonzero) {
+        return edge.normal;
+      }
+      const srcray = new SpaceRay(srcpos, srctan);
+      const dstray = new SpaceRay(dstpos, dsttan);
+      const tanray = new SpaceRay(
+        edge.midpoint.splus(10, edge.normal),
+        edge.tangent,
+      );
+      const srchit = srcray.intersection(tanray);
+      const dsthit = dstray.intersection(tanray);
+      if (srchit === null || dsthit === null) {
+        return edge.normal;
+      }
+      return Vectors.between(
+        edge.midpoint,
+        srchit.point.lerp(0.5, dsthit.point),
+      ).unit();
+    };
+
     handle.createKnob({
-      poly: () => Polygon.arrow(
-        this.midpoint.splus(Distance(10, 'screen'), this.getEdge().normal),
-        this.midpoint.splus(Distance(30, 'screen'), this.getEdge().normal),
-        Distance(10, 'screen'),
-      ),
+      poly: () => {
+        const normal = this.getEdge().normal;
+        const src = this.midpoint.splus(Distance(10, 'screen'), normal);
+        const dst = src.splus(Distance(50, 'screen'), normal);
+        return Polygon.lollipop(src, dst, Distance(10, 'screen'));
+      },
       fill: BLUE,
     }, {
       clickable: false,
       selectable: false,
       draggable: true,
-      cursor: () => getResizeCursor(this.outsideNormal, false),
       drag: () => {
         const srcpos = this.src.pos;
         const dstpos = this.dst.pos;

@@ -54,14 +54,14 @@ class GUI {
     });
 
     form.addButton({
-      name: 'Undo',
+      name: 'Undo (ctrl+z)',
       icon: Icons.editUndo,
       onClick: () => App.actions.fire('undo'),
       enabled: App.history.canUndo,
     });
 
     form.addButton({
-      name: 'Redo',
+      name: 'Redo (ctrl+shift+z)',
       icon: Icons.editRedo,
       onClick: () => App.actions.fire('redo'),
       enabled: App.history.canRedo,
@@ -124,7 +124,7 @@ class GUI {
     });
 
     form.add({
-      name: 'Snapping',
+      name: 'Snapping (Shift + %)',
       kind: 'toggle',
       value: App.ui.snapping.enableByDefaultRef,
       icons: { on: Icons.snapOn, off: Icons.snapOff },
@@ -164,14 +164,14 @@ class GUI {
     form.addSeparator();
 
     form.addButton({
-      name: 'Recenter View',
+      name: 'Recenter View (0)',
       onClick: () => App.viewport.recenter(),
       icon: Icons.recenter,
     });
 
     form.addSeparator();
     form.add({
-      name: 'Kinematics',
+      name: 'Kinematics (k)',
       kind: 'toggle',
       tooltip: 'Kinematic Constraints',
       value: App.settings.kinematics,

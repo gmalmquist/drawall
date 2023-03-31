@@ -7,7 +7,7 @@ class Settings {
   public readonly showAngles = Refs.of(true);
   public readonly showLengths = Refs.of(true);
   public readonly showGrid = Refs.of(true);
-  public readonly snapGrid = Refs.of(false);
+  public readonly snapGrid = Refs.of(true);
 
   public get fontSize(): number {
     return this.fontSizeRef.get();

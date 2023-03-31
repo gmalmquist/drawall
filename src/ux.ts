@@ -456,8 +456,8 @@ interface MouseState {
 class SnapState {
   public readonly enableByDefaultRef: Ref<boolean> = Refs.of(false);
   public readonly enabledRef: Ref<boolean> = Refs.of(false);
-  public readonly snapToLocalRef: Ref<boolean> = Refs.of(true);
-  public readonly snapToGlobalRef: Ref<boolean> = Refs.of(true);
+  public readonly snapToLocalRef: Ref<boolean> = Refs.of(false);
+  public readonly snapToGlobalRef: Ref<boolean> = Refs.of(false);
   public readonly snapToGeometryRef: Ref<boolean> = Refs.of(false);
   public readonly snapRadius: Ref<Distance> = Refs.of(Distance(25, 'screen'));
   public readonly angleThreshold: Ref<Degrees> = Refs.of(
@@ -789,7 +789,6 @@ class UiState {
     if (typeof knob.fill !== 'undefined') {
       App.canvas.fillStyle = knob.fill;
       App.canvas.fill();
-      App.canvas.fillCircle(poly.centroid, Distance(5, 'screen'));
     }
     if (typeof knob.stroke !== 'undefined') {
       App.canvas.lineWidth = 1;
@@ -889,7 +888,7 @@ class UiState {
 
   public snapPoint(pos: Position) {
     // TODO: should prob plug into formalized snapping system
-    if (App.settings.snapGrid.get()) {
+    if (this.snapping.enabled && App.settings.snapGrid.get()) {
       return Grid.getGrid().snap(pos);
     }
     return pos;
