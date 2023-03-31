@@ -114,12 +114,27 @@ class Room extends Component implements Solo {
     });
   }
 
-  set labelPos(pos: Position) {
-    this.relativeLabelPos.set(Vectors.between(this.centroid, pos));
+  get labelPos(): Position {
+    return this.centroid.plus(this.labelOffset);
   }
 
-  get labelPos(): Position {
-    return this.centroid.plus(this.relativeLabelPos.get());
+  set labelPos(pos: Position) {
+    const poly = this.polygon;
+    const centroid = this.centroid;
+    const radius = poly
+      ? poly.vertices.map(v => Distances.between(centroid, v))
+        .reduce((a, b) => a.max(b), Distance(0, 'model'))
+      : Distance(0, 'model');
+    const delta = Vectors.between(this.centroid, pos);
+    this.labelOffset = delta.mag().gt(radius) ? delta.unit().scale(radius) : delta;
+  }
+
+  get labelOffset(): Vector {
+    return this.relativeLabelPos.get();
+  }
+
+  set labelOffset(v: Vector) {
+    this.relativeLabelPos.set(v);
   }
 
   get isInverted(): boolean {
@@ -239,7 +254,10 @@ class Room extends Component implements Solo {
     return {
       factory: this.constructor.name,
       arguments: [
-        { walls: this.walls.map(w => w.entity.id) },
+        {
+          walls: this.walls.map(w => w.entity.id),
+          labelOffset: MoreJson.vector.to(this.labelOffset),
+        },
       ],
     };
   }
@@ -258,6 +276,7 @@ ComponentFactories.register(Room, (
   entity: Entity,
   data: {
     walls: Eid[],
+    labelOffset: JsonObject,
   },
 ) => {
   const walls = data.walls.map(w => entity.ecs.getEntity(w));
@@ -267,6 +286,10 @@ ComponentFactories.register(Room, (
 
   const room = entity.getOrCreate(Room);
   walls.forEach(w => room.addWall(w!.only(Wall)));
+
+  if (data.labelOffset) {
+    room.labelOffset = MoreJson.vector.from(data.labelOffset);
+  }
 
   return room;
 });
