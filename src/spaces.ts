@@ -491,7 +491,7 @@ type Vector = SpaceVec;
 const Vector = SpaceVec.of;
 const Vectors = {
   between: SpaceVec.between,
-  zero: SpaceVec.between,
+  zero: SpaceVec.zero,
   fromAngle: SpaceVec.fromAngle,
 };
 
@@ -898,6 +898,21 @@ class Polygon extends SDF {
       Position(new Point(minX, minY), 'model'),
       Position(new Point(maxX, maxY), 'model'),
     );
+  }
+
+  get area(): Distance {
+    const verts = this._vertices;
+    if (verts.length === 0) {
+      return Distance(0, 'model');
+    }
+    const space = verts[0]!.space;
+    let area = 0;
+    for (let i = 0; i < verts.length; i++) {
+      const a = verts[i].toVector().get(space);
+      const b = verts[(i + 1) % verts.length].toVector().get(space);
+      area += a.x * b.y - a.y * b.x;
+    }
+    return Distance(Math.abs(area / 2), 'model');
   }
 
   public override sdist(point: Position): Distance {

@@ -88,9 +88,38 @@ class Room extends Component implements Solo {
   private _triangulation: Array<Triangle> = [];
   private _triangulatedAt: number = 0;
   private _triangulatedWith: Array<Position> = [];
+  private readonly relativeLabelPos = Refs.of(
+    Vectors.zero('model'),
+    (a, b) => Distances.between(a.toPosition(), b.toPosition()).get('model') < 0.001,
+  );
 
   constructor(entity: Entity) {
     super(entity);
+    
+    const handle = entity.add(Handle, {
+      setPos: _ => {},
+      getPos: () => this.labelPos,
+      distance: p => Distances.between(this.labelPos, p),
+      selectable: false,
+      clickable: false,
+      hoverable: false,
+      draggable: true,
+      drag: () => ({
+        kind: 'point',
+        get: () => this.labelPos,
+        set: p => { this.labelPos = p; },
+        name: this.name,
+        disableWhenMultiple: true,
+      }),
+    });
+  }
+
+  set labelPos(pos: Position) {
+    this.relativeLabelPos.set(Vectors.between(this.centroid, pos));
+  }
+
+  get labelPos(): Position {
+    return this.centroid.plus(this.relativeLabelPos.get());
   }
 
   get isInverted(): boolean {
@@ -139,9 +168,13 @@ class Room extends Component implements Solo {
   }
 
   get area(): Distance {
-    return this.triangulation.map(t => t.area).reduce(
-      (a, b) => a.plus(b), Distance(0, 'model'),
-    );
+    const poly = this.polygon;
+    if (!poly) return Distance(0, 'model');
+    return poly.area;
+    //return this.triangulation.map(t => t.area).reduce(
+    //  (a, b) => a.plus(b),
+    //  Distance(0, 'model'),
+    //);
   }
 
   get triangulation(): Triangle[] {
@@ -1538,9 +1571,10 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
 const RoomRenderer = (ecs: EntityComponentSystem) => {
   ecs.getComponents(Room).forEach(room => {
+    const labelPos = room.labelPos;
     App.canvas.text({
       text: room.isInverted ? 'interior wall' : room.name,
-      point: room.centroid,
+      point: labelPos,
       fill: 'black',
       align: 'center',
       baseline: 'middle',
@@ -1556,8 +1590,8 @@ const RoomRenderer = (ecs: EntityComponentSystem) => {
         const label = `${num} ${amount.unit}²`;
         App.canvas.text({
           text: label,
-          point: room.centroid.splus(
-            Distance(App.settings.fontSize * 2, 'screen'),
+          point: labelPos.splus(
+            App.settings.fontSize * 2,
             Vector(Axis.Y, 'screen'),
           ),
           fill: 'darkgray',
