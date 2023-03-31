@@ -1454,13 +1454,17 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const WallJointRenderer = (ecs: EntityComponentSystem) => {
-  if (!App.settings.showAngles.get()) return;
-
   const joints = ecs.getComponents(WallJoint);
   const canvas = App.canvas;
   for (const joint of joints) {
     const active = joint.entity.get(Handle).some(h => h.isActive);
     const locked = joint.entity.get(FixedConstraint).some(f => f.enabled);
+
+    if (App.tools.current.name !== 'joint tool' 
+      && !App.settings.showAngles.get() 
+      && !joint.entity.has(Hovered)) {
+      continue;
+    }
 
     canvas.fillStyle = 'black';
     canvas.strokeStyle = 'black';
