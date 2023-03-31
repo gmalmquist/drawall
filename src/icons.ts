@@ -17,6 +17,7 @@ const Icons = {
   axisY: iconUrl('axis-y.svg'),
   editRedo: iconUrl('redo.svg'),
   editUndo: iconUrl('undo.svg'),
+  exportImage: iconUrl('export-png.svg'),
   hideAngles: iconUrl('hide-angles.svg'),
   hideGrid: iconUrl('hide-grid.svg'),
   hideGuides: iconUrl('hide-guides.svg'),

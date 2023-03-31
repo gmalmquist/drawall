@@ -21,6 +21,7 @@ class App {
   public static readonly settings = new Settings();
   public static readonly project = new Project();
   public static readonly history = new ProjectHistory();
+  public static readonly imageExporter = new ImageExporter();
   public static debug: boolean = false;
 
   constructor() {

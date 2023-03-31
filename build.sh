@@ -66,6 +66,7 @@ time.js
 units.js
 icons.js
 json.js
+exportpng.js
 ecs.js
 mouse.js
 controls.js

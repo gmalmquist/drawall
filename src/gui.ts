@@ -54,6 +54,12 @@ class GUI {
     });
 
     form.addButton({
+      name: 'Download Image',
+      icon: Icons.exportImage,
+      onClick: () => App.imageExporter.downloadCanvasComposite(),
+    });
+
+    form.addButton({
       name: 'Undo (ctrl+z)',
       icon: Icons.editUndo,
       onClick: () => App.actions.fire('undo'),

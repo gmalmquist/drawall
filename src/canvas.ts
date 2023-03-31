@@ -566,6 +566,12 @@ const GridRenderer = (ecs: EntityComponentSystem) => {
 
   const c = App.background;
   c.clear();
+  c.fillStyle = 'white';
+  c.rect(new Rect(
+    Positions.zero('screen'),
+    Position(new Point(c.width + 1, c.height + 1), 'screen'),
+  ));
+  c.fill();
 
   if (!App.settings.showGrid.get()) return;
 
@@ -620,5 +626,4 @@ const GridRenderer = (ecs: EntityComponentSystem) => {
     });
   }
 };
-
 
