@@ -32,6 +32,7 @@ class Keybindings {
     kb.bind('k').to('toggle-kinematics');
     kb.bind('Control', 'l').to('loop-select'); // matches blender
     kb.bind('Control', 'a').to('select-all'); // nearly universal convention lol
+    kb.bind('0').to('recenter'); // common convention
     return kb;
   }
 

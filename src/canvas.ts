@@ -1,9 +1,11 @@
 class Viewport {
+  private static readonly DEFAULT_RADIUS = 100;
+
   private _changed: boolean = true;
 
   constructor(
     public origin: Point = Point.ZERO,
-    public radius: number = 150.,
+    public radius: number = Viewport.DEFAULT_RADIUS,
     public screen_width: number = 1000,
     public screen_height: number = 1000) {}
 
@@ -85,7 +87,61 @@ class Viewport {
    });
    this._changed = true;
  }
- 
+
+ public recenter() {
+   const handles = App.ecs.getComponents(Handle);
+   const positions: Position[] = Drags.closure(
+     'complete',
+     ...handles.map(handle => handle.getDragItem()),
+   ).points.map(point => point.get());
+
+   const screen = {
+     width: this.screen_width,
+     height: this.screen_height,
+     aspect: 1,
+   };
+   screen.aspect = screen.width / screen.height;
+
+   if (positions.length === 0 || screen.width <= 0 || screen.height <= 0) {
+     this.origin = Point.ZERO;
+     this.radius = Viewport.DEFAULT_RADIUS;
+     this.updateTransforms();
+     return;
+   }
+
+   const bounds = {
+     minX: Number.POSITIVE_INFINITY,
+     minY: Number.POSITIVE_INFINITY,
+     maxX: Number.NEGATIVE_INFINITY,
+     maxY: Number.NEGATIVE_INFINITY,
+   };
+
+   const points = positions.map(p => p.get('model'));
+   for (const point of points) {
+     bounds.minX = Math.min(point.x, bounds.minX);
+     bounds.minY = Math.min(point.y, bounds.minY);
+     bounds.maxX = Math.max(point.x, bounds.maxX);
+     bounds.maxY = Math.max(point.y, bounds.maxY);
+   }
+
+   const center = new Point(
+     (bounds.minX + bounds.maxX) / 2.0,
+     (bounds.minY + bounds.maxY) / 2.0,
+   );
+
+   const extents = {
+     horizontal: (bounds.maxX - bounds.minX) / 2.0,
+     vertical: (bounds.maxY - bounds.minY) / 2.0,
+   };
+   
+   this.origin = center;
+   this.radius = Math.max(
+     extents.horizontal / screen.aspect,
+     extents.vertical * screen.aspect,
+   ) * 1.1;
+   this.updateTransforms();
+ }
+
  private handleResize() {
    this.screen_width = Math.round(App.pane.clientWidth);
    this.screen_height = Math.round(App.pane.clientHeight);

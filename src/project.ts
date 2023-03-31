@@ -46,9 +46,6 @@ class Project {
       this.modelUnitRef.set(unit);
       return; // wow that was easy
     }
-
-    App.viewport.radius *= scaleFactor;
-    App.viewport.updateTransforms();
     
     // have to go in and update all the units....
     const nodes = App.ecs.getComponents(PhysNode);
@@ -83,6 +80,8 @@ class Project {
     }
 
     this.modelUnitRef.set(unit);
+
+    App.viewport.recenter();
   }
 }
 

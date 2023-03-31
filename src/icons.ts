@@ -35,6 +35,7 @@ const Icons = {
   showLengths: iconUrl('show-lengths.svg'),
   kinematicsOn: iconUrl('kinematics-on.svg'),
   kinematicsOff: iconUrl('kinematics-off.svg'),
+  recenter: iconUrl('recenter.svg'),
   snapOn: iconUrl('snap-on.svg'),
   snapOff: iconUrl('snap-off.svg'),
   snapLocalOn: iconUrl('snap-local-on.svg'),

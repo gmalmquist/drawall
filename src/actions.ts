@@ -4,6 +4,7 @@ type UserActionId = ToolName
   | 'toggle-kinematics'
   | 'loop-select'
   | 'select-all'
+  | 'recenter'
 ;
 
 interface UserAction {
@@ -28,6 +29,8 @@ class UserActions {
 
     add('loop-select', () => App.ui.loopSelect());
     add('select-all', () => App.ui.selectAll());
+
+    add('recenter', () => App.viewport.recenter());
     // add('foo', () => doFoo());
   }
 

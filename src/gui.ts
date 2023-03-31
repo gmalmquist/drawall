@@ -41,12 +41,22 @@ class GUI {
       from: _ => App.tools.current,
     });
 
+    const snappingEnabled = Refs.reduce(
+      {
+        to: ([supported, enabled]) => supported && enabled,
+        from: _ => [snappingSupported.get(), App.ui.snapping.enableByDefaultRef.get()],
+        compareValues: (a, b) => a === b,
+      },
+      snappingSupported,
+      App.ui.snapping.enableByDefaultRef,
+    );
+
     form.add({
       name: 'Local Axes Snapping',
       kind: 'toggle',
       value: App.ui.snapping.snapToLocalRef,
       icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
-      enabled: snappingSupported,
+      enabled: snappingEnabled,
     });
 
     form.add({
@@ -54,7 +64,7 @@ class GUI {
       kind: 'toggle',
       value: App.ui.snapping.snapToGlobalRef,
       icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
-      enabled: snappingSupported,
+      enabled: snappingEnabled,
     });
 
     form.add({
@@ -62,7 +72,7 @@ class GUI {
       kind: 'toggle',
       value: App.ui.snapping.snapToGeometryRef,
       icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
-      enabled: snappingSupported,
+      enabled: snappingEnabled,
     });
 
     form.add({
@@ -70,7 +80,7 @@ class GUI {
       kind: 'toggle',
       value: App.settings.snapGrid,
       icons: { on: Icons.snapGridOn, off: Icons.snapGridOff },
-      enabled: snappingSupported,
+      enabled: snappingEnabled,
     });
 
     form.add({
@@ -113,6 +123,15 @@ class GUI {
 
     form.addSeparator();
 
+    form.add<'button'>({
+      name: 'Recenter View',
+      kind: 'button',
+      value: Refs.of('button'),
+      onClick: () => App.viewport.recenter(),
+      icon: Icons.recenter,
+    });
+
+    form.addSeparator();
     form.add({
       name: 'Kinematics',
       kind: 'toggle',
