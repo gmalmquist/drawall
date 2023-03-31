@@ -30,6 +30,7 @@ const Icons = {
   kinematicsOn: iconUrl('kinematics-on.svg'),
   lengthLocked: iconUrl('length-locked.svg'),
   lengthUnlocked: iconUrl('length-unlocked.svg'),
+  lockSmall: iconUrl('lock-small.png'),
   newPage: iconUrl('new-page.svg'),
   panTool: iconUrl('grab.svg'),
   pen: iconUrl('pen.svg'),
@@ -57,4 +58,21 @@ const Icons = {
   snapOn: iconUrl('snap-on.svg'),
   visible: iconUrl('eye-open.svg'),
 };
+
+type KeysOfToType<M extends { [key: string]: unknown }, T> = {
+  [Property in keyof M]: T;
+};
+
+
+type IconImages = KeysOfToType<typeof Icons, HTMLImageElement>;
+
+const IconImages: IconImages = ((): IconImages => {
+  const result: { [key: string]: HTMLImageElement } = {};
+  for (const key of Object.keys(Icons)) {
+    const image = new Image();
+    image.src = (Icons[key as keyof (typeof Icons)] as URL).toString();
+    result[key] = image;
+  }
+  return result as unknown as IconImages;
+})();
 

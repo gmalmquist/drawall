@@ -293,6 +293,17 @@ class Canvas2d {
     this.stroke();
   }
 
+  image(image: HTMLImageElement, pos: Position, width?: Distance, height?: Distance) {
+    const p = pos.get('screen');
+    this.g.drawImage(
+      image,
+      p.x,
+      p.y,
+      width?.get('screen') || image.width,
+      height?.get('screen') || image.height,
+    );
+  }
+
   strokeCircle(src: Position, radius: Distance) {
     const g = this.g;
     const c = src.get('screen');

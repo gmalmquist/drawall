@@ -81,8 +81,13 @@ ComponentFactories.register(PhysNode, (
 class Room extends Component implements Solo {
   public readonly [SOLO] = true;
 
+  private static TRIANGULATION_FREQUENCY: number = 1.0;
+
   private _wallSet = new Set<Wall>();
   private _walls: Wall[] = [];
+  private _triangulation: Array<Triangle> = [];
+  private _triangulatedAt: number = 0;
+  private _triangulatedWith: Array<Position> = [];
 
   constructor(entity: Entity) {
     super(entity);
@@ -133,6 +138,17 @@ class Room extends Component implements Solo {
     return !!this.polygon?.contains(point);
   }
 
+  get area(): Distance {
+    return this.triangulation.map(t => t.area).reduce(
+      (a, b) => a.plus(b), Distance(0, 'model'),
+    );
+  }
+
+  get triangulation(): Triangle[] {
+    this.checkTriangulation();
+    return [...this._triangulation];
+  }
+
   get polygon(): Polygon | null {
     for (const wall of this._walls) {
       return new Polygon(
@@ -161,6 +177,29 @@ class Room extends Component implements Solo {
       .map(w => Vectors.between(zerop, w))
       .reduce((a, b) => a.plus(b), zerov)!;
     return zerop.splus(1.0 / loop.length, sum);
+  }
+
+  private checkTriangulation() {
+    const poly = this.polygon;
+    if (poly === null) {
+      this._triangulation = [];
+      return;
+    }
+
+    if (this._triangulatedAt + Room.TRIANGULATION_FREQUENCY > Time.now) {
+      return;
+    }
+    this._triangulatedAt = Time.now;
+
+    const eps = Distance(1, 'screen');
+    const verts = poly.vertices;
+    if (verts.length === this._triangulatedWith.length
+      && verts.every((v, i) => Distances.between(v, this._triangulatedWith[i]).lt(eps))) {
+      return; // nothing to do
+    }
+
+    this._triangulation = Triangle.triangulate(poly);
+    this._triangulatedWith = verts;
   }
 
   toJson(): SavedComponent {
@@ -1471,7 +1510,6 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.tools.current.name !== 'joint tool' 
       && !App.settings.showJoints.get() 
-      && !locked
       && !active
     ) {
       continue;
@@ -1507,6 +1545,45 @@ const RoomRenderer = (ecs: EntityComponentSystem) => {
       align: 'center',
       baseline: 'middle',
     });
+
+    if (!room.isInverted) {
+      const area = room.area;
+      if (area.nonzero) {
+        const sqrtModel = App.project.modelUnit.newAmount(Math.sqrt(area.get('model')));
+        const sqrtDisplay = App.project.displayUnit.from(sqrtModel);
+        const amount = App.project.displayUnit.newAmount(Math.pow(sqrtDisplay.value, 2));
+        const num = prettyNum(roundBy(amount.value, App.project.displayDecimals));
+        const label = `${num} ${amount.unit}²`;
+        App.canvas.text({
+          text: label,
+          point: room.centroid.splus(
+            Distance(App.settings.fontSize * 2, 'screen'),
+            Vector(Axis.Y, 'screen'),
+          ),
+          fill: 'darkgray',
+          align: 'center',
+          baseline: 'middle',
+        });
+      }
+    }
+
+    if (App.debug) {
+      const triangles = room.triangulation;
+      let count = 0;
+      for (const tri of triangles) {
+        const smol = tri.scale(0.9);
+        App.canvas.polygon(smol);
+
+        App.canvas.strokeStyle = `hsl(${Math.round(330 * count / triangles.length)}, 100%, 50%)`;
+        App.canvas.lineWidth = 1;
+        App.canvas.setLineDash([]);
+        App.canvas.stroke();
+
+        App.canvas.strokeCircle(smol.b, Distance(5, 'screen'));
+
+        count++;
+      }
+    }
   });
 };
 
@@ -1541,6 +1618,20 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
     }, constraint.currentAngle, constraint.targetAngle);
     
     const middle = rightVec.rotate(constraint.currentAngle.scale(0.5)).to('model').unit();
+
+    if (constraint.entity.maybe(FixedConstraint)?.enabled) {
+      const icon = IconImages.lockSmall;
+      const size = Distance(8, 'screen');
+      canvas.image(
+        icon,
+        center
+          .splus(Distance(-15, 'screen'), middle)
+          .splus(size.div(-1.25), Vector(Axis.X, 'screen'))
+          .splus(size.div(-1.25), Vector(Axis.Y, 'screen')),
+        size,
+        size,
+      );
+    }
 
     let label = formatDegrees(angle);
     if (unwrap(error) > 0) {

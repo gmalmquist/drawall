@@ -951,6 +951,14 @@ class Polygon extends SDF {
     return false;
   }
 
+  public scale(factor: number | Distance): Polygon {
+    const centroid = this.centroid;
+    return new Polygon(this.vertices
+      .map(v => Vectors.between(centroid, v))
+      .map(v => v.scale(factor))
+      .map(v => centroid.plus(v)));
+  }
+
   private raycastCheck(
     ray: SpaceRay,
     edges: SpaceEdge[],
@@ -1030,6 +1038,134 @@ class Polygon extends SDF {
       ...middle,
       ...end,
     ]);
+  }
+}
+
+class Triangle extends Polygon {
+  constructor(
+    a: Position,
+    b: Position,
+    c: Position,
+  ) {
+    super([a, b, c]);
+  }
+
+  get a(): Position { return this.vertices[0]!; }
+  get b(): Position { return this.vertices[1]!; }
+  get c(): Position { return this.vertices[2]!; }
+
+  get area(): Distance {
+    const ab = Vectors.between(this.a, this.b).get(this.a.space);
+    const ac = Vectors.between(this.a, this.c).get(this.a.space);
+    // ortho comp of cross product. since these are 2d vectors,
+    // the absolute value of this is equal to the magnitude of
+    // the cross product
+    const det = (ab.x * ac.y) - (ab.y * ac.x); 
+    // the magnitude of a cross product is equal to the area
+    // of the parallogram formed by the two vectors, so half
+    // that is the area of this triangle.
+    return Distance(Math.abs(det)/2.0, this.a.space);
+  }
+
+  override contains(p: Position): boolean {
+    return super.containsConvex(p);
+  }
+
+  override sdist(p: Position): Distance {
+    const [first, ...more] = this.edges.map(e => e.distance(p));
+    return more.reduce((a, b) => a.min(b), first)
+      .scale(this.contains(p) ? -1 : 1);
+  }
+
+  override scale(s: number | Distance): Triangle {
+    const v = super.scale(s).vertices;
+    return new Triangle(v[0]!, v[1]!, v[2]!);
+  }
+
+  public static triangulate(poly: Polygon): Array<Triangle> {
+    if (poly.isConvex) return Triangle.triangulateConvex(poly);
+    // ear clipping method, O(n^2)
+    const vertices = poly.vertices;
+    let indices = vertices.map((_, i) => i);
+    const results: Array<readonly [number, number, number]> = [];
+
+
+    const checkTriangle = (v0: number, v1: number, v2: number): boolean => {
+      const a = vertices[v0];
+      const b = vertices[v1];
+      const c = vertices[v2];
+
+      const ab = new SpaceEdge(a, b);
+      const bc = new SpaceEdge(b, c);
+      const ca = new SpaceEdge(c, a);
+
+      if (ab.vector.r90().dot(bc.vector).sign >= 0) { // .dot -h-a-c-k- sign
+        // angle is >= 180 deg, would make an OOB triangle
+        return false;
+      }
+
+      const verts = new Set([v0, v1, v2]);
+
+      // now check for self intersections ....
+      for (let i = 0; i < indices.length; i++) {
+        const middle = indices[i];
+        if (verts.has(middle)) continue;
+        const left = indices[(i - 1 + indices.length) % indices.length];
+        const right = indices[(i + 1) % indices.length];
+
+        const el = new SpaceEdge(vertices[middle], vertices[left]);
+        const er = new SpaceEdge(vertices[middle], vertices[right]);
+
+        const leftTests: SpaceEdge[] = [];
+        const rightTests: SpaceEdge[] = [];
+
+        if (left !== v0 && left !== v1) leftTests.push(ab);
+        if (left !== v0 && left !== v2) leftTests.push(ca);
+        if (left !== v1 && left !== v2) leftTests.push(bc);
+
+        if (right !== v0 && right !== v1) rightTests.push(ab);
+        if (right !== v0 && right !== v2) rightTests.push(ca);
+        if (right !== v1 && right !== v2) rightTests.push(bc);
+
+        if (leftTests.some(e => e.intersection(el))) return false;
+        if (rightTests.some(e => e.intersection(er))) return false;
+      }
+      return true;
+    };
+
+    while (indices.length >= 3) {
+      let progressed = false;
+      for (let i = 0; i < indices.length; i++) {
+        const v0 = indices[i];
+        const v1 = indices[(i+1) % indices.length];
+        const v2 = indices[(i+2) % indices.length];
+        if (!checkTriangle(v0, v1, v2)) continue;
+        // woo we found one
+        results.push([v0, v1, v2]);
+        // cut off the ear >:3
+        indices = indices.filter(k => k !== v1);
+        progressed = true;
+        break;
+      }
+      if (!progressed) {
+        // give up, this parrot watches too much anime
+        // (this poly[gon] is degenerate)
+        break; 
+      }
+    }
+    return results.map(([a, b, c]) => new Triangle(
+      vertices[a], vertices[b], vertices[c],
+    ));
+  }
+
+  public static triangulateConvex(poly: Polygon): Array<Triangle> {
+    if (poly.isDegenerate) return [];
+    const [first, ...more] = poly.vertices;
+    const results: Array<Triangle> = [];
+    for (let i = 0; i < more.length - 1; i++) {
+      results.push(new Triangle(first, more[i], more[i+1]));
+    }
+    return results;
   }
 }
 
