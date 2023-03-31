@@ -1554,7 +1554,12 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       label = `${label} (${formatDegrees(error)})`;
     }
 
-    const color = constraint.enabled ? 'black' : 'hsl(0, 0%, 50%)';
+    const color = (opaque: boolean) => {
+      if (constraint.enabled) {
+        return `hsla(0, 0%, 0%, ${opaque ? 1 : 0.75})`;
+      }
+      return `hsla(0, 0%, 50%, ${opaque ? 1 : 0.25})`;
+    };
     const highlight = error === Degrees(0) ? undefined
         : error > Degrees(0) ? PINK
         : BLUE;
@@ -1564,7 +1569,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       align: 'center',
       baseline: 'middle',
       point: center.splus(textDistance, middle),
-      fill: color,
+      fill: color(true),
       shadow: highlight,
     });
 
@@ -1577,11 +1582,18 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       leftAngle,
       true,
     );
-    canvas.strokeStyle = color;
-    canvas.setLineDash(constraint.enabled ? [] : [2, 2]);
+
+    canvas.strokeStyle = color(false);
+    //canvas.setLineDash(constraint.enabled ? [] : [2, 2]);
+    canvas.setLineDash([]);
     canvas.lineWidth = 1;
     canvas.stroke();
     canvas.setLineDash([]);
+
+    canvas.lineTo(center);
+    canvas.closePath();
+    canvas.fillStyle = color(false);
+    canvas.fill();
   }
 };
 
