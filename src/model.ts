@@ -319,6 +319,11 @@ class Wall extends Component implements Solo {
       ).unit();
     };
 
+    const forceFixed = (p: WallJoint) => {
+      const f = p.entity.only(FixedConstraint);
+      f.updateTargets([p.pos]);
+    };
+
     handle.createKnob({
       poly: () => {
         const normal = this.getEdge().normal;
@@ -338,7 +343,7 @@ class Wall extends Component implements Solo {
         const dsttan = this.dst.outgoing?.tangent;
         return {
           kind: 'point',
-          name: 'midpoint',
+          name: 'edge',
           get: () => this.getEdge().midpoint,
           set: (midpoint) => {
             if (typeof srctan !== 'undefined' && typeof dsttan !== 'undefined') {
@@ -357,6 +362,8 @@ class Wall extends Component implements Solo {
               this.src.pos = midpoint.minus(wing);
               this.dst.pos = midpoint.plus(wing);
             }
+            forceFixed(this.src);
+            forceFixed(this.dst);
           },
           disableWhenMultiple: true,
           snapCategories: ['grid', 'guide'],

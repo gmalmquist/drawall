@@ -1,4 +1,5 @@
 *.swp
+*.swo
 www/*.js
 www/index.html
 build/
