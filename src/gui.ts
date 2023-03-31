@@ -5,6 +5,7 @@ class GUI {
   public readonly tool: MiniForm;
   public readonly ux: MiniForm;
   public readonly project: MiniForm;
+  public readonly meta: MiniForm;
 
   constructor() {
     this.topbar = new MiniForm(
@@ -17,6 +18,7 @@ class GUI {
     this.tool = new MiniForm();
     this.ux = new MiniForm();
     this.project = new MiniForm();
+    this.meta = new MiniForm();
 
     this.topbar.append(this.file);
     this.topbar.appendRuler();
@@ -27,13 +29,89 @@ class GUI {
     this.topbar.append(this.ux);
     this.topbar.appendRuler();
     this.topbar.append(this.project);
+    this.topbar.appendRuler();
+    this.topbar.append(this.meta);
   }
 
   setup() {
     this.setupFile();
     this.setupUx();
     this.setupProject();
+    this.setupMeta();
     this.preloadIcons();
+  }
+
+  private setupMeta() {
+    const form = new AutoForm();
+
+    form.addButton({
+      name: 'About',
+      icon: Icons.heartInfo,
+      onClick: () => {
+        const popup = App.ecs.createEntity().add(PopupWindow);
+        popup.setPosition(Position(new Point(
+          App.viewport.screen_width/2,
+          App.viewport.screen_height/2,
+        ), 'screen'));
+        popup.title = 'About';
+
+        const rainbow = (text: string): string => {
+          const result: string[] = [];
+          for (let i = 0; i < text.length; i++) {
+            const c = text.charAt(i);
+            if (c === ' ') {
+              result.push('<span style="display: inline-block; width: 0.5em;"></span>');
+              continue;
+            }
+            const hue = Math.round(360 * i / text.length);
+            const color = `hsl(${hue}, 100%, 50%)`;
+            result.push(`<span style="
+              display: inline-block;
+              color: ${color};
+            ">${c}</span>`);
+          }
+          return result.join('');
+        };
+
+        const content = document.createElement('div');
+        content.style.width = '50vw';
+        content.style.maxWidth = '50em';
+        content.style.maxHeight = 'calc(70vh - 100px)';
+        content.style.overflowY = 'scroll';
+        content.style.marginBottom = '1ex';
+        const inner = document.createElement('div');
+        content.appendChild(inner);
+        inner.innerHTML = `
+          Hi~! This floor plan CAD thingy was made by <a target="blank_" href="https://cohost.org/gwenverbsnouns/">Gwen</a>.
+          <p>It's designed to make quick and easy mockups from imprecise measurements—because we've all had the experience of taking a thousand measurements, then trying to draw it up and finding that the inches don't <em>quite</em> add up! Or trying to plan a move based off of vague dimensions provided by a landlord.
+          <h4>why did u do this</h4>
+          <p>I made it 'cause <span style="text-decoration: line-through; font-size: 0.9em;">it was my project during a manic episode</span> I've moved into a lot of apartments, and I always end up spending wayyyy too much time figuring out how to arrange furniture in applications that are either totally overkill (Sketchup, Blender, OpenSCAD, FreeCAD), or lacking features I wanted. And none of them did a great job of supporting measurements that were a little bit fuzzy!
+          <h4>is this rly free???</h4>
+          <p>This is always totally free to use if you're an individual, system, polycule, socialist co-op, etc that's trying to plan out your living space. It's also free if you're a student and this helps you with your education somehow. It is never free if you're a landlord or an agent thereof using this for advertising.
+          <h4>ok but i feel like it <em>shouldn't</em> be free???</h4>
+          <p>If you like this tool and wanna support me and my polycule, feel free to click on <a target="blank_" href="https://ko-fi.com/gwenverbsnouns">this ko-fi link</a>. I'll prolly spend it on getting bubble tea with my gf. My financial situation isn't dire, but I <em>am</em> burned out af and not working rn, which is p stressful at times.
+          <h4>privacy?</h4>
+          <p>This is a static website; all data is stored locally in your browser. There's not even a backend (backends are expensive), let alone a shadowy database of personal info.
+          <h4>i think it's broken</h4>
+          <p>Oh no! Please file an issue (or a pull request) over <a target="blank_" href="https://github.com/gmalmquist/drawall">here</a>.
+          <h4>what's it made out of?</h4>
+          <p>I mean, you can look at the github repo linked above? But I made the icons in <a target="blank_" href="https://inkscape.org">Inkscape</a>, which I adore. I made typescript newtypes for IDs and math stuffs using <a target="blank_" href="https://github.com/kanwren/minewt">this teeny library</a> my girlfriend (whom I also adore) wrote. The rest is mostly just vanilla typescript and html/css bc I thought that would be fun.
+          <h4>why is the ui kinda gay</h4>
+          <p>${rainbow('idk what ur talking about')}
+        `;
+
+        popup.appendHTML(content);
+        popup.getUiBuilder()
+          .newRow()
+          .addButton("im done reading now <3", (_) => {
+            popup.entity.destroy();
+          });
+        popup.show();
+        popup.element.style.top = '100px';
+      },
+    });
+
+    form.inflate(this.meta);
   }
 
   private setupFile() {
@@ -43,7 +121,7 @@ class GUI {
       name: 'New',
       icon: Icons.newPage,
       onClick: () => {
-        if (true || App.ecs.entityCount > 0) {
+        if (App.ecs.entityCount > 0) {
           Popup.confirm({
             title: 'Create New Project',
             body: 'This will clear any unsaved work and open a new project.',
