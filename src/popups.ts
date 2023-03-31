@@ -57,6 +57,33 @@ class Popup extends Component {
     this.element.style.left = `${tx}px`;
     this.element.style.top = `${ty}px`;
   }
+
+  public static confirm(props: PopConfirmProps) {
+    const confirm = App.ecs.createEntity().add(PopupWindow);
+    confirm.title = props.title;
+    confirm.getUiBuilder()
+      .addText(props.body)
+      .newRow()
+      .addButton(props.cancelLabel || 'Cancel', _ => confirm.entity.destroy())
+      .addButton(props.okLabel || '<b>Okay</b>', _ => {
+        confirm.entity.destroy();
+        props.action();
+      });
+    confirm.setPosition(props.position || Position(
+      new Point(App.viewport.screen_width/2, App.viewport.screen_height/2),
+      'screen',
+    ));
+    confirm.show();
+  }
+}
+
+interface PopConfirmProps {
+  title: string;
+  body: string;
+  action: () => void;
+  okLabel?: string;
+  cancelLabel?: string;
+  position?: Position;
 }
 
 class PopupWindow extends Popup {
@@ -121,12 +148,14 @@ class PopupWindow extends Popup {
       offset: Vec.ZERO,
       dragging: false,
     };
+    handle.style.cursor = 'grab';
     handle.addEventListener('mousedown', (e: MouseEvent) => {
       const pos = new Point(e.clientX, e.clientY);
       drag.start = pos;
       const rect = element.getBoundingClientRect();
       drag.offset = Vec.between(pos, new Point(rect.left, rect.top));
       drag.dragging = true;
+      handle.style.cursor = 'grabbing';
     });
     window.addEventListener('mousemove', (e: MouseEvent) => {
       const pos = new Point(e.clientX, e.clientY);
@@ -138,6 +167,7 @@ class PopupWindow extends Popup {
     });
     handle.addEventListener('mouseup', (e: MouseEvent) => {
       drag.dragging = false;
+      handle.style.cursor = 'grab';
     });
   }
 }
@@ -214,6 +244,10 @@ class UiBuilder {
 
   addLabel(label: string, forField: string): UiBuilder {
     return this.add(this.create('label', { 'for': forField }, label));
+  }
+
+  addText(text: string): UiBuilder {
+    return this.add(this.create('div', {}, text));
   }
 
   addInput(name: string, inputType: string, attrs: AttrMap): UiBuilder {

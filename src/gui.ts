@@ -1,5 +1,6 @@
 class GUI {
   private readonly topbar: MiniForm;
+  public readonly file: MiniForm;
   public readonly selection: MiniForm;
   public readonly tool: MiniForm;
   public readonly ux: MiniForm;
@@ -10,16 +11,17 @@ class GUI {
       Array.from(document.getElementsByClassName('topbar'))
       .map(t => t as HTMLElement)[0]);
     this.topbar.verticalAlign = 'stretch';
-  
+ 
+    this.file = new MiniForm();
     this.selection = new MiniForm();
     this.tool = new MiniForm();
     this.ux = new MiniForm();
     this.project = new MiniForm();
 
+    this.topbar.append(this.file);
+    this.topbar.appendRuler();
     this.topbar.append(this.selection);
-
     this.topbar.appendSpacer();
-
     this.topbar.append(this.tool);
     this.topbar.appendRuler();
     this.topbar.append(this.ux);
@@ -28,9 +30,29 @@ class GUI {
   }
 
   setup() {
+    this.setupFile();
     this.setupUx();
     this.setupProject();
     this.preloadIcons();
+  }
+
+  private setupFile() {
+    const form = new AutoForm();
+
+    form.addButton({
+      name: 'New',
+      onClick: () => {
+        if (true || App.ecs.entityCount > 0) {
+          Popup.confirm({
+            title: 'Create New Project',
+            body: 'This will clear any unsaved work and open a new project.',
+            action: () => App.project.newProject(),
+          });
+        }
+      },
+    });
+
+    form.inflate(this.file);
   }
 
   private setupUx() {
@@ -123,10 +145,8 @@ class GUI {
 
     form.addSeparator();
 
-    form.add<'button'>({
+    form.addButton({
       name: 'Recenter View',
-      kind: 'button',
-      value: Refs.of('button'),
       onClick: () => App.viewport.recenter(),
       icon: Icons.recenter,
     });

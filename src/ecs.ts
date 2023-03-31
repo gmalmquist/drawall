@@ -426,6 +426,15 @@ class EntityComponentSystem {
     }
   }
 
+  get entityCount() {
+    return this.entities.size;
+  }
+
+  deleteEverything() {
+    const entities = [...this.entities.values()];
+    entities.forEach(e => e.destroy());
+  }
+
   toJson(): SavedEcs {
     const entities: SavedEntity[] = [];
     for (const e of this.entities.values()) {

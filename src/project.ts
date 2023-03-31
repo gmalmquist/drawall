@@ -91,5 +91,10 @@ class Project {
   public amountToModel(amount: Amount): number {
     return this.modelUnit.from(amount).value;
   }
+
+  public newProject() {
+    App.ecs.deleteEverything();
+    App.viewport.recenter();
+  }
 }
 

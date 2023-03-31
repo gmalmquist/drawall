@@ -125,6 +125,14 @@ class AutoForm {
     });
   }
 
+  addButton(field: Omit<AutoFieldButton, 'kind' | 'value'>): AutoFieldHandle<'button'> {
+    return this.add<'button'>({
+      ...field,
+      kind: 'button',
+      value: Refs.of('button'),
+    });
+  }
+
   add<Value>(field: AutoField & { value: Ref<Value> }): AutoFieldHandle<Value> {
     type HandleType = AutoFieldHandle<Value>;
 
