@@ -83,5 +83,13 @@ class Project {
 
     App.viewport.recenter();
   }
+
+  public modelToAmount(value: number): Amount {
+    return new Amount(value, this.modelUnit.name);
+  }
+
+  public amountToModel(amount: Amount): number {
+    return this.modelUnit.from(amount).value;
+  }
 }
 

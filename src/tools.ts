@@ -199,6 +199,7 @@ class Tools {
     const keybinds = App.keybindings.values()
       .filter(kb => kb.action === tool)
       .map(kb => kb.stroke.keys.join('+'))
+      .map(s => s.replace(/ /g, 'Spacebar'))
       .join(' or ');
     if (keybinds.length > 0) {
       parts.push(`(${keybinds})`);

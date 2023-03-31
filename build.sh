@@ -65,6 +65,7 @@ spaces.js
 time.js
 units.js
 icons.js
+json.js
 ecs.js
 mouse.js
 controls.js

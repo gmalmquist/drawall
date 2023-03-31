@@ -146,6 +146,15 @@ class Room extends Component implements Solo {
     return zerop.splus(1.0 / loop.length, sum);
   }
 
+  toJson(): SavedComponent {
+    return {
+      factory: this.constructor.name,
+      arguments: [
+        { walls: this.walls.map(w => w.entity.id) },
+      ],
+    };
+  }
+
   tearDown() {
     for (const wall of this.walls) {
       if (wall.room === this) {
@@ -155,6 +164,23 @@ class Room extends Component implements Solo {
     }
   }
 }
+
+ComponentFactories.register(Room, (
+  entity: Entity,
+  data: {
+    walls: Eid[],
+  },
+) => {
+  const walls = data.walls.map(w => entity.ecs.getEntity(w));
+  if (walls.some(w => !w?.has(Wall))) {
+    return 'not ready';
+  }
+
+  const room = entity.getOrCreate(Room);
+  walls.forEach(w => room.addWall(w!.only(Wall)));
+
+  return room;
+});
 
 class PhysEdge extends Component implements Solo, Surface {
   public readonly [SOLO] = true;
@@ -466,12 +492,46 @@ class Wall extends Component implements Solo {
     return this.getEdge().length;
   }
 
+  toJson(): SavedComponent {
+    const lc = this.entity.only(LengthConstraint);
+    const ac = this.entity.only(AxisConstraint);
+    return {
+      factory: this.constructor.name,
+      arguments: [
+        lc.enabled ? MoreJson.distance.to(Distance(lc.length, 'model')) : false,
+        ac.enabled ? MoreJson.vector.to(ac.axis.get()) : false,
+      ],
+    };
+  }
+
   tearDown() {
     this.src.detachOutgoing();
     this.dst.detachIncoming();
     this.room = null;
   }
 }
+
+ComponentFactories.register(Wall, (
+  entity: Entity,
+  length: JsonObject | false,
+  axis: JsonObject | false,
+) => {
+  const wall = entity.add(Wall);
+  const lc = wall.entity.only(LengthConstraint);
+  const ac = wall.entity.only(AxisConstraint);
+
+  if (length !== false) {
+    lc.length = MoreJson.distance.from(length).get('model');
+  }
+  lc.enabled = length !== false;
+
+  if (axis !== false) {
+    ac.axis.set(MoreJson.vector.from(axis));
+  }
+  ac.enabled = axis !== false;
+
+  return wall;
+});
 
 class WallJoint extends Component {
   private _pos: Position = Position(Point.ZERO, 'model');
@@ -621,6 +681,25 @@ class WallJoint extends Component {
     }
   }
 
+  override toJson(): SavedComponent {
+    const angleConstraint = this.entity.only(AngleConstraint);
+    const fixedConstraint = this.entity.only(FixedConstraint);
+    const position = this.pos;
+    return {
+      factory: this.constructor.name,
+      arguments: [
+        this._incoming === null ? -1 : unwrap(this._incoming.entity.id),
+        this._outgoing === null ? -1 : unwrap(this._outgoing.entity.id),
+        {
+          angle: angleConstraint.enabled 
+            ? MoreJson.angle.to(angleConstraint.targetAngle) : false,
+          fixed: fixedConstraint.enabled,
+          position: MoreJson.position.to(position),
+        },
+      ],
+    };
+  }
+
   override tearDown() {
     const out = this._outgoing;
     const inc = this._incoming;
@@ -628,6 +707,43 @@ class WallJoint extends Component {
     if (inc !== null && inc.dst === this) inc.entity.destroy();
   }
 }
+
+ComponentFactories.register(WallJoint, (
+  entity: Entity,
+  incomingId: Eid,
+  outgoingId: Eid,
+  options: {
+    angle: JsonObject | false;
+    fixed: boolean;
+    position: JsonObject;
+  },
+) => {
+  const joint = entity.getOrCreate(WallJoint);
+
+  const constraint = joint.entity.only(AngleConstraint);
+  if (options.angle !== false) {
+    const angle = MoreJson.angle.from(options.angle);
+    constraint.targetAngle = angle;
+  }
+  constraint.enabled = options.angle !== false;
+
+  joint.pos = MoreJson.position.from(options.position);
+  joint.entity.only(FixedConstraint).enabled = options.fixed;
+
+  if (unwrap(incomingId) >= 0) {
+    const incoming = entity.ecs.getEntity(incomingId)?.maybe(Wall);
+    if (!incoming) return 'not ready';
+    incoming.dst = joint;
+  }
+
+  if (unwrap(outgoingId) >= 0) {
+    const outgoing = entity.ecs.getEntity(outgoingId)?.maybe(Wall);
+    if (!outgoing) return 'not ready';
+    outgoing.src = joint;
+  }
+
+  return joint;
+});
 
 class Constraint extends Component {
   protected readonly enabledRef = Refs.of(false);

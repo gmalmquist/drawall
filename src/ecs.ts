@@ -22,6 +22,10 @@ abstract class Component {
     return this._name;
   }
 
+  set name(n: string) {
+    this._name = n;
+  }
+
   addKind<C extends Component>(c: ComponentType<C>) {
     this.kinds.add(c);
   }
@@ -37,6 +41,10 @@ abstract class Component {
 
   ref() {
     return this.entity.ref((_) => this);
+  }
+
+  toJson(): SavedComponent | null {
+    return null;
   }
 }
 
@@ -213,12 +221,21 @@ class Entity {
     return arr[0];
   }
 
+  maybe<C extends Component, Solo>(kind: ComponentType<C>): C | null {
+    const arr = this.get(kind);
+    if (arr.length !== 1) {
+      return null;
+    }
+    return arr[0];
+  }
+
   onlyRef<C extends Component, Solo>(kind: ComponentType<C>): EntityRef<C> {
     return this.ref(e => e.only(kind));
   }
 
   getOrCreate<C extends Component>(kind: ComponentType<C>): C {
-    return this.components.getOrCreate(kind, this);
+    if (this.has(kind)) return this.get(kind)[0]!;
+    return this.add(kind);
   }
 
   ref<T>(f: (e: Entity) => T): EntityRef<T> {
@@ -227,6 +244,26 @@ class Entity {
 
   toString() {
     return `Entity(id=${this.id}, name=${this.name})`;
+  }
+
+  toJson(): SavedEntity {
+    const components: Array<NamedSavedComponent> = [];
+    for (const key of this.components.keys()) {
+      for (const component of this.components.get(key)) {
+        const saved = component.toJson();
+        if (saved !== null) {
+          components.push({
+            ...saved,
+            name: component.name,
+          });
+        }
+      }
+    }
+    return {
+      id: unwrap(this.id),
+      name: this.name,
+      components,
+    };
   }
 }
 
@@ -302,6 +339,38 @@ const EntityRef = <T, E extends readonly Entity[]>(
   return new EntityRefImpl(() => getter(...entities), entities);
 };
 
+type ComponentInflateResult = Component | 'not ready';
+
+type ComponentFactory<A extends JsonArray>
+  = (entity: Entity, ...args: A) => ComponentInflateResult;
+
+class ComponentFactories {
+  private static readonly map = new Map<string, ComponentFactory<JsonArray>>();
+
+  public static register<C extends Component, A extends JsonArray>(
+    component: ComponentType<C>,
+    factory: ComponentFactory<A>
+  ) {
+    const name = component.name;
+    if (ComponentFactories.map.has(name)) {
+      throw new Error(`Already have a factory for '${name}'.`);
+    }
+    ComponentFactories.map.set(name, factory as ComponentFactory<JsonArray>);
+  }
+
+  public static inflate(
+    entity: Entity,
+    name: string,
+    args: JsonArray,
+  ): ComponentInflateResult {
+    const factory = ComponentFactories.map.get(name);
+    if (!factory) {
+      throw new Error(`No component factory named '${name}'`);
+    }
+    return (factory as ComponentFactory<JsonArray>)(entity, ...args);
+  }
+}
+
 class EntityComponentSystem {
   private readonly entities = new Map<Eid, Entity>();
   private readonly components = new ComponentMap(false);
@@ -328,6 +397,10 @@ class EntityComponentSystem {
     return e;
   }
 
+  getEntity(e: Eid): Entity | null {
+    return this.entities.get(e) || null;
+  }
+
   getComponents<C extends Component>(kind: ComponentType<C>): C[] {
     return this.components.get(kind).filter(c => !c.entity.isDestroyed);
   }
@@ -351,6 +424,77 @@ class EntityComponentSystem {
     for (const s of this.systems) {
       s(this);
     }
+  }
+
+  toJson(): SavedEcs {
+    const entities: SavedEntity[] = [];
+    for (const e of this.entities.values()) {
+      if (!e.isAlive) continue;
+      const saved = e.toJson();
+      if (saved.components.length > 0) {
+        entities.push(saved);
+      }
+    }
+    return {
+      nextEid: this.nextEid,
+      entities,
+    };
+  }
+
+  loadJson(ecs: SavedEcs) {
+    this.nextEid = Math.max(this.nextEid, ecs.nextEid);
+    const toInflate: Array<readonly [Entity, NamedSavedComponent]> = [];
+
+    for (const savedEntity of ecs.entities) {
+      const existing = this.entities.get(Eid(savedEntity.id));
+      if (existing) {
+        // allows updating in-place for e.g. undo-redo functionality
+        existing.destroy();
+      }
+
+      const e = new Entity(this, Eid(savedEntity.id));
+      e.name = savedEntity.name;
+      this.entities.set(e.id, e);
+
+      for (const savedComponent of savedEntity.components) {
+        toInflate.push([e, savedComponent]);
+      }
+    }
+
+    const describe = (entity: Entity, comp: NamedSavedComponent): string =>
+      `${entity.id}<-'${comp.name}' ${comp.factory}(${JSON.stringify(comp.arguments)})`;
+
+    let futile: boolean = false;
+    while (!futile) {
+      futile = true;
+      const tryAgain = [];
+      while (toInflate.length > 0) {
+        const item = toInflate.pop()!;
+        const [entity, savedComponent] = item;
+        const result = ComponentFactories.inflate(
+          entity, savedComponent.factory, savedComponent.arguments
+        );
+        if (result === 'not ready') {
+          tryAgain.push(item);
+          continue;
+        }
+        result.name = savedComponent.name;
+        console.log('I', describe(entity, savedComponent));
+        // made progress
+        futile = false;
+      }
+      tryAgain.forEach(item => toInflate.push(item));
+    }
+    if (toInflate.length > 0) {
+      console.log('failed to inflate', toInflate.length, 'components.');
+      for (const [entity, component] of toInflate) {
+        console.log('F', describe(entity, component));
+      }
+    }
+
+    this.nextEid = [...this.entities.keys()]
+      .map(e => unwrap(e))
+      .reduce((a, b) => Math.max(a, b), 0);
   }
 }
 

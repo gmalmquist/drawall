@@ -537,6 +537,10 @@ class SpacePos extends BaseSpaceValue<Point> {
     return Vectors.between(this, other).mag().get(this.space) < 0.001;
   }
 
+  scale(factor: number): SpacePos {
+    return this.map(p => new Point(p.x * factor, p.y * factor));
+  }
+
   public static zero(space: SpaceName): SpacePos {
     return SpacePos.of(Point.ZERO, space);
   }
