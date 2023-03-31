@@ -140,31 +140,38 @@ class GUI {
     form.addSeparator();
 
     form.add({
-      name: 'Show Grid',
+      name: 'Show/Hide Grid',
       kind: 'toggle',
       value: App.settings.showGrid,
       icons: { on: Icons.showGrid, off: Icons.hideGrid },
     });
 
     form.add({
-      name: 'Guides',
+      name: 'Show/Hide Guides',
       kind: 'toggle',
       value: App.settings.showGuides,
       icons: { on: Icons.showGuides, off: Icons.hideGuides },
     });
 
     form.add({
-      name: 'Lengths',
+      name: 'Show/Hide Lengths',
       kind: 'toggle',
       value: App.settings.showLengths,
       icons: { on: Icons.showLengths, off: Icons.hideLengths },
     });
 
     form.add({
-      name: 'Angles',
+      name: 'Show/Hide Angles',
       kind: 'toggle',
       value: App.settings.showAngles,
       icons: { on: Icons.showAngles, off: Icons.hideAngles },
+    });
+
+    form.add({
+      name: 'Show/Hide Joints',
+      kind: 'toggle',
+      value: App.settings.showJoints,
+      icons: { on: Icons.showJoints, off: Icons.hideJoints },
     });
 
     form.addSeparator();

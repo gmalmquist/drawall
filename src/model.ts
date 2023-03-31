@@ -1461,7 +1461,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
     const locked = joint.entity.get(FixedConstraint).some(f => f.enabled);
 
     if (App.tools.current.name !== 'joint tool' 
-      && !App.settings.showAngles.get() 
+      && !App.settings.showJoints.get() 
       && !joint.entity.has(Hovered)) {
       continue;
     }

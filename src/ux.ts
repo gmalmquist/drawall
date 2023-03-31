@@ -222,18 +222,15 @@ class Handle extends Component implements Solo {
   getContextualCursor(): Cursor {
     // if already selected, prioritize showing the user that this can be dragged.
     // otherwise, prioritize highlighting that this can be clicked.
-    if (this.isSelected && this.draggable) {
+    if (this.clickable && !App.ui.dragging) {
+      return 'pointer';
+    }
+    if (this.draggable) {
       const nonSpecific = App.ui.dragging ? 'grabbing' : 'grab';
       if (App.ui.selection.size > 1 || this.cursor === null) {
         return nonSpecific;
       }
       return this.cursor;
-    }
-    if (this.clickable) {
-      return 'pointer';
-    }
-    if (this.draggable) {
-      return this.cursor || 'grab';
     }
     return 'default';
   }
@@ -721,6 +718,15 @@ class UiState {
 
   getDefaultDragHandler(filter: (handle: Handle) => boolean): UiEventDispatcher {
     const dispatcher = new UiEventDispatcher(UiState, 'default drag handler');
+    const pickCursor = (handle: Handle[]): Cursor => {
+      const counter = new Counter<Cursor>();
+      let max = 0;
+      for (const h of handle) {
+        max = Math.max(max, counter.inc(h.getContextualCursor()));
+      }
+      if (max === 0) return 'grabbing';
+      return Array.from(counter.keys()).filter(k => counter.get(k) === max)[0]!;
+    };
     dispatcher.addDragListener({
       onStart: e => {
         const hovering = this.getHandleAt(e.start, filter);
@@ -741,7 +747,7 @@ class UiState {
         } else {
           this.selection.forEach(s => selection.push(s));
         }
-        
+        App.pane.style.cursor = pickCursor(selection);
         const closure = this.getDragClosure('minimal', selection);
         const starts = closure.points.map(point => point.get());
         return { closure, starts };

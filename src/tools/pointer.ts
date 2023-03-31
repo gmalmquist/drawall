@@ -148,7 +148,15 @@ class PointerTool extends Tool {
       return false;
     };
     const handles = App.ecs.getComponents(Handle).filter(shouldRender);
-    handles.forEach(h => App.ui.renderKnob(h));
+    if (handles.length === 0) return;
+    const [first, ...others] = handles;
+    const closest = others.reduce((a, b) => {
+      if (a.knob!.poly().sdist(App.ui.mousePos).le(b.knob!.poly().sdist(App.ui.mousePos))) {
+        return a;
+      }
+      return b;
+    }, first);
+    App.ui.renderKnob(closest);
   }
 
   private getDrawSelectDispatcher(): UiEventDispatcher {
