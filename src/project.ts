@@ -34,7 +34,6 @@ class Project {
 
   public set gridSpacing(amount: Amount) {
     this.gridSpacingRef.set(amount);
-    App.gui.project.reset();
   }
 
   public get displayDecimals(): number {
@@ -116,6 +115,7 @@ class Project {
     if (!data) return;
     const json = JSON.parse(data) as JsonObject;
     this.loadJson(json);
+    App.viewport.recenter();
   }
 
   public requestSave(reason: string) {
@@ -128,15 +128,41 @@ class Project {
     return {
       version: Project.STORAGE_VERSION,
       ecs: App.ecs.toJson(),
+      gridSpacing: Units.distance.format(this.gridSpacing),
+      modelUnit: this.modelUnit.name,
+      displayUnit: this.displayUnit.name,
     };
   }
 
   public loadJson(json: JsonObject) {
     App.history.suspendWhile(() => {
       const p = json as unknown as ProjectJson;
+
       App.ecs.deleteEverything();
+
+      if (p.gridSpacing) {
+        const spacing = Units.distance.parse(
+          p.gridSpacing! as string
+        );
+        if (spacing !== null) {
+          this.gridSpacing = spacing;
+        }
+      }
+      if (p.modelUnit) {
+        this.modelUnitRef.set(Units.distance.get(p.modelUnit! as string)!);
+      }
+      if (p.displayUnit) {
+        this.displayUnitRef.set(Units.distance.get(p.displayUnit! as string)!);
+      }
+
       App.ecs.loadJson(p.ecs);
     });
+  }
+
+  public setup() {
+    this.modelUnitRef.onChange(_ => this.requestSave('model unit'));
+    this.displayUnitRef.onChange(_ => this.requestSave('display unit'));
+    this.gridSpacingRef.onChange(_ => this.requestSave('grid spacing'));
   }
 
   public update() {
@@ -153,5 +179,8 @@ class Project {
 interface ProjectJson {
   version: string;
   ecs: SavedEcs;
+  gridSpacing: string;
+  modelUnit: string;
+  displayUnit: string;
 }
 

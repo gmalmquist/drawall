@@ -663,6 +663,13 @@ class AmountInput extends MiniFormInput<Amount, HTMLInputElement> {
     this.addClass('amount');
     this.element.setAttribute('type', 'text');
     this.element.setAttribute('size', '8');
+
+    App.project.displayUnitRef.onChange(unit => {
+      const value = this.getValue();
+      if (value !== null) {
+        this.setRawValue(this.format(value));
+      }
+    });
   }
 
   protected override getRawValue(): string {

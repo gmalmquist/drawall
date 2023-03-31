@@ -177,9 +177,9 @@ class GUI {
 
     form.addSeparator();
     form.add({
-      name: 'Kinematics (k)',
+      name: 'Kinematics',
       kind: 'toggle',
-      tooltip: 'Kinematic Constraints',
+      tooltip: 'Kinematic Constraints (k)',
       value: App.settings.kinematics,
       icons: { on: Icons.kinematicsOn, off: Icons.kinematicsOff },
     });
@@ -205,10 +205,7 @@ class GUI {
       label: 'grid spacing',
       kind: 'amount',
       min: Units.distance.parse('1cm')!,
-      value: Refs.of(
-        App.project.gridSpacing,
-        (a, b) => a.unit === b.unit && a.value === b.value,
-      ),
+      value: App.project.gridSpacingRef,
       unit: Units.distance,
     });
 
@@ -229,6 +226,7 @@ class GUI {
         } else if (unit.family === 'esoteric') {
           App.project.modelUnit = Units.distance.get('light-nanosecond')!;
         }
+        App.viewport.recenter();
       }
     });
 
