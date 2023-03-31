@@ -7,6 +7,7 @@ type UserActionId = ToolName
   | 'recenter'
   | 'undo'
   | 'redo'
+  | 'export-png'
 ;
 
 interface UserAction {
@@ -36,6 +37,8 @@ class UserActions {
 
     add('undo', () => App.history.undo());
     add('redo', () => App.history.redo());
+
+    add('export-png', () => App.imageExporter.export());
     // add('foo', () => doFoo());
   }
 

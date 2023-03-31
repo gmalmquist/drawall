@@ -132,20 +132,20 @@ class GUI {
     });
 
     form.addButton({
-      name: 'Download Image',
+      name: 'Download Image (Shift+D)',
       icon: Icons.exportImage,
-      onClick: () => App.imageExporter.downloadCanvasComposite(),
+      onClick: () => App.actions.fire('export-png'),
     });
 
     form.addButton({
-      name: 'Undo (ctrl+z)',
+      name: 'Undo (Control+z)',
       icon: Icons.editUndo,
       onClick: () => App.actions.fire('undo'),
       enabled: App.history.canUndo,
     });
 
     form.addButton({
-      name: 'Redo (ctrl+shift+z)',
+      name: 'Redo (Control+Shift+Z)',
       icon: Icons.editRedo,
       onClick: () => App.actions.fire('redo'),
       enabled: App.history.canRedo,

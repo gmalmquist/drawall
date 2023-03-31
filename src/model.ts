@@ -1454,6 +1454,8 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const WallJointRenderer = (ecs: EntityComponentSystem) => {
+  if (App.rendering.get()) return;
+
   const joints = ecs.getComponents(WallJoint);
   const canvas = App.canvas;
   for (const joint of joints) {

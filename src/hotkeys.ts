@@ -35,6 +35,7 @@ class Keybindings {
     kb.bind('0').to('recenter'); // common convention
     kb.bind('Control', 'z').to('undo'); // universal 
     kb.bind('Control', 'Shift', 'Z').to('redo'); // common convention
+    kb.bind('Shift', 'D').to('export-png'); // google drive?
     return kb;
   }
 

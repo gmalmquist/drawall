@@ -119,6 +119,8 @@ class PointerTool extends Tool {
   }
 
   override update() {
+    if (App.rendering.get()) return;
+
     this.renderNearbyKnobs();
 
     const rect = this.selectionRect.get();

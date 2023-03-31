@@ -22,6 +22,8 @@ class App {
   public static readonly project = new Project();
   public static readonly history = new ProjectHistory();
   public static readonly imageExporter = new ImageExporter();
+  public static readonly rendering = Refs.of<boolean>(false);
+  public static readonly renderReady = Refs.of<boolean>(false);
   public static debug: boolean = false;
 
   constructor() {
@@ -58,6 +60,7 @@ class App {
     App.actions.setup();
     App.gui.setup();
     App.ui.setup();
+    App.imageExporter.setup();
 
     // register systems
     App.ecs.registerSystem(Recycler);
@@ -87,6 +90,13 @@ class App {
 
   static update() {
     Time.tick();
+
+    // important to get this up front before anything runs
+    const isRendering = App.rendering.get();
+    if (isRendering) {
+      App.renderReady.set(false);
+    }
+
     // nb: order matters, mostly bc it affects draw order
     // for things like tool actions.
     App.background.update();
@@ -96,6 +106,10 @@ class App {
     App.ui.update();
     App.tools.update();
     App.project.update();
+
+    if (isRendering) {
+      App.renderReady.set(true);
+    }
   }
 
   static start() {
