@@ -115,6 +115,14 @@ class Surfaced extends Component implements Surface, Solo {
   }
 }
 
+class Dragging extends Component implements Solo {
+  public readonly [SOLO] = true;
+
+  constructor(entity: Entity) {
+    super(entity);
+  }
+}
+
 class Hovered extends Component implements Solo {
   public readonly [SOLO] = true;
 
@@ -282,6 +290,15 @@ class Handle extends Component implements Solo {
 
   get isActive(): boolean {
     return this.isHovered || this.isSelected;
+  }
+
+  get dragging(): boolean {
+    return this.entity.has(Dragging);
+  }
+
+  set dragging(d: boolean) {
+    if (d) this.entity.getOrCreate(Dragging);
+    else this.entity.removeAll(Dragging);
   }
 
   set hovered(h: boolean) {
@@ -555,16 +572,19 @@ class UiState {
   }
 
   cancelDrag() {
-    if (!this.mouse.dragging) return;
-    const base = {
-      start: this.mouse.start,
-      position: this.mouse.start,
-      delta: Vector(Vec.ZERO, 'screen'),
-      primary: true,
-    };
-    this.events.handleDrag({ kind: 'update', ...base });
-    this.events.handleDrag({ kind: 'end', ...base });
+    if (this.mouse.dragging) {
+      const base = {
+        start: this.mouse.start,
+        position: this.mouse.start,
+        delta: Vector(Vec.ZERO, 'screen'),
+        primary: true,
+      };
+      this.events.handleDrag({ kind: 'update', ...base });
+      this.events.handleDrag({ kind: 'end', ...base });
+    }
     this.mouse.dragging = false;
+    this.mouse.pressed = false;
+    this.clearDragging();
   }
 
   get selection(): Set<Handle> {
@@ -580,8 +600,15 @@ class UiState {
     App.ecs.getComponents(Selected).map(s => s.entity.only(Handle)).forEach(e => {
       e.selected = false;
       e.hovered = false;
+      e.dragging = false;
     });
     this.updateForms();
+  }
+
+  clearDragging() {
+    App.ecs.getComponents(Dragging).map(s => s.entity.only(Handle)).forEach(e => {
+      e.dragging = false;
+    });
   }
 
   setSelection(...handles: Handle[]) {
@@ -747,12 +774,16 @@ class UiState {
         } else {
           this.selection.forEach(s => selection.push(s));
         }
+
         App.pane.style.cursor = pickCursor(selection);
+        selection.forEach(h => { h.dragging = true; });
+
         const closure = this.getDragClosure('minimal', selection);
         const starts = closure.points.map(point => point.get());
         return { closure, starts };
       },
       onUpdate: (e, { closure, starts }) => {
+        if (App.ecs.getComponents(Dragging).length === 0) return;
         const drag = new Drag(e.start, e.position);
         const preferred = this.preferredSnap !== null
           ? closure.snaps.filter(s => s.name === this.preferredSnap)[0]
@@ -772,6 +803,7 @@ class UiState {
         closure.points.forEach((point, i) => point.set(starts[i].plus(delta)));
       },
       onEnd: (_e, _context) => {
+        this.clearDragging();
         this.currentSnapResult = null;
         this.preferredSnap = null;
         App.project.requestSave('drag completed');

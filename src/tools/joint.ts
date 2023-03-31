@@ -12,7 +12,7 @@ class JointTool extends Tool {
   }
 
   override get cursor(): Cursor {
-    return 'default';
+    return `url('${Icons.pen}') 4 4, default`;
   }
 
   override setup() {
@@ -31,7 +31,14 @@ class JointTool extends Tool {
     });
     this.events.onMouse('move', e => {
       const handle = App.ui.getHandleAt(e.position, h => h.entity.has(Wall) || h.entity.has(WallJoint));
-      App.pane.style.cursor = handle === null ? this.cursor : 'pointer';
+      if (handle === null) {
+        App.pane.style.cursor = 'default';
+        App.ui.clearHovered();
+      } else if (handle.entity.has(Wall)) {
+        App.pane.style.cursor = this.cursor;
+      } else if (handle.entity.has(WallJoint)) {
+        App.pane.style.cursor = 'pointer';
+      }
 
       if (handle?.entity?.has(WallJoint)) {
         App.ui.setHovered(handle);

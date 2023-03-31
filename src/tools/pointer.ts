@@ -143,6 +143,7 @@ class PointerTool extends Tool {
     const handleDrawRadius = Distance(100, 'screen');
     const shouldRender = (h: Handle): boolean => {
       if (h.knob === null) return false;
+      if (h.dragging) return true;
       if (selectionSize === 1 && h.knob.parent.only(Handle).isSelected) return true;
       if (h.knob.poly().sdist(App.ui.mousePos).lt(handleDrawRadius)) return true;
       return false;
@@ -151,6 +152,8 @@ class PointerTool extends Tool {
     if (handles.length === 0) return;
     const [first, ...others] = handles;
     const closest = others.reduce((a, b) => {
+      if (a.dragging) return a;
+      if (b.dragging) return b;
       if (a.knob!.poly().sdist(App.ui.mousePos).le(b.knob!.poly().sdist(App.ui.mousePos))) {
         return a;
       }

@@ -1462,7 +1462,9 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.tools.current.name !== 'joint tool' 
       && !App.settings.showJoints.get() 
-      && !joint.entity.has(Hovered)) {
+      && !joint.entity.has(Hovered)
+      && !locked
+    ) {
       continue;
     }
 
