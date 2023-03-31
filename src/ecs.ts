@@ -46,6 +46,10 @@ abstract class Component {
   toJson(): SavedComponent | null {
     return null;
   }
+
+  public static resetCounters() {
+    this.counter.clear();
+  }
 }
 
 class TestComponent extends Component implements Solo {
@@ -435,6 +439,8 @@ class EntityComponentSystem {
   deleteEverything() {
     const entities = [...this.entities.values()];
     entities.forEach(e => e.destroy());
+    Component.resetCounters();
+    this.nextEid = 0;
   }
 
   toJson(): SavedEcs {
