@@ -230,7 +230,7 @@ class Handle extends Component implements Solo {
   getContextualCursor(): Cursor {
     // if already selected, prioritize showing the user that this can be dragged.
     // otherwise, prioritize highlighting that this can be clicked.
-    if (this.clickable && !App.ui.dragging) {
+    if (this.clickable && !App.ui.dragging && !this.isSelected) {
       return 'pointer';
     }
     if (this.draggable) {
@@ -240,7 +240,7 @@ class Handle extends Component implements Solo {
       }
       return this.cursor;
     }
-    return 'default';
+    return this.clickable ? 'pointer' : 'default';
   }
 
   /** user initiated delete event. */
@@ -289,7 +289,7 @@ class Handle extends Component implements Solo {
   }
 
   get isActive(): boolean {
-    return this.isHovered || this.isSelected;
+    return this.isHovered || this.isSelected || this.dragging;
   }
 
   get dragging(): boolean {

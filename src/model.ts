@@ -1471,35 +1471,30 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.tools.current.name !== 'joint tool' 
       && !App.settings.showJoints.get() 
-      && !joint.entity.has(Hovered)
       && !locked
+      && !active
     ) {
       continue;
     }
 
     canvas.fillStyle = 'black';
     canvas.strokeStyle = 'black';
+    canvas.lineWidth = 1;
 
     const pos = joint.pos;
     const radius = Distance(5, 'screen');
-    if (locked) {
+    if (active) {
+      canvas.fillStyle = BLUE;
+      canvas.strokeStyle = PINK;
+      canvas.lineWidth = 4;
+    } else if (locked) {
       canvas.fillStyle = 'black';
-      canvas.fillCircle(pos, radius);
     } else {
       canvas.fillStyle = 'white';
-      canvas.fillCircle(pos, radius);
     }
-    canvas.lineWidth = 1;
+    canvas.fillCircle(pos, radius);
     canvas.strokeCircle(pos, radius);
-
-    if (active) {
-      canvas.lineWidth = 2;
-      canvas.strokeStyle = BLUE;
-      canvas.strokeCircle(pos, radius.scale(2).plus(Distance(2, 'screen')));
-      canvas.lineWidth = 2;
-      canvas.strokeStyle = PINK;
-      canvas.strokeCircle(pos, radius.scale(2));
-    }
+    canvas.lineWidth = 1;
   }
 };
 
@@ -1573,27 +1568,48 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       shadow: highlight,
     });
 
-    canvas.beginPath();
-    canvas.moveTo(center.splus(arcRadius, rightVec.unit()));
-    canvas.arc(
-      center,
-      arcRadius,
-      rightAngle,
-      leftAngle,
-      true,
-    );
 
-    canvas.strokeStyle = color(false);
-    //canvas.setLineDash(constraint.enabled ? [] : [2, 2]);
-    canvas.setLineDash([]);
-    canvas.lineWidth = 1;
-    canvas.stroke();
-    canvas.setLineDash([]);
+    const arc = (arcRadius: Distance, fill: string | null, stroke: string | null) => {
+      canvas.beginPath();
+      canvas.moveTo(center.splus(arcRadius, rightVec.unit()));
+      canvas.arc(
+        center,
+        arcRadius,
+        rightAngle,
+        leftAngle,
+        true,
+      );
 
-    canvas.lineTo(center);
-    canvas.closePath();
-    canvas.fillStyle = color(false);
-    canvas.fill();
+      if (stroke) {
+        canvas.strokeStyle = stroke;
+        canvas.stroke();
+      }
+
+      if (fill) {
+        canvas.lineTo(center);
+        canvas.closePath();
+        canvas.fillStyle = fill;
+        canvas.fill();
+      }
+    };
+
+    const active = constraint.entity.has(Selected) || constraint.entity.has(Hovered)
+      || constraint.entity.has(Dragging);
+
+    if (!active) {
+      canvas.lineWidth = 1;
+      arc(
+        arcRadius,
+        color(false),
+        color(false),
+      );
+    } else {
+      const thickness = 4;
+      canvas.lineWidth = thickness;
+      arc(arcRadius, 'white', null);
+      arc(arcRadius.minus(Distance(thickness/2, 'screen')), null, PINK);
+      arc(arcRadius.plus(Distance(thickness/2, 'screen')), null, BLUE);
+    }
   }
 };
 
