@@ -1359,17 +1359,32 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
     const wallColor = active ? rainbow : 'black'; 
 
+    const getEndPad = (joint: WallJoint, offset: Distance): Distance => {
+      // nb: at offset = 0, this will always be 0
+      const angle = joint.entity.only(AngleConstraint).currentAngle;
+      const radians = unwrap(angle.get('model'));
+      return offset.scale(Math.sin(radians)).neg();
+    };
+
     const strokeWall = (
       width: number,
-      offset: Distance | number = 0,
+      offset: Distance = Distances.zero('screen'),
       color: string | CanvasGradient = wallColor,
     ) => {
+      const srcpad = getEndPad(wall.src, offset);
+      const dstpad = getEndPad(wall.dst, offset);
+      const src = wall.src.pos
+        .splus(offset, edge.normal)
+        .splus(srcpad, edge.tangent);
+      const dst = wall.dst.pos
+        .splus(offset, edge.normal)
+        .splus(dstpad, edge.tangent.neg());
       canvas.strokeStyle = color;
       canvas.lineWidth = width;
-      canvas.strokeLine(
-        wall.src.pos.splus(offset, edge.normal),
-        wall.dst.pos.splus(offset, edge.normal),
-      );
+      canvas.strokeLine(src, dst);
+      canvas.fillStyle = color;
+      canvas.fillCircle(src, Distance(width/2, 'screen'));
+      canvas.fillCircle(dst, Distance(width/2, 'screen'));
     };
 
     const thickness = Distance(6, 'screen');
@@ -1439,6 +1454,8 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 };
 
 const WallJointRenderer = (ecs: EntityComponentSystem) => {
+  if (!App.settings.showAngles.get()) return;
+
   const joints = ecs.getComponents(WallJoint);
   const canvas = App.canvas;
   for (const joint of joints) {
