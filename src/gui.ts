@@ -52,6 +52,18 @@ class GUI {
       },
     });
 
+    form.addButton({
+      name: 'Undo',
+      onClick: () => App.actions.fire('undo'),
+      enabled: App.history.canUndo,
+    });
+
+    form.addButton({
+      name: 'Redo',
+      onClick: () => App.actions.fire('redo'),
+      enabled: App.history.canRedo,
+    });
+
     form.inflate(this.file);
   }
 
@@ -63,7 +75,7 @@ class GUI {
       from: _ => App.tools.current,
     });
 
-    const snappingEnabled = Refs.reduce(
+    const snappingHidden = Refs.reduce(
       {
         to: ([supported, enabled]) => supported && enabled,
         from: _ => [snappingSupported.get(), App.ui.snapping.enableByDefaultRef.get()],
@@ -71,14 +83,17 @@ class GUI {
       },
       snappingSupported,
       App.ui.snapping.enableByDefaultRef,
-    );
+    ).map<boolean>({
+      to: a => !a,
+      from: a => !a,
+    });
 
     form.add({
       name: 'Local Axes Snapping',
       kind: 'toggle',
       value: App.ui.snapping.snapToLocalRef,
       icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
-      enabled: snappingEnabled,
+      hidden: snappingHidden,
     });
 
     form.add({
@@ -86,7 +101,7 @@ class GUI {
       kind: 'toggle',
       value: App.ui.snapping.snapToGlobalRef,
       icons: { on: Icons.snapGlobalOn, off: Icons.snapGlobalOff },
-      enabled: snappingEnabled,
+      hidden: snappingHidden,
     });
 
     form.add({
@@ -94,7 +109,7 @@ class GUI {
       kind: 'toggle',
       value: App.ui.snapping.snapToGeometryRef,
       icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
-      enabled: snappingEnabled,
+      hidden: snappingHidden,
     });
 
     form.add({
@@ -102,7 +117,7 @@ class GUI {
       kind: 'toggle',
       value: App.settings.snapGrid,
       icons: { on: Icons.snapGridOn, off: Icons.snapGridOff },
-      enabled: snappingEnabled,
+      hidden: snappingHidden,
     });
 
     form.add({

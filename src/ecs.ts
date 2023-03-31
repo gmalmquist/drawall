@@ -386,6 +386,7 @@ class EntityComponentSystem {
     }
     this.entities.delete(e);
     entity.destroy();
+    App.project.requestSave('entity deleted');
   }
 
   createEntity(...components: (new (e: Entity) => Component)[]): Entity {
@@ -394,6 +395,7 @@ class EntityComponentSystem {
     for (const c of components) {
       e.add(c);
     }
+    App.project.requestSave('entity created');
     return e;
   }
 
@@ -451,6 +453,10 @@ class EntityComponentSystem {
   }
 
   loadJson(ecs: SavedEcs) {
+    App.history.suspendWhile(() => this._doLoadJson(ecs));
+  }
+
+  private _doLoadJson(ecs: SavedEcs) {
     this.nextEid = Math.max(this.nextEid, ecs.nextEid);
     const toInflate: Array<readonly [Entity, NamedSavedComponent]> = [];
 

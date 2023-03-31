@@ -80,6 +80,7 @@ ux.js
 model.js
 popups.js
 project.js
+history.js
 settings.js
 app.js
 EOF

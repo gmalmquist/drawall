@@ -49,6 +49,7 @@ class DrawRoomTool extends Tool {
       onEnd: (e, room) => {
         this.drawingRoom = null;
         this.mergeIntersectingRooms(room);
+        App.project.requestSave('finished drawing a new room');
       },
     });
   }

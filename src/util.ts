@@ -133,6 +133,10 @@ const Refs = {
     }, props.delayMillis);
     return ref;
   },
+  negate: (ref: Ref<boolean>): Ref<boolean> => ref.map({
+    to: (v: boolean) => !v,
+    from: (v: boolean) => !v,
+  }),
 };
 
 interface PollingRefProps<V> {

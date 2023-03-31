@@ -518,6 +518,13 @@ class Grid extends Component implements Solo {
     );
   }
 
+  toJson(): SavedComponent {
+    return {
+      factory: this.constructor.name,
+      arguments: [],
+    };
+  }
+
   private calcDisplayDecimals(): number {
     const du = App.project.displayUnit;
     const spacing = App.project.gridSpacing;
@@ -540,12 +547,15 @@ class Grid extends Component implements Solo {
     if (grids.length === 0) {
       return App.ecs.createEntity().add(Grid);
     }
-    if (grids.length > 1) {
-      throw new Error('There should never be more than one grid!');
-    }
+    const [first, ...more] = grids;
+    more.forEach(grid => grid.entity.destroy());
     return grids[0]!;
   }
 }
+
+ComponentFactories.register(Grid, (entity: Entity) => {
+  return entity.add(Grid);
+});
 
 const GridRenderer = (ecs: EntityComponentSystem) => {
   const grid = Grid.getGrid();

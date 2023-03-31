@@ -35,6 +35,14 @@ class ElementWrap<E extends HTMLElement> {
     }
   }
 
+  setHidden(hidden: boolean) {
+    if (hidden) {
+      this.addClass('hidden');
+    } else {
+      this.removeClass('hidden');
+    }
+  }
+
   set tooltip(text: string) {
     this.element.setAttribute('title', text);
   }
@@ -87,11 +95,13 @@ interface AutoFieldUi<T> {
   setValue: (value: T) => void;
   clear: () => void;
   setEnabled: (enabled: boolean) => void;
+  setHidden: (hidden: boolean) => void;
 }
 
 interface AutoFieldHandle<V> {
   readonly value: Ref<V>;
   readonly enabled: Ref<boolean>;
+  readonly hidden: Ref<boolean>;
 }
 
 type AutoFieldId = Pick<AutoField, 'name' | 'kind'>;
@@ -142,10 +152,12 @@ class AutoForm {
     const handle: AutoFieldHandle<Value> = {
       value: field.value,
       enabled: field.enabled || Refs.of(true),
+      hidden: field.hidden || Refs.of(false),
     };
 
     handle.value.onChange(_ => this.updateUi(field));
     handle.enabled.onChange(_ => this.updateUi(field));
+    handle.hidden.onChange(_ => this.updateUi(field));
     this.handles.get(id).add(handle);
 
     return handle;
@@ -164,7 +176,9 @@ class AutoForm {
         const wrapped = form.appendLabeled(field.label, inflated.element);
         for (const handle of this.handles.get(id)) {
           handle.enabled.onChange(e => wrapped.setEnabled(e));
+          handle.hidden.onChange(e => wrapped.setHidden(e));
           wrapped.setEnabled(handle.enabled.get());
+          wrapped.setHidden(handle.hidden.get());
         }
       } else {
         form.append(inflated.element);
@@ -201,9 +215,11 @@ class AutoForm {
 
     const values = new Set<Value>();
     const enables = new Set<boolean>();
+    const hiddens = new Set<boolean>();
     for (const handle of this.handles.get(id)) {
       values.add((handle as AutoFieldHandle<Value>).value.get());
       enables.add(handle.enabled.get());
+      hiddens.add(handle.hidden.get());
     }
 
     if (values.size === 1) {
@@ -213,6 +229,7 @@ class AutoForm {
     }
 
     ui.setEnabled(Array.from(enables).some(e => e));
+    ui.setHidden(Array.from(hiddens).some(e => e));
   }
 
   private updateHandle<V, R extends Ref<V>>(
@@ -234,6 +251,7 @@ class AutoForm {
         setValue: v => input.setValue(v),
         clear: () => input.clear(),
         setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
       };
     }
     if (field.kind === 'slider') {
@@ -244,6 +262,7 @@ class AutoForm {
         setValue: v => input.setValue(v),
         clear: () => input.clear(),
         setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
       };
     }
     if (field.kind === 'angle') {
@@ -254,6 +273,7 @@ class AutoForm {
         setValue: v => input.setValue(v),
         clear: () => input.clear(),
         setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
       };
     }
     if (field.kind === 'number') {
@@ -267,6 +287,7 @@ class AutoForm {
         setValue: v => input.setValue(v),
         clear: () => input.clear(),
         setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
       };
     }
     if (field.kind === 'toggle') {
@@ -277,6 +298,7 @@ class AutoForm {
         setValue: v => input.setToggled(v),
         clear: () => input.clear(),
         setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
       };
     }
     if (field.kind === 'button') {
@@ -287,14 +309,17 @@ class AutoForm {
         setValue: (_) => {},
         clear: () => {},
         setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
       };
     }
     if (field.kind === 'separator') {
+      const element = new Separator(true);
       return {
-        element: new Separator(true),
+        element,
         setValue: (_) => {},
         clear: () => {},
         setEnabled: (_) => {},
+        setHidden: h => element.setHidden(h),
       };
     }
     return impossible(field);
@@ -370,6 +395,7 @@ interface AutoFieldBase<V> {
   label?: string;
   value: Ref<V>;
   enabled?: Ref<boolean>;
+  hidden?: Ref<boolean>;
   tooltip?: string;
 }
 

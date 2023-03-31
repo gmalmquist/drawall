@@ -650,6 +650,7 @@ class UiState {
     this.cancelDrag();
     this.clearSelection();
     selected.forEach(s => s.delete());
+    App.project.requestSave('selection deleted');
   }
 
   clearHovered() {
@@ -767,6 +768,7 @@ class UiState {
       onEnd: (_e, _context) => {
         this.currentSnapResult = null;
         this.preferredSnap = null;
+        App.project.requestSave('drag completed');
       },
     });
     return dispatcher;

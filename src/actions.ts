@@ -5,6 +5,8 @@ type UserActionId = ToolName
   | 'loop-select'
   | 'select-all'
   | 'recenter'
+  | 'undo'
+  | 'redo'
 ;
 
 interface UserAction {
@@ -31,6 +33,9 @@ class UserActions {
     add('select-all', () => App.ui.selectAll());
 
     add('recenter', () => App.viewport.recenter());
+
+    add('undo', () => App.history.undo());
+    add('redo', () => App.history.redo());
     // add('foo', () => doFoo());
   }
 
@@ -49,13 +54,17 @@ class UserActions {
     return Array.from(this.map.keys());
   }
 
+  fire(action: UserActionId) {
+    this.get(action).apply();
+  }
+
   public evaluateKeybindings(): boolean {
     const stroke: KeyStroke = {
       keys: App.ui.pressedKeys,
     };
     const hotkey = App.keybindings.match(stroke);
     if (hotkey !== null) {
-      const action = App.actions.get(hotkey.action);
+      const action = this.get(hotkey.action);
       App.log('executing keybinding', formatKeyStroke(hotkey.stroke), ':', action.name);
       action.apply();
       return true;

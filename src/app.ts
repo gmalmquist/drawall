@@ -19,7 +19,8 @@ class App {
   public static readonly foreground = new VectorCanvas(
     document.getElementById('foreground-svg')!);
   public static readonly settings = new Settings();
-  public static project = new Project();
+  public static readonly project = new Project();
+  public static readonly history = new ProjectHistory();
   public static debug: boolean = false;
 
   constructor() {
@@ -74,6 +75,8 @@ class App {
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
 
+    App.project.loadLocal();
+
     console.log(`
       hi! if you're here u probably are savvy enough that you'd like some hotkeys:
       ${App.keybindings.values().map(binding => `\n${binding.stroke.keys.join('+')}: ${binding.action}`).join('')}
@@ -90,6 +93,7 @@ class App {
     App.ecs.update();
     App.ui.update();
     App.tools.update();
+    App.project.update();
   }
 
   static start() {

@@ -1,4 +1,11 @@
 class Project {
+  private static readonly STORAGE_VERSION = '0.0.1';
+  private static readonly PROJECT_KEY = 'project-data';
+  private static readonly SAVE_FREQUENCY_SECONDS = 0.5;
+  private saveRequestedAt: number | null = 0;
+
+  private historyIndex: number = 0;
+
   // defines what 1 unit of model space is
   public readonly modelUnitRef = Refs.of<Unit>(Units.distance.get('in')!, (a, b) => (
     a.name === b.name
@@ -95,6 +102,56 @@ class Project {
   public newProject() {
     App.ecs.deleteEverything();
     App.viewport.recenter();
+    window.localStorage.removeItem(Project.PROJECT_KEY);
   }
+
+  public saveLocal() {
+    const data = JSON.stringify(this.serialize());
+    App.log(`saved ${data.length} bytes to local storage`);
+    window.localStorage.setItem(Project.PROJECT_KEY, data);
+  }
+
+  public loadLocal() {
+    const data = window.localStorage.getItem(Project.PROJECT_KEY);
+    if (!data) return;
+    const json = JSON.parse(data) as JsonObject;
+    this.loadJson(json);
+  }
+
+  public requestSave(reason: string) {
+    if (App.history.isSuspended) return;
+    App.log(`requestSave(${reason})`);
+    this.saveRequestedAt = Time.now;
+  }
+
+  public serialize(): ProjectJson {
+    return {
+      version: Project.STORAGE_VERSION,
+      ecs: App.ecs.toJson(),
+    };
+  }
+
+  public loadJson(json: JsonObject) {
+    App.history.suspendWhile(() => {
+      const p = json as unknown as ProjectJson;
+      App.ecs.deleteEverything();
+      App.ecs.loadJson(p.ecs);
+    });
+  }
+
+  public update() {
+    const saveReq = this.saveRequestedAt;
+    if (saveReq !== null
+      && Time.now - saveReq >= Project.SAVE_FREQUENCY_SECONDS) {
+      this.saveLocal();
+      App.history.push();
+      this.saveRequestedAt = null;
+    }
+  }
+}
+
+interface ProjectJson {
+  version: string;
+  ecs: SavedEcs;
 }
 

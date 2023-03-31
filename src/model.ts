@@ -516,7 +516,7 @@ class Wall extends Component implements Solo {
       factory: this.constructor.name,
       arguments: [
         lc.enabled ? MoreJson.distance.to(Distance(lc.length, 'model')) : false,
-        ac.enabled ? MoreJson.vector.to(ac.axis.get()) : false,
+        ac.enabled ? ac.axisToggle.get() : 0,
       ],
     };
   }
@@ -531,21 +531,21 @@ class Wall extends Component implements Solo {
 ComponentFactories.register(Wall, (
   entity: Entity,
   length: JsonObject | false,
-  axis: JsonObject | false,
+  axis: boolean | 0,
 ) => {
   const wall = entity.add(Wall);
   const lc = wall.entity.only(LengthConstraint);
   const ac = wall.entity.only(AxisConstraint);
 
   if (length !== false) {
+    lc.enabled = true;
     lc.length = MoreJson.distance.from(length).get('model');
   }
-  lc.enabled = length !== false;
 
-  if (axis !== false) {
-    ac.axis.set(MoreJson.vector.from(axis));
+  if (axis !== 0) {
+    ac.enabled = true;
+    ac.axisToggle.set(axis);
   }
-  ac.enabled = axis !== false;
 
   return wall;
 });
@@ -740,9 +740,9 @@ ComponentFactories.register(WallJoint, (
   const constraint = joint.entity.only(AngleConstraint);
   if (options.angle !== false) {
     const angle = MoreJson.angle.from(options.angle);
+    constraint.enabled = true;
     constraint.targetAngle = angle;
   }
-  constraint.enabled = options.angle !== false;
 
   joint.pos = MoreJson.position.from(options.position);
   joint.entity.only(FixedConstraint).enabled = options.fixed;
@@ -776,7 +776,10 @@ class Constraint extends Component {
     this.enabledRef.onChange(e => {
       if (e) this.onEnable();
       else this.onDisable();
+      App.project.requestSave(`constraint ${this.name} enabled`);
     });
+    this.tensionRef.onChange(_ =>
+      App.project.requestSave(`${this.name} tension changed`));
   }
 
   public get enabled(): boolean {
@@ -841,7 +844,7 @@ class FixedConstraint extends Constraint {
   }
 
   updateTargets(pts: Position[]) {
-    this.targets = pts; 
+    this.targets = pts;
   }
 
   enforce() {
@@ -911,6 +914,10 @@ class LengthConstraint extends Constraint {
     super(entity);
     this.enabled = false;
 
+    this.targetLength.onChange(_ => {
+      if (this.enabled) App.project.requestSave('target length changed');
+    });
+
     this.entity.add(Form).setFactory(() => {
       const form = new AutoForm();
       const lockField = form.add({
@@ -926,7 +933,7 @@ class LengthConstraint extends Constraint {
         name: 'length',
         label: 'length',
         kind: 'amount',
-        enabled: this.enabledRef,
+        hidden: Refs.negate(this.enabledRef),
         value: this.targetLength.map({
           to: modelLength => App.project.displayUnit.from(App.project.modelUnit.newAmount(modelLength)),
           from: amount => App.project.modelUnit.from(amount).value,
@@ -939,7 +946,7 @@ class LengthConstraint extends Constraint {
         name: 'length tension',
         label: 'tension',
         kind: 'slider',
-        enabled: this.enabledRef,
+        hidden: Refs.negate(this.enabledRef),
         value: this.tensionRef,
         min: 0,
         max: 1,
@@ -1014,6 +1021,10 @@ class AngleConstraint extends Constraint {
   ) {
     super(entity);
 
+    this.targetAngleRef.onChange(_ => {
+      if (this.enabled) App.project.requestSave('target angle changed');
+    });
+
     this.entity.add(Form).setFactory(() => {
       const form = new AutoForm();
       const lockField = form.add({
@@ -1029,14 +1040,14 @@ class AngleConstraint extends Constraint {
         name: 'angle',
         label: 'angle',
         kind: 'angle',
-        enabled: this.enabledRef,
+        hidden: Refs.negate(this.enabledRef),
         value: this.targetAngleRef,
       });
       const tensionField = form.add({
         name: 'angle tension',
         label: 'tension',
         kind: 'slider',
-        enabled: this.enabledRef,
+        hidden: Refs.negate(this.enabledRef),
         value: this.tensionRef,
         min: 0,
         max: 1,
@@ -1134,9 +1145,16 @@ class AxisConstraint extends Constraint {
       return a.minus(b).mag() < 0.001;
     },
   );
+  public readonly axisToggle = this.axis.map<boolean>({
+    to: (axis: Vector) => Math.abs(axis.get('screen').x) < Math.abs(axis.get('screen').y),
+    from: (vertical: boolean) => vertical ? Vector(Axis.Y, 'screen') : Vector(Axis.X, 'screen'),
+  });
 
   constructor(entity: Entity) {
     super(entity);
+    this.axis.onChange(_ => {
+      if (this.enabled) App.project.requestSave('axis constraint changed');
+    });
     this.entity.add(Form).setFactory(() => {
       const form = new AutoForm();
       form.add({
@@ -1151,11 +1169,8 @@ class AxisConstraint extends Constraint {
       form.add({
         name: 'axis',
         kind: 'toggle',
-        value: this.axis.map<boolean>({
-          to: (axis: Vector) => Math.abs(axis.get('screen').x) < Math.abs(axis.get('screen').y),
-          from: (vertical: boolean) => vertical ? Vector(Axis.Y, 'screen') : Vector(Axis.X, 'screen'),
-        }),
-        enabled: this.enabledRef,
+        value: this.axisToggle,
+        hidden: Refs.negate(this.enabledRef),
         icons: { on: Icons.axisY, off: Icons.axisX }, 
       });
       form.add({
@@ -1165,7 +1180,7 @@ class AxisConstraint extends Constraint {
         min: 0,
         max: 1,
         value: this.tensionRef,
-        enabled: this.enabledRef,
+        hidden: Refs.negate(this.enabledRef),
       });
       return form;
     });

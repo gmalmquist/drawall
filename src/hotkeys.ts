@@ -33,6 +33,8 @@ class Keybindings {
     kb.bind('Control', 'l').to('loop-select'); // matches blender
     kb.bind('Control', 'a').to('select-all'); // nearly universal convention lol
     kb.bind('0').to('recenter'); // common convention
+    kb.bind('Control', 'z').to('undo'); // universal 
+    kb.bind('Control', 'Shift', 'Z').to('redo'); // common convention
     return kb;
   }
 
