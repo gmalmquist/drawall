@@ -41,6 +41,7 @@ class GUI {
 
     form.addButton({
       name: 'New',
+      icon: Icons.newPage,
       onClick: () => {
         if (true || App.ecs.entityCount > 0) {
           Popup.confirm({
@@ -54,12 +55,14 @@ class GUI {
 
     form.addButton({
       name: 'Undo',
+      icon: Icons.editUndo,
       onClick: () => App.actions.fire('undo'),
       enabled: App.history.canUndo,
     });
 
     form.addButton({
       name: 'Redo',
+      icon: Icons.editRedo,
       onClick: () => App.actions.fire('redo'),
       enabled: App.history.canRedo,
     });
