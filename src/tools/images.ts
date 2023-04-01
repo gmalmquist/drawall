@@ -207,6 +207,7 @@ class ImagesTool extends Tool {
       clickable: false,
       hoverable: false,
       draggable: true,
+      priority: -2,
       drag: () => {
         if (App.tools.current !== this) return Drags.empty();
         const X = Vector(Axis.X, 'screen');

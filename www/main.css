@@ -53,6 +53,10 @@ body {
   height: 100%;
 }
 
+.canvas-wrap > div {
+  overflow: clip;
+}
+
 .toolbar {
   display: flex;
   flex-direction: column;
