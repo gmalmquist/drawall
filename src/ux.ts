@@ -209,7 +209,6 @@ class Handle extends Component implements Solo {
       distance: p => props.poly().sdist(p).max(Distance(0, 'model')),
       getPos: () => props.poly().centroid,
       setPos: _ => { /* noop */ },
-      priority: 3,
     });
     this.addKnob(knob);
     return knob;

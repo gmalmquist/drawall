@@ -161,6 +161,9 @@ class PointerTool extends Tool {
       }
       return b;
     }, first);
+    if (!closest.dragging && App.ecs.getComponents(Dragging).length > 0) {
+      return;
+    }
     App.ui.renderKnob(closest);
   }
 
