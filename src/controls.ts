@@ -793,6 +793,31 @@ class NumberInput extends MiniFormInput<number, HTMLInputElement> {
   }
 }
 
+class TextInput extends MiniFormInput<string, HTMLInputElement> {
+  constructor() {
+    super(document.createElement('input') as HTMLInputElement);
+    this.element.setAttribute('type', 'text');
+    this.element.style.width = '20em';
+  }
+
+  protected override getRawValue(): string {
+    return this.element.value;
+  }
+
+  protected override setRawValue(value: string): void {
+    this.element.value = value;
+  }
+
+  protected override format(value: string): string {
+    return `${value}`;
+  }
+
+  protected override parse(input: string): InputParse<string> {
+    const value = input.trim();
+    return { value };
+  }
+}
+
 interface ToggleIcons {
   on: URL | null,
   off: URL | null,

@@ -99,10 +99,11 @@ class Room extends Component implements Solo {
     const handle = entity.add(Handle, {
       setPos: _ => {},
       getPos: () => this.labelPos,
-      distance: p => Distances.between(this.labelPos, p),
+      distance: p => Distances.between(this.labelPos, p)
+        .minus(Distance(20, 'screen')),
       selectable: false,
-      clickable: false,
       hoverable: false,
+      clickable: true,
       draggable: true,
       drag: () => ({
         kind: 'point',
@@ -111,6 +112,27 @@ class Room extends Component implements Solo {
         name: this.name,
         disableWhenMultiple: true,
       }),
+    });
+
+    const popup = entity.ecs.createEntity().add(PopupWindow);
+    const mini = new MiniForm();
+    mini.layout = 'column';
+    popup.appendHTML(mini.element);
+    const labelInput = new TextInput();
+    labelInput.setValue(this.name);
+    labelInput.onChange((name: string) => {
+      if (this.name !== name) {
+        this.name = name;
+      }
+      popup.hide();
+    });
+    mini.append(labelInput);
+
+    handle.events.onMouse('click', e => {
+      popup.title = `Room '${this.name}'`;
+      popup.setPosition(e.position);
+      labelInput.setValue(this.name);
+      popup.show();
     });
   }
 

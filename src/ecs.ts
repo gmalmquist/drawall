@@ -24,6 +24,7 @@ abstract class Component {
 
   set name(n: string) {
     this._name = n;
+    App.project.requestSave(`component renamed to '${n}'`);
   }
 
   addKind<C extends Component>(c: ComponentType<C>) {
