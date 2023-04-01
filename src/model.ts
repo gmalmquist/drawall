@@ -708,15 +708,20 @@ class WallJoint extends Component {
   private _pos: Position = Position(Point.ZERO, 'model');
   private _outgoing: Wall | null = null;
   private _incoming: Wall | null = null;
+  private corner: Ref<Corner | null>;
 
   constructor(entity: Entity) {
     super(entity);
 
-    const position = entity.add(
+    const position = entity.getOrCreate(
       PhysNode,
       () => this.pos,
       (pos: Position) => { this.pos = pos; },
     );
+
+    this.corner = Refs.of<Corner | null>(null, (a: Corner | null, b: Corner | null) => (
+      a?.center === b?.center && a?.left === b?.left && a?.right === b?.right
+    ));
 
     const handle = entity.add(Handle, {
       getPos: () => this.pos,
@@ -741,20 +746,50 @@ class WallJoint extends Component {
       },
     });
 
-    entity.add(AngleConstraint,
-      () => {
-        return {
-          center: position,
-          left: this.outgoing ? this.outgoing.dst.entity.onlyRef(PhysNode).or(position) : position,
-          right: this.incoming ? this.incoming.src.entity.onlyRef(PhysNode).or(position) : position,
-        };
-      },
-    );
+    const corner = new Memo(() => {
+      this.updateCorner();
+      const c = this.corner.get() || this.createDummyCorner();
+      return c;
+    }, () => [
+      this.corner.get(),
+      this._incoming?.src,
+      this._outgoing?.dst,
+    ], 1);
+
+    entity.add(AngleConstraint, () => corner.value);
 
     entity.add(FixedConstraint,
       () => [ this.pos ],
       ([p]: Position[]) => { this.pos = p; },
     );
+  }
+
+  private createDummyCorner(): Corner {
+    const pos = this.entity.only(PhysNode);
+    return {
+      center: pos,
+      left: pos,
+      right: pos,
+    };
+  }
+
+  private updateCorner() {
+    const center = this.entity.maybe(PhysNode);
+    if (!center) {
+      this.corner.set(null);
+      return;
+    }
+    const left = this._outgoing?.dst?.entity?.maybe(PhysNode);
+    if (!left) {
+      this.corner.set(null);
+      return;
+    }
+    const right = this._incoming?.dst?.entity?.maybe(PhysNode);
+    if (!right) {
+      this.corner.set(null);
+      return;
+    }
+    this.corner.set({ center, left, right });
   }
 
   shallowDup(): WallJoint {
@@ -825,11 +860,15 @@ class WallJoint extends Component {
   }
 
   attachIncoming(wall: Wall) {
+    if (this._incoming === wall) return;
     this._incoming = wall;
+    this.updateCorner();
   }
 
   attachOutgoing(wall: Wall) {
+    if (this._outgoing === wall) return;
     this._outgoing = wall;
+    this.updateCorner();
   }
 
   detachIncoming() {
@@ -840,6 +879,7 @@ class WallJoint extends Component {
     if (this._outgoing === null || this._outgoing.entity.isDestroyed) {
       this.entity.destroy();
     }
+    this.updateCorner();
   }
 
   detachOutgoing() {
@@ -850,6 +890,7 @@ class WallJoint extends Component {
     if (this._incoming === null || this._incoming.entity.isDestroyed) {
       this.entity.destroy();
     }
+    this.updateCorner();
   }
 
   override toJson(): SavedComponent {

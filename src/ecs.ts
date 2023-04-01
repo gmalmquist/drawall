@@ -238,9 +238,13 @@ class Entity {
     return this.ref(e => e.only(kind));
   }
 
-  getOrCreate<C extends Component>(kind: ComponentType<C>): C {
-    if (this.has(kind)) return this.get(kind)[0]!;
-    return this.add(kind);
+  getOrCreate<C extends Component, A extends Array<any>>(
+    kind: new (e: Entity, ...args: A) => C,
+    ...args: A): C {
+    if (this.has(kind as ComponentType<C>)) {
+      return this.get(kind as ComponentType<C>)[0]! as C;
+    }
+    return this.add<C, A>(kind, ...args);
   }
 
   ref<T>(f: (e: Entity) => T): EntityRef<T> {
