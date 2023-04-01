@@ -835,12 +835,21 @@ class Rect extends SDF {
 
 class Polygon extends SDF {
   private readonly _vertices: Position[];
+  private readonly radius: Distance;
 
   constructor(
     vertices: Position[],
   ) {
     super();
     this._vertices = [...vertices];
+    // optimization
+    const centroid = Positions.centroid(vertices); 
+    this.radius = vertices.map(v => Distances.between(centroid, v))
+      .reduce((a, b) => a.max(b), Distance(0, centroid.space));
+  }
+
+  translate(delta: Vector): Polygon {
+    return new Polygon(this.vertices.map(v => v.plus(delta)));
   }
 
   get vertices(): Position[] {
@@ -928,6 +937,9 @@ class Polygon extends SDF {
   }
 
   public override contains(point: Position): boolean {
+    if (Vectors.between(this.centroid, point).mag2().gt(this.radius.scale(this.radius))) {
+      return false;
+    }
     if (this.isConvex) {
       return this.containsConvex(point);
     }
@@ -1000,6 +1012,20 @@ class Polygon extends SDF {
     return hits % 2 === 0 ? 'outside' : 'inside';
   }
 
+  public static regular(
+    center: Position,
+    radius: Distance,
+    sides: number,
+  ): Polygon {
+    return new Polygon(
+      new Array(sides).fill(center).map((c, i) => 
+        c.splus(
+          radius,
+          Vectors.fromAngle(Angle(Radians(2 * Math.PI * i / sides), center.space))
+      )),
+    );
+  }
+  
   public static arrow(src: Position, dst: Position, width: Distance): Polygon {
     const headWidth = width.scale(5);
     const headHeight = width.scale(10);

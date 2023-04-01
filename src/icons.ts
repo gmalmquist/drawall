@@ -25,6 +25,8 @@ const Icons = {
   hideJoints: iconUrl('hide-joints.svg'),
   hideLengths: iconUrl('hide-lengths.svg'),
   invisible: iconUrl('eye-closed.svg'),
+  image: iconUrl('image.svg'),
+  imageUpload: iconUrl('image-upload.svg'),
   jointTool: iconUrl('joint-tool.svg'),
   kinematicsOff: iconUrl('kinematics-off.svg'),
   kinematicsOn: iconUrl('kinematics-on.svg'),

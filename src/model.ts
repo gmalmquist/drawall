@@ -443,8 +443,9 @@ class Wall extends Component implements Solo {
 
     handle.createKnob({
       poly: () => {
-        const normal = this.getEdge().normal;
-        const src = this.midpoint.splus(Distance(10, 'screen'), normal);
+        const edge = this.getEdge();
+        const normal = edge.normal;
+        const src = edge.midpoint.splus(Distance(10, 'screen'), normal);
         const dst = src.splus(Distance(50, 'screen'), normal);
         return Polygon.lollipop(src, dst, Distance(10, 'screen'));
       },

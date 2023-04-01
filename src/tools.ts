@@ -1,8 +1,9 @@
 type ToolName = 'none' 
-  | 'pointer tool'
-  | 'room tool'
+  | 'images tool'
   | 'joint tool'
   | 'pan tool'
+  | 'pointer tool'
+  | 'room tool'
   | 'ruler tool'
 ;
 
@@ -102,6 +103,7 @@ class Tools {
     .addSingle('room tool')
     .addSingle('ruler tool')
     .addSingle('joint tool')
+    .addSingle('images tool')
   ;
 
   public get current(): Tool {
