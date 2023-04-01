@@ -47,8 +47,20 @@ class ImageExporter {
         App.rendering.set(false);
         document.body.prepend(compositing);
         const g = compositing.getContext('2d')!;
-        for (const image of images) {
-          g.drawImage(image, 0, 0, image.width, image.height);
+
+        for (let i = 0; i < images.length; i++) {
+          const canvasImage = images[i];
+          g.drawImage(canvasImage, 0, 0, canvasImage.width, canvasImage.height);
+
+          if (i === 0) {
+            // now draw the html images
+            App.ecs.getComponents(Imaged).forEach(m => {
+              const pos = m.position.get().get('screen');
+              const width = m.width.get().get('screen');
+              const height = m.height.get().get('screen');
+              g.drawImage(m.image, pos.x, pos.y, width, height);
+            });
+          }
         }
         
         const download = document.createElement('a');

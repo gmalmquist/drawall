@@ -1,13 +1,19 @@
 class Viewport {
   private static readonly DEFAULT_RADIUS = 100;
 
-  private _changed: boolean = true;
+  private _changed: Ref<boolean> = Refs.of(true);
 
   constructor(
     public origin: Point = Point.ZERO,
     public radius: number = Viewport.DEFAULT_RADIUS,
     public screen_width: number = 1000,
     public screen_height: number = 1000) {}
+
+  public onChange(callback: () => void) {
+    this._changed.onChange(c => {
+      if (c) callback();
+    });
+  }
 
   public getModelFrame(): Frame {
     return new Frame(
@@ -47,11 +53,11 @@ class Viewport {
   }
 
   get changed(): boolean {
-    return this._changed;
+    return this._changed.get();
   }
 
   public resetChanged() {
-    this._changed = false;
+    this._changed.set(false);
   }
 
   public setup() {
@@ -66,7 +72,7 @@ class Viewport {
       this.radius = Math.max(10, this.radius + Math.sign(wheel.deltaY) * 10);
       this.updateTransforms();
     });
-    const markDirty = (_: any) => { this._changed = true; };
+    const markDirty = (_: any) => { this._changed.set(true); };
     App.settings.fontSizeRef.onChange(markDirty);
     App.settings.showGrid.onChange(markDirty);
     App.project.gridSpacingRef.onChange(markDirty);
@@ -85,7 +91,7 @@ class Viewport {
      project: this.getScreenFrame().project,
      unproject: this.getScreenFrame().unproject,
    });
-   this._changed = true;
+   this._changed.set(true);
  }
 
  public recenter() {

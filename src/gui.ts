@@ -23,9 +23,8 @@ class GUI {
     this.topbar.append(this.file);
     this.topbar.appendRuler();
     this.topbar.append(this.selection);
-    this.topbar.appendSpacer();
     this.topbar.append(this.tool);
-    this.topbar.appendRuler();
+    this.topbar.appendSpacer();
     this.topbar.append(this.ux);
     this.topbar.appendRuler();
     this.topbar.append(this.project);
