@@ -97,8 +97,6 @@ class PointerTool extends Tool {
 
     const drawSelect = this.getDrawSelectDispatcher();
 
-    type NamedAxisP = (() => NamedAxis) | undefined;
-
     this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
         const overHandle = App.ui.getHandleAt(e.start, h => h.draggable) !== null;

@@ -77,6 +77,9 @@ tools.js
 actions.js
 hotkeys.js
 dragging.js
+cursors.js
+handles.js
+uievents.js
 ux.js
 kinematics.js
 constraints.js
