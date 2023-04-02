@@ -251,6 +251,9 @@ interface Corner {
 class AngleConstraint extends Constraint {
   public readonly targetAngleRef = Refs.of(Angle(Radians(Math.PI/2), 'model'));
 
+  private readonly currentAngleRef: RoRef<Angle>;
+  public readonly corner: RoRef<Corner>;
+
   constructor(
     entity: Entity,
     private readonly center: PhysNode,
@@ -262,6 +265,24 @@ class AngleConstraint extends Constraint {
     this.targetAngleRef.onChange(_ => {
       if (this.enabled) App.project.requestSave('target angle changed');
     });
+
+    this.corner = Refs.memo(Refs.reduceRo(
+      ([center, left, right]) => ({
+        center,
+        left: Vectors.between(center, left),
+        right: Vectors.between(center, right),
+      }),
+      center.position,
+      Refs.flatMapRo(left, n => n.position),
+      Refs.flatMapRo(right, n => n.position),
+    ));
+
+    this.currentAngleRef = Refs.memo(this.corner.map(({center, left, right}) => {
+      if (!left.mag2().nonzero || !right.mag2().nonzero) {
+        return Angles.zero('model');
+      }
+      return left.angle().minus(right.angle()).normalize();
+    }));
 
     this.entity.add(Form).setFactory(() => {
       const form = new AutoForm();
@@ -304,12 +325,7 @@ class AngleConstraint extends Constraint {
   }
 
   public getCorner(): Corner {
-    const center = this.center.pos;
-    return {
-      center,
-      left: Vectors.between(center, this.left.get().pos),
-      right: Vectors.between(center, this.right.get().pos),
-    };
+    return this.corner.get();
   }
 
   get targetAngle(): Angle {
@@ -321,11 +337,7 @@ class AngleConstraint extends Constraint {
   }
     
   get currentAngle(): Angle {
-    const { left, right } = this.getCorner();
-    if (!left.mag2().nonzero || !right.mag2().nonzero) {
-      return Angles.zero('model');
-    }
-    return left.angle().minus(right.angle()).normalize();
+    return this.currentAngleRef.get();
   }
 
   get springConstant(): number {

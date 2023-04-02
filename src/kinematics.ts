@@ -1,30 +1,33 @@
 class PhysNode extends Component implements Solo, Surface {
   readonly [SOLO] = true;
 
-  private _pos: Point = Point.ZERO;
+  private static readonly CMP_POINT = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+
+  private readonly pointRef = Refs.of(Point.ZERO, PhysNode.CMP_POINT);
   private velocity: Vec = Vec.ZERO;
   private acceleration: Vec = Vec.ZERO;
   private forceAccum: Vec = Vec.ZERO;
   private mass: number = 1.0;
   private dragFactor: number = 0.5;
 
-  constructor(
-    entity: Entity,
-    private readonly getPos?: () => Position,
-    private readonly setPos?: (p: Position) => void) {
+  public readonly position: Ref<Position>;
+
+  constructor(entity: Entity) {
     super(entity);
+
+    this.position = this.pointRef.map({
+      to: pt => Position(pt, 'model'),
+      from: pos => pos.get('model'),
+      compareValues: areEq,
+    });
   }
 
   get pos(): Position {
-    return typeof this.getPos === 'undefined' ? Position(this._pos, 'model') : this.getPos();
+    return this.position.get();
   }
 
   set pos(p: Position) {
-    if (typeof this.setPos !== 'undefined') {
-      this.setPos(p);
-    } else {
-      this._pos = p.get('model');
-    }
+    this.position.set(p);
   }
 
   update() {
@@ -40,7 +43,9 @@ class PhysNode extends Component implements Solo, Surface {
     this.velocity = this.velocity.splus(dt / this.mass, dragForce);
     this.velocity = this.velocity.splus(dt, this.acceleration);
     this.velocity = this.velocity.splus(dt / this.mass, this.forceAccum);
-    this.pos = this.pos.splus(dt, Vector(this.velocity, 'model'));
+    if (this.velocity.mag2() > 0.0001) {
+      this.pointRef.set(this.pointRef.get().splus(dt, this.velocity));
+    }
     this.clearForces();
   }
 
@@ -61,7 +66,6 @@ class PhysNode extends Component implements Solo, Surface {
   }
 
   toJson(): SavedComponent | null {
-    if (this.getPos || this.setPos) return null;
     return {
       factory: this.constructor.name,
       arguments: [ MoreJson.position.to(this.pos) ],

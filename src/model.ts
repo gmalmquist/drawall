@@ -240,6 +240,10 @@ class Wall extends Component implements Solo {
   public readonly [SOLO] = true;
   public readonly srcRef: Ref<WallJoint>;
   public readonly dstRef: Ref<WallJoint>;
+  public readonly vector: RoRef<Vector>;
+  public readonly tangent: RoRef<Vector>;
+  public readonly normal: RoRef<Vector>;
+  public readonly midpoint: RoRef<Position>;
   private _room: Room | null = null;
 
   constructor(entity: Entity) {
@@ -256,6 +260,19 @@ class Wall extends Component implements Solo {
     );
 
     entity.add(Surfaced, () => entity.ref(e => e.only(PhysEdge)));
+
+    this.vector = Refs.memo(Refs.reduceRo(
+      ([src, dst]) => Vectors.between(src, dst),
+      Refs.flatMapRo(this.srcRef, j => j.position),
+      Refs.flatMapRo(this.dstRef, j => j.position),
+    ));
+    this.tangent = Refs.memoMap(this.vector, v => v.unit());
+    this.normal = Refs.memoMap(this.tangent, v => v.r90());
+    this.midpoint = Refs.memo(Refs.reduceRo(
+      ([src, dst]) => src.lerp(0.5, dst),
+      Refs.flatMapRo(this.srcRef, j => j.position),
+      Refs.flatMapRo(this.dstRef, j => j.position),
+    ));
 
     const handle = entity.add(Handle, {
       getPos: () => this.src.pos,
@@ -278,35 +295,6 @@ class Wall extends Component implements Solo {
       },
     });
 
-    const arrowDir = (): Vector => {
-      const edge = this.getEdge();
-      const srcpos = this.src.pos;
-      const dstpos = this.dst.pos;
-      const srctan = this.src.incoming?.tangent;
-      const dsttan = this.dst.outgoing?.tangent;
-      if (!srctan
-        || !dsttan
-        || !srctan.mag2().nonzero
-        || !dsttan.mag2().nonzero) {
-        return edge.normal;
-      }
-      const srcray = new SpaceRay(srcpos, srctan);
-      const dstray = new SpaceRay(dstpos, dsttan);
-      const tanray = new SpaceRay(
-        edge.midpoint.splus(10, edge.normal),
-        edge.tangent,
-      );
-      const srchit = srcray.intersection(tanray);
-      const dsthit = dstray.intersection(tanray);
-      if (srchit === null || dsthit === null) {
-        return edge.normal;
-      }
-      return Vectors.between(
-        edge.midpoint,
-        srchit.point.lerp(0.5, dsthit.point),
-      ).unit();
-    };
-
     const forceFixed = (p: WallJoint) => {
       const f = p.entity.only(FixedConstraint);
       f.updateTargets([p.pos]);
@@ -320,10 +308,9 @@ class Wall extends Component implements Solo {
 
     handle.createKnob({
       poly: () => {
-        const edge = this.getEdge();
         return lollipop
-          .rotate(edge.normal.angle())
-          .translate(edge.midpoint.toVector());
+          .rotate(this.normal.get().angle())
+          .translate(this.midpoint.get().toVector());
       },
       fill: BLUE,
     }, {
@@ -333,15 +320,15 @@ class Wall extends Component implements Solo {
       drag: () => {
         const srcpos = this.src.pos;
         const dstpos = this.dst.pos;
-        const srctan = this.src.incoming?.tangent;
-        const dsttan = this.dst.outgoing?.tangent;
+        const srctan = this.src.incoming?.tangent.get();
+        const dsttan = this.dst.outgoing?.tangent.get();
         return {
           kind: 'point',
           name: 'edge',
-          get: () => this.getEdge().midpoint,
+          get: this.midpoint.get,
           set: (midpoint) => {
             if (typeof srctan !== 'undefined' && typeof dsttan !== 'undefined') {
-              const tangent = Vectors.between(srcpos, dstpos);
+              const tangent = this.tangent.get();
               const ray = new SpaceRay(midpoint, tangent);
               const srchit = ray.intersection(new SpaceRay(srcpos, srctan));
               const dsthit = ray.intersection(new SpaceRay(dstpos, dsttan));
@@ -384,6 +371,10 @@ class Wall extends Component implements Solo {
 
   get dstRo(): RoRef<WallJoint> {
     return Refs.ro(this.dstRef);
+  }
+
+  getEdge(): SpaceEdge {
+    return new SpaceEdge(this.src.pos, this.dst.pos);
   }
 
   getConnectedLoop(direction: 'forward' | 'backward' | 'both' = 'both'): Wall[] {
@@ -480,29 +471,21 @@ class Wall extends Component implements Solo {
   }
 
   get outsideNormal(): Vector {
-    return this.tangent.r90();
+    return this.normal.get();
   }
 
   get insideNormal(): Vector {
     return this.outsideNormal.scale(-1);
   }
 
-  get tangent(): Vector {
-    return Vectors.between(this.src.pos, this.dst.pos);
-  }
-
-  get midpoint(): Position {
-    return this.src.pos.lerp(0.5, this.dst.pos);
-  }
-
   get length(): Distance {
-    return Distances.between(this.src.pos, this.dst.pos);
+    return this.vector.get().mag();
   }
 
   // split this wall into two walls, creating a new
   // wall joint between them.
   splitWall(at: Position): readonly [Wall, Wall] | null {
-    const edge = this.getEdge();
+    const edge = new SpaceEdge(this.src.pos, this.dst.pos);
     const s = Vectors.between(edge.src, at).get('model')
       .dot(edge.vector.get('model')) / edge.vector.get('model').mag2();
 
@@ -537,14 +520,6 @@ class Wall extends Component implements Solo {
     length1.entity.only(AxisConstraint).enabled = false;
 
     return [this, rest];
-  }
-
-  getEdge(): SpaceEdge {
-    return new SpaceEdge(this.src.pos, this.dst.pos);
-  }
-
-  getLength(): Distance {
-    return this.getEdge().length;
   }
 
   toJson(): SavedComponent {
@@ -711,11 +686,15 @@ class WallJoint extends Component {
   }
 
   get pos(): Position {
-    return this.entity.only(PhysNode).pos;
+    return this.node.pos;
   }
 
   set pos(p: Position) {
-    this.entity.only(PhysNode).pos = p;
+    this.node.pos = p;
+  }
+
+  get position(): Ref<Position> {
+    return this.node.position;
   }
 
   get isCorner(): boolean {
@@ -907,8 +886,10 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
   for (const wall of walls) {
     if (wall.src === null || wall.dst ===  null) continue;
     const active = wall.entity.get(Handle).some(h => h.isActive);
-   
-    const edge = new SpaceEdge(wall.src.pos, wall.dst.pos);
+  
+    const normal = wall.normal.get();
+    const tangent = wall.tangent.get();
+    const length = wall.length;
     const wallColor = active ? rainbow : 'black'; 
 
     const getEndPad = (joint: WallJoint, offset: Distance): Distance => {
@@ -926,11 +907,11 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       const srcpad = getEndPad(wall.src, offset);
       const dstpad = getEndPad(wall.dst, offset);
       const src = wall.src.pos
-        .splus(offset, edge.normal)
-        .splus(srcpad, edge.tangent);
+        .splus(offset, normal)
+        .splus(srcpad, tangent);
       const dst = wall.dst.pos
-        .splus(offset, edge.normal)
-        .splus(dstpad, edge.tangent.neg());
+        .splus(offset, normal)
+        .splus(dstpad, tangent.neg());
       canvas.strokeStyle = color;
       canvas.lineWidth = width;
       canvas.strokeLine(src, dst);
@@ -946,10 +927,10 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     if (!App.settings.showLengths.get()) continue;
 
     const constraint = wall.entity.only(LengthConstraint);
-    const error = constraint?.enabled ? edge.length.get('model') - constraint.length : 0;
+    const error = constraint?.enabled ? length.get('model') - constraint.length : 0;
     const decimals = App.project.displayDecimals;
     const dispLength = App.project.displayUnit.from(
-      App.project.modelUnit.newAmount(edge.length.get('model'))
+      App.project.modelUnit.newAmount(length.get('model'))
     );
     const dispError = App.project.modelUnit.newAmount(error);
     dispError.value = Math.round(dispError.value);
@@ -959,30 +940,30 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
     const label = hasError ? `${lengthText} (${errorText})` : lengthText;
     const textOffset = Distance(App.settings.fontSize/2 + 10, 'screen');
-    const textPosition = edge.lerp(0.5).splus(textOffset.neg(), edge.vector.r90().unit());
+    const textPosition = wall.midpoint.get().splus(textOffset.neg(), normal);
 
     if (constraint.enabled) {
       const offCenter = Distance(App.settings.fontSize * 3, 'screen');
-      const maxAccentWidth = edge.length.scale(0.5).minus(offCenter.scale(1.5));
+      const maxAccentWidth = length.scale(0.5).minus(offCenter.scale(1.5));
       const accentWidth = Distance(50, 'screen').min(maxAccentWidth);
       if (accentWidth.sign > 0) {
         canvas.strokeStyle = 'black';
         canvas.lineWidth = 1;
 
         canvas.strokeLine(
-          textPosition.splus(offCenter, edge.tangent),
-          textPosition.splus(offCenter.plus(accentWidth), edge.tangent),
+          textPosition.splus(offCenter, tangent),
+          textPosition.splus(offCenter.plus(accentWidth), tangent),
         );
         canvas.strokeLine(
-          textPosition.splus(offCenter, edge.tangent.neg()),
-          textPosition.splus(offCenter.plus(accentWidth), edge.tangent.neg()),
+          textPosition.splus(offCenter, tangent.neg()),
+          textPosition.splus(offCenter.plus(accentWidth), tangent.neg()),
         );
       }
     }
 
     canvas.text({
       point: textPosition,
-      axis: edge.vector,
+      axis: tangent,
       keepUpright: true,
       text: label,
       fill: 'black',
@@ -993,8 +974,8 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
 
     if (App.debug) {
       canvas.text({
-        point: textPosition.splus(Distance(-15, 'screen'), edge.vector.r90().unit()),
-        axis: edge.vector,
+        point: textPosition.splus(Distance(-15, 'screen'), normal),
+        axis: tangent,
         keepUpright: true,
         text: wall.name,
         fill: 'black',
@@ -1044,16 +1025,16 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
 const RoomRenderer = (ecs: EntityComponentSystem) => {
   ecs.getComponents(Room).forEach(room => {
-    const labelPos = room.labelPos;
-    App.canvas.text({
-      text: room.isInverted ? 'interior wall' : room.name,
-      point: labelPos,
-      fill: 'black',
-      align: 'center',
-      baseline: 'middle',
-    });
-
     if (!room.isInverted) {
+      const labelPos = room.labelPos;
+      App.canvas.text({
+        text: room.isInverted ? 'interior wall' : room.name,
+        point: labelPos,
+        fill: 'black',
+        align: 'center',
+        baseline: 'middle',
+      });
+
       const area = room.area;
       if (area.nonzero) {
         const sqrtModel = App.project.modelUnit.newAmount(Math.sqrt(area.get('model')));

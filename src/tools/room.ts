@@ -152,9 +152,9 @@ class DrawRoomTool extends Tool {
 
       if (App.debug) {
         const arrow = (w: Wall, l: string, c: string) => {
-          const offset = w.outsideNormal.unit()
+          const offset = w.outsideNormal
             .scale(Distance(5 * (1 + splitDepth.get(w.name)), 'screen'));
-          const tangent = w.tangent.unit();
+          const tangent = w.tangent.get();
           const shrink = Distance(10, 'screen')
             .min(w.length.scale(0.25));
           const src = w.src.pos.splus(shrink, tangent).plus(offset);

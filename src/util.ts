@@ -33,7 +33,6 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
   }
 };
 
-// i think this function name might be a war crime
 const areEq = <V>(a: V, b: V) => a === b;
 
 interface Eq<T> {
@@ -166,19 +165,24 @@ const Refs = {
     if (ref.kind === 'ro') {
       return ref as RoRef<V>;
     }
-    const r: { r?: RoRef<V> } = {};
-    r.r = {
+    const r: { self?: RoRef<V> } = {};
+    r.self = {
       kind: 'ro',
       get: () => ref.get(),
       onChange: l => ref.onChange(l),
       toString: () => `Ro(${ref.get()})`,
-      map: f => Refs.mapRo(r.r!, f),
+      map: f => Refs.mapRo(r.self!, f),
     };
-    return r.r;
+    return r.self;
   },
   memo: <V>(ref: RefView<V, RefK>): RoRef<V> => {
     const mem = Refs.of<V>(ref.get(), (a, b) => a === b);
     ref.onChange(v => mem.set(v));
+    return Refs.ro(mem);
+  },
+  memoMap: <V, W>(ref: RefView<V, RefK>, f: (v: V) => W): RoRef<W> => {
+    const mem = Refs.of<W>(f(ref.get()), areEq);
+    ref.onChange(v => mem.set(f(v)));
     return Refs.ro(mem);
   },
   reduceRo: <A extends readonly RefView<any, RefK>[], B>(
@@ -189,8 +193,8 @@ const Refs = {
       const u = <V>(r: RefView<V, RefK>): V => r.get();
       return refs.map(u) as UnwrapRefArray<A>;
     };
-    const r: { r?: RoRef<B> } = {};
-    r.r = {
+    const r: { self?: RoRef<B> } = {};
+    r.self = {
       kind: 'ro',
       get: () => map(get()),
       onChange: (l: (value: B) => void) => {
@@ -199,37 +203,40 @@ const Refs = {
         ));
       },
       toString: () => `Ro(${map(get())})`,
-      map: <X>(g: (value: B) => X): RoRef<X> => Refs.mapRo(r.r!, g),
+      map: <X>(g: (value: B) => X): RoRef<X> => Refs.mapRo(r.self!, g),
     };
-    return r.r!;
+    return r.self!;
   },
   flatMapRo: <V, W>(
     ref: RefView<V, RefK>,
     f: (value: V) => RefView<W, RefK>,
   ): RoRef<W> => {
     const egg = Refs.mapRo(ref, f);
-    const r: { r?: RoRef<W> } = {};
+    const r: { self?: RoRef<W> } = {};
     const yolkListener = (
       expectedYolk: RefView<W, RefK>,
-      l: (value: W) => void): ((value: W) => void) => {
+      listen: (value: W) => void): ((value: W) => void) => {
       return value => {
         if (egg.get() === expectedYolk) {
-          l(value);
+          listen(value);
         }
       };
     };
-    r.r = {
+    r.self = {
       kind: 'ro',
       get: () => egg.get().get(),
-      onChange: l => {
+      onChange: listen => {
         const yolk = egg.get();
-        yolk.onChange(yolkListener(yolk, l));
-        egg.onChange(yolk => yolk.onChange(yolkListener(yolk, l)));
+        yolk.onChange(yolkListener(yolk, listen));
+        egg.onChange(yolk => { 
+          yolk.onChange(yolkListener(yolk, listen));
+          listen(yolk.get());
+        });
       },
       toString: () => egg.get().toString(),
-      map: g => Refs.mapRo(r.r!, g),
+      map: g => Refs.mapRo(r.self!, g),
     };
-    return r.r;
+    return r.self;
   }
 };
 
