@@ -78,6 +78,7 @@ actions.js
 hotkeys.js
 dragging.js
 ux.js
+kinematics.js
 constraints.js
 model.js
 popups.js
