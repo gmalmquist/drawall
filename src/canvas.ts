@@ -2,12 +2,15 @@ class Viewport {
   private static readonly DEFAULT_RADIUS = 100;
 
   private _changed: Ref<boolean> = Refs.of(true);
+  public readonly changedRef: RoRef<boolean>;
 
   constructor(
     public origin: Point = Point.ZERO,
     public radius: number = Viewport.DEFAULT_RADIUS,
     public screen_width: number = 1000,
-    public screen_height: number = 1000) {}
+    public screen_height: number = 1000) {
+    this.changedRef = Refs.ro(this._changed);
+  }
 
   public onChange(callback: () => void) {
     this._changed.onChange(c => {

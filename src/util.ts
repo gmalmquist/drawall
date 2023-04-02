@@ -176,14 +176,40 @@ const Refs = {
     return r.self;
   },
   memo: <V>(ref: RefView<V, RefK>): RoRef<V> => {
-    const mem = Refs.of<V>(ref.get(), (a, b) => a === b);
-    ref.onChange(v => mem.set(v));
-    return Refs.ro(mem);
+    return Refs.memoMap(ref, x => x);
   },
   memoMap: <V, W>(ref: RefView<V, RefK>, f: (v: V) => W): RoRef<W> => {
-    const mem = Refs.of<W>(f(ref.get()), areEq);
-    ref.onChange(v => mem.set(f(v)));
-    return Refs.ro(mem);
+    const initial = ref.get();
+    const state: {
+      value: V,
+      mapped: W,
+      valid: boolean,
+      self?: RoRef<W>,
+    } = {
+      value: initial,
+      mapped: f(initial),
+      valid: true,
+    };
+    ref.onChange(v => {
+      state.value = v;
+      state.valid = false;
+    });
+    state.self = {
+      kind: 'ro',
+      get: () => {
+        if (!state.valid) {
+          state.mapped = f(state.value);
+          state.valid = true;
+        }
+        return state.mapped;
+      },
+      onChange: listen => ref.onChange(v => listen(
+        state.valid ? state.mapped : state.self!.get()
+      )),
+      toString: () => `MemoRoRef(${state.self!.get()})`,
+      map: f => Refs.mapRo(state.self!, f),
+    };
+    return state.self;
   },
   reduceRo: <A extends readonly RefView<any, RefK>[], B>(
     map: (arr: UnwrapRefArray<A>) => B,

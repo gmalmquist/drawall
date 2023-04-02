@@ -300,18 +300,27 @@ class Wall extends Component implements Solo {
       f.updateTargets([p.pos]);
     };
 
-    const lollipop = Polygon.lollipop(
+    const lollipopBase = Polygon.lollipop(
       Position(new Point(10, 0), 'screen'),
       Position(new Point(40, 0), 'screen'),
       Distance(10, 'screen'),
     );
 
-    handle.createKnob({
-      poly: () => {
-        return lollipop
+    // NB: i don't like that we have to add the fake dependency on the viewport
+    // here. the issue is that the conversion between screen and model space is
+    // only valid until the view changes, so it doesn't hold for cached values
+    // like this.
+    const lollipopRef = Refs.memoMap(
+      Refs.reduceRo(x => x, this.midpoint, this.normal, App.viewport.changedRef),
+      ([midpoint, normal, _]) => {
+        return lollipopBase
           .rotate(this.normal.get().angle())
           .translate(this.midpoint.get().toVector());
       },
+    );
+
+    handle.createKnob({
+      poly: () => lollipopRef.get(),
       fill: BLUE,
     }, {
       clickable: false,
