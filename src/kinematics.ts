@@ -1,7 +1,9 @@
 class PhysNode extends Component implements Solo, Surface {
   readonly [SOLO] = true;
 
-  private static readonly CMP_POINT = (a: Point, b: Point) => a.x === b.x && a.y === b.y;
+  private static readonly CMP_POINT = (a: Point, b: Point) => {
+    return Math.abs(a.x - b.x) < 0.001 && Math.abs(a.y - b.y) < 0.001
+  };
 
   private readonly pointRef = Refs.of(Point.ZERO, PhysNode.CMP_POINT);
   private velocity: Vec = Vec.ZERO;
@@ -43,8 +45,9 @@ class PhysNode extends Component implements Solo, Surface {
     this.velocity = this.velocity.splus(dt / this.mass, dragForce);
     this.velocity = this.velocity.splus(dt, this.acceleration);
     this.velocity = this.velocity.splus(dt / this.mass, this.forceAccum);
-    if (this.velocity.mag2() > 0.0001) {
-      this.pointRef.set(this.pointRef.get().splus(dt, this.velocity));
+    const delta = this.velocity.scale(dt);
+    if (delta.mag2() > 0.0001) {
+      this.pointRef.set(this.pointRef.get().plus(delta));
     }
     this.clearForces();
   }

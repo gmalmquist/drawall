@@ -100,7 +100,7 @@ class Point {
   }
 
   toString(): string {
-    return `(${this.x}, ${this.y})`;
+    return `(${Math.round(this.x*100)/100}, ${Math.round(this.y*100)/100})`;
   }
 
   static get ZERO() {
@@ -191,7 +191,7 @@ class Vec {
   }
 
   toString(): string {
-    return `<${this.x}, ${this.y}>`;
+    return `<${this.x.toString(4)}, ${this.y.toString(4)}>`;
   }
 
   static between(a: Point, b: Point): Vec {

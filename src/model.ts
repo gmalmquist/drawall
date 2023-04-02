@@ -889,6 +889,10 @@ const createRainbow = (edge: SpaceEdge): CanvasGradient => {
   return gradient;
 };
 
+const WallRendererState = {
+  cache: new Map<string, () => unknown>(),
+};
+
 const WallRenderer = (ecs: EntityComponentSystem) => {
   const canvas = App.canvas;
 
@@ -900,6 +904,17 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
   const walls = ecs.getComponents(Wall);
   for (const wall of walls) {
     if (wall.src === null || wall.dst ===  null) continue;
+
+    const cached = <V>(f: () => V, name: string, ...id: readonly any[]): V => {
+      const key = `${wall.id}.${name}.${id.map(e => `${e}`).join(':')}`;
+      if (WallRendererState.cache.has(key)) {
+        const cf = WallRendererState.cache.get(key) as (() => V);
+        return cf();
+      }
+      WallRendererState.cache.set(key, f);
+      return f();
+    };
+
     const active = wall.entity.get(Handle).some(h => h.isActive);
   
     const normal = wall.normal.get();
@@ -919,14 +934,23 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       offset: Distance = Distances.zero('screen'),
       color: string | CanvasGradient = wallColor,
     ) => {
-      const srcpad = getEndPad(wall.src, offset);
-      const dstpad = getEndPad(wall.dst, offset);
-      const src = wall.src.pos
-        .splus(offset, normal)
-        .splus(srcpad, tangent);
-      const dst = wall.dst.pos
-        .splus(offset, normal)
-        .splus(dstpad, tangent.neg());
+      const { src, dst } = cached(
+        Memo(() => {
+          const srcpad = getEndPad(wall.src, offset);
+          const dstpad = getEndPad(wall.dst, offset);
+          const normal = wall.normal.get();
+          const tangent = wall.tangent.get();
+          const src = wall.src.pos
+            .splus(offset, normal)
+            .splus(srcpad, tangent);
+          const dst = wall.dst.pos
+            .splus(offset, normal)
+            .splus(dstpad, tangent.neg());
+          return { src, dst };
+        },
+        () => [ wall.src.pos.toString(), wall.dst.pos.toString() ]),
+        'strokeWall', width, offset
+      );
       canvas.strokeStyle = color;
       canvas.lineWidth = width;
       canvas.strokeLine(src, dst);

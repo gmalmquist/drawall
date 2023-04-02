@@ -1,6 +1,9 @@
 type Eid = Newtype<number, { readonly _: unique symbol; }>;
 const Eid = newtype<Eid>();
 
+type Cid = Newtype<number, { readonly _: unique symbol; }>;
+const Cid = newtype<Cid>();
+
 const SOLO: unique symbol = Symbol();
 // a component which always
 // exists at most once on an 
@@ -11,9 +14,12 @@ interface Solo {
 }
 
 abstract class Component {
+  private static idCount: number = 0;
   private static readonly counter = new Counter<string>();
   private readonly kinds = new Set<ComponentType<Component>>();
   private _name: string = `${this.constructor.name} ${Component.counter.inc(this.constructor.name)}`;
+
+  public readonly id = Cid(Component.idCount++);
 
   constructor(public readonly entity: Entity) {
   }
