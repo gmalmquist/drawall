@@ -125,9 +125,9 @@ class ImagesTool extends Tool {
       if (left) dx += tw - cw;
       if (top) dy += th - ch;
 
-      img.position.set(Position(startPos.plus(new Vec(dx, dy)), 'screen'));
-      img.width.set(Distance(cw, 'screen'));
-      img.height.set(Distance(ch, 'screen'));
+      img.position.set(Position(startPos.plus(new Vec(dx, dy)), 'screen').to('model'));
+      img.width.set(Distance(cw, 'screen').to('model'));
+      img.height.set(Distance(ch, 'screen').to('model'));
     };
 
     dispatcher.addDragListener<Context>({
