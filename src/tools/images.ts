@@ -135,10 +135,17 @@ class ImagesTool extends Tool {
         const bounds = img.getBounds();
         const centroid = bounds.centroid;
         const delta = Vectors.between(centroid, e.start);
-        App.pane.style.cursor = getResizeCursor(delta, true);
+        const bicursor = getResizeCursor(delta, true);
+        if (bicursor === 'nesw-resize' || bicursor === 'nwse-resize') {
+          App.pane.style.cursor = bicursor;
+        }
         return { centroid, direction: getResizeCursor(delta, false) };
       },
       onUpdate: (e, { centroid, direction }) => {
+        const bicursor = getResizeCursor(Vectors.between(centroid, e.start), true);
+        if (bicursor !== 'nesw-resize' && bicursor !== 'nwse-resize') {
+          return;
+        }
         const top = e.delta.dot(Y);
         const bottom = top;
         const left = e.delta.dot(X);
