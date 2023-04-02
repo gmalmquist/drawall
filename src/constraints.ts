@@ -18,6 +18,10 @@ class Constraint extends Component {
       App.project.requestSave(`${this.name} tension changed`));
   }
 
+  public get kinematic(): boolean {
+    return true;
+  }
+
   public get enabled(): boolean {
     return this.enabledRef.get();
   }
@@ -73,6 +77,10 @@ class FixedConstraint extends Constraint {
       });
       return form;
     });
+  }
+
+  override get kinematic() {
+    return this.tension < 1;
   }
 
   getTargets(): Position[] {
@@ -505,6 +513,9 @@ const ConstraintEnforcer = (ecs: EntityComponentSystem) => {
   constraints.sort((a, b) => a.priority - b.priority);
   for (const c of constraints) {
     if (!c.enabled) continue;
+    if (c.kinematic && (!App.settings.kinematics.get() || App.ui.dragging)) {
+      continue;
+    }
     c.enforce();
   }
 };
