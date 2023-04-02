@@ -33,6 +33,9 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
   }
 };
 
+// i think this function name might be a war crime
+const areEq = <V>(a: V, b: V) => a === b;
+
 interface Eq<T> {
   eq: (other: T) => boolean;
 }
@@ -173,6 +176,11 @@ const Refs = {
     };
     return r.r;
   },
+  memo: <V>(ref: RefView<V, RefK>): RoRef<V> => {
+    const mem = Refs.of<V>(ref.get(), (a, b) => a === b);
+    ref.onChange(v => mem.set(v));
+    return Refs.ro(mem);
+  },
   reduceRo: <A extends readonly RefView<any, RefK>[], B>(
     map: (arr: UnwrapRefArray<A>) => B,
     ...refs: A
@@ -195,6 +203,34 @@ const Refs = {
     };
     return r.r!;
   },
+  flatMapRo: <V, W>(
+    ref: RefView<V, RefK>,
+    f: (value: V) => RefView<W, RefK>,
+  ): RoRef<W> => {
+    const egg = Refs.mapRo(ref, f);
+    const r: { r?: RoRef<W> } = {};
+    const yolkListener = (
+      expectedYolk: RefView<W, RefK>,
+      l: (value: W) => void): ((value: W) => void) => {
+      return value => {
+        if (egg.get() === expectedYolk) {
+          l(value);
+        }
+      };
+    };
+    r.r = {
+      kind: 'ro',
+      get: () => egg.get().get(),
+      onChange: l => {
+        const yolk = egg.get();
+        yolk.onChange(yolkListener(yolk, l));
+        egg.onChange(yolk => yolk.onChange(yolkListener(yolk, l)));
+      },
+      toString: () => egg.get().toString(),
+      map: g => Refs.mapRo(r.r!, g),
+    };
+    return r.r;
+  }
 };
 
 interface PollingRefProps<V> {

@@ -243,9 +243,9 @@ class LengthConstraint extends Constraint {
 }
 
 interface Corner {
-  center: PhysNode;
-  left: PhysNode;
-  right: PhysNode;
+  center: Position;
+  left: Vector;
+  right: Vector;
 }
 
 class AngleConstraint extends Constraint {
@@ -253,7 +253,9 @@ class AngleConstraint extends Constraint {
 
   constructor(
     entity: Entity,
-    public readonly getCorner: () => Corner,
+    private readonly center: PhysNode,
+    private readonly left: RoRef<PhysNode>,
+    private readonly right: RoRef<PhysNode>,
   ) {
     super(entity);
 
@@ -301,6 +303,15 @@ class AngleConstraint extends Constraint {
     });
   }
 
+  public getCorner(): Corner {
+    const center = this.center.pos;
+    return {
+      center,
+      left: Vectors.between(center, this.left.get().pos),
+      right: Vectors.between(center, this.right.get().pos),
+    };
+  }
+
   get targetAngle(): Angle {
     return this.targetAngleRef.get();
   }
@@ -309,20 +320,9 @@ class AngleConstraint extends Constraint {
     this.targetAngleRef.set(a);
   }
     
-  private getLeft(): Vector {
-    const c = this.getCorner();
-    return Vectors.between(c.center.pos, c.left.pos);
-  }
-
-  private getRight(): Vector {
-    const c = this.getCorner();
-    return Vectors.between(c.center.pos, c.right.pos);
-  }
-
   get currentAngle(): Angle {
-    const left = this.getLeft();
-    const right = this.getRight();
-    if (left.mag2().get('model') === 0 || right.mag2().get('model') === 0) {
+    const { left, right } = this.getCorner();
+    if (!left.mag2().nonzero || !right.mag2().nonzero) {
       return Angles.zero('model');
     }
     return left.angle().minus(right.angle()).normalize();
@@ -333,37 +333,38 @@ class AngleConstraint extends Constraint {
   }
 
   enforce() {
-    const left = this.getLeft();
-    const right = this.getRight();
-    if (left.get('model').mag2() === 0 || right.get('model').mag2() === 0) {
+    const { center, left, right } = this.getCorner();
+    if (!left.mag2().nonzero || !right.mag2().nonzero) {
       return;
     }
-    const delta = this.targetAngle.normalize().minus(this.currentAngle);
-    const corner = this.getCorner();
+    const currentAngle = this.currentAngle;
+    const delta = this.targetAngle.normalize().minus(currentAngle);
 
-    const targetLeft = corner.center.pos.plus(left.rotate(delta.scale(this.springConstant / 2)));
-    const targetRight = corner.center.pos.plus(right.rotate(delta.scale(-this.springConstant / 2)));
+    const targetLeft = center.plus(left.rotate(delta.scale(this.springConstant / 2)));
+    const targetRight = center.plus(right.rotate(delta.scale(-this.springConstant / 2)));
 
-    const deltaL = Vectors.between(corner.left.pos, targetLeft);
-    const deltaR = Vectors.between(corner.right.pos, targetRight);
-    corner.left.addForce(deltaL.scale(this.tension));
-    corner.right.addForce(deltaR.scale(this.tension));
+    const deltaL = Vectors.between(center.plus(left), targetLeft);
+    const deltaR = Vectors.between(center.plus(right), targetRight);
+    this.left.get().addForce(deltaL.scale(this.tension));
+    this.right.get().addForce(deltaR.scale(this.tension));
 
     if (!App.debug) return;
     App.canvas.lineWidth = 1;
 
     App.canvas.strokeStyle = 'green';
-    App.canvas.strokeLine(corner.center.pos, targetLeft);
+    App.canvas.strokeLine(center, targetLeft);
     App.canvas.strokeStyle = 'blue';
     App.canvas.setLineDash([2, 2]);
-    App.canvas.strokeLine(corner.left.pos, targetLeft);
+    App.canvas.arrow(center.plus(left), targetLeft);
+    App.canvas.stroke();
     App.canvas.setLineDash([]);
 
     App.canvas.strokeStyle = 'red';
-    App.canvas.strokeLine(corner.center.pos, targetRight);
+    App.canvas.strokeLine(center, targetRight);
     App.canvas.strokeStyle = 'blue';
     App.canvas.setLineDash([2, 2]);
-    App.canvas.strokeLine(corner.right.pos, targetRight);
+    App.canvas.arrow(center.plus(right), targetRight);
+    App.canvas.stroke();
     App.canvas.setLineDash([]);
   }
 

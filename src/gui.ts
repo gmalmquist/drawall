@@ -165,7 +165,7 @@ class GUI {
       {
         to: ([supported, enabled]) => supported && enabled,
         from: _ => [snappingSupported.get(), App.ui.snapping.enableByDefaultRef.get()],
-        compareValues: (a, b) => a === b,
+        compareValues: areEq,
       },
       snappingSupported,
       App.ui.snapping.enableByDefaultRef,

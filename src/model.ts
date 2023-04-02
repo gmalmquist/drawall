@@ -238,14 +238,14 @@ ComponentFactories.register(Room, (
 
 class Wall extends Component implements Solo {
   public readonly [SOLO] = true;
-  private _src: WallJoint;
-  private _dst: WallJoint;
+  public readonly srcRef: Ref<WallJoint>;
+  public readonly dstRef: Ref<WallJoint>;
   private _room: Room | null = null;
 
   constructor(entity: Entity) {
     super(entity);
-    this._src = entity.ecs.createEntity().add(WallJoint);
-    this._dst = entity.ecs.createEntity().add(WallJoint);
+    this.srcRef = Refs.of(entity.ecs.createEntity().add(WallJoint), areEq);
+    this.dstRef = Refs.of(entity.ecs.createEntity().add(WallJoint), areEq);
     this.src.attachOutgoing(this);
     this.dst.attachIncoming(this);
 
@@ -373,6 +373,14 @@ class Wall extends Component implements Solo {
     entity.add(AxisConstraint);
   }
 
+  get srcRo(): RoRef<WallJoint> {
+    return Refs.ro(this.srcRef);
+  }
+
+  get dstRo(): RoRef<WallJoint> {
+    return Refs.ro(this.dstRef);
+  }
+
   getConnectedLoop(direction: 'forward' | 'backward' | 'both' = 'both'): Wall[] {
     const results: Wall[] = [ this ];
     const seen: Set<Wall> = new Set(results);
@@ -443,13 +451,13 @@ class Wall extends Component implements Solo {
     }
   }
 
-  get src() { return this._src; }
-  get dst() { return this._dst; }
+  get src() { return this.srcRef.get(); }
+  get dst() { return this.dstRef.get(); }
 
   set src(j: WallJoint) {
-    if (j === this._src) return;
-    const old = this._src;
-    this._src = j;
+    if (j === this.srcRef.get()) return;
+    const old = this.srcRef.get();
+    this.srcRef.set(j);
     if (old.outgoing === this) {
       old.detachOutgoing();
     }
@@ -457,9 +465,9 @@ class Wall extends Component implements Solo {
   }
 
   set dst(j: WallJoint) {
-    if (j === this._dst) return;
-    const old = this._dst;
-    this._dst = j;
+    if (j === this.dstRef.get()) return;
+    const old = this.dstRef.get();
+    this.dstRef.set(j);
     if (old.incoming === this) {
       old.detachIncoming();
     }
@@ -576,23 +584,14 @@ ComponentFactories.register(Wall, (
 });
 
 class WallJoint extends Component {
-  private _pos: Position = Position(Point.ZERO, 'model');
-  private _outgoing: Wall | null = null;
-  private _incoming: Wall | null = null;
-  private corner: Ref<Corner | null>;
+  private readonly outRef = Refs.of<Wall | null>(null, areEq);
+  private readonly incRef = Refs.of<Wall | null>(null, areEq);
+  private readonly node: PhysNode;
 
   constructor(entity: Entity) {
     super(entity);
 
-    const position = entity.getOrCreate(
-      PhysNode,
-      () => this.pos,
-      (pos: Position) => { this.pos = pos; },
-    );
-
-    this.corner = Refs.of<Corner | null>(null, (a: Corner | null, b: Corner | null) => (
-      a?.center === b?.center && a?.left === b?.left && a?.right === b?.right
-    ));
+    this.node = entity.getOrCreate(PhysNode);
 
     const handle = entity.add(Handle, {
       getPos: () => this.pos,
@@ -617,17 +616,37 @@ class WallJoint extends Component {
       },
     });
 
-    const corner = new Memo(() => {
-      this.updateCorner();
-      const c = this.corner.get() || this.createDummyCorner();
-      return c;
-    }, () => [
-      this.corner.get(),
-      this._incoming?.src,
-      this._outgoing?.dst,
-    ], 1);
+    const leftRef = Refs.of(this.node, areEq);
+    const rightRef = Refs.of(this.node, areEq);
+    this.outRef.onChange(out => {
+      if (out === null) {
+        leftRef.set(this.node);
+        return;
+      }
+      leftRef.set(out.dst.node);
+      out.dstRef.onChange(dst => {
+        if (out === this.outRef.get()) {
+          leftRef.set(dst.node);
+        }
+      });
+    });
+    this.incRef.onChange(inc => {
+      if (inc === null) {
+        rightRef.set(this.node);
+        return;
+      }
+      rightRef.set(inc.src.node);
+      inc.srcRef.onChange(src => {
+        if (inc === this.incRef.get()) {
+          rightRef.set(src.node);
+        }
+      });
+    });
+    entity.add(AngleConstraint, this.node, Refs.ro(leftRef), Refs.ro(rightRef));
 
-    entity.add(AngleConstraint, () => corner.value);
+    leftRef.onChange(p => {
+      console.log(`${this.name}.left = ${p.name} (${p.entity.maybe(WallJoint)?.name})`);
+    });
 
     entity.add(FixedConstraint,
       () => [ this.pos ],
@@ -635,32 +654,12 @@ class WallJoint extends Component {
     );
   }
 
-  private createDummyCorner(): Corner {
-    const pos = this.entity.only(PhysNode);
-    return {
-      center: pos,
-      left: pos,
-      right: pos,
-    };
+  get incRo(): RoRef<Wall | null> {
+    return Refs.ro(this.incRef);
   }
 
-  private updateCorner() {
-    const center = this.entity.maybe(PhysNode);
-    if (!center) {
-      this.corner.set(null);
-      return;
-    }
-    const left = this._outgoing?.dst?.entity?.maybe(PhysNode);
-    if (!left) {
-      this.corner.set(null);
-      return;
-    }
-    const right = this._incoming?.dst?.entity?.maybe(PhysNode);
-    if (!right) {
-      this.corner.set(null);
-      return;
-    }
-    this.corner.set({ center, left, right });
+  get outRo(): RoRef<Wall | null> {
+    return Refs.ro(this.outRef);
   }
 
   shallowDup(): WallJoint {
@@ -677,8 +676,8 @@ class WallJoint extends Component {
     const outgoing = this.outgoing;
     if (incoming === null || outgoing === null) return;
     if (!incoming.entity.isAlive || !outgoing.entity.isAlive) return;
-    this._incoming = null;
-    this._outgoing = null;
+    this.incRef.set(null);
+    this.outRef.set(null);
 
     if (incoming.src.incoming === outgoing.dst.outgoing) {
       // oops, we'll end up with less than three walls! best scrap the whole thing.
@@ -711,11 +710,11 @@ class WallJoint extends Component {
   }
 
   get pos(): Position {
-    return this._pos;
+    return this.entity.only(PhysNode).pos;
   }
 
   set pos(p: Position) {
-    this._pos = p.to('model');
+    this.entity.only(PhysNode).pos = p;
   }
 
   get isCorner(): boolean {
@@ -723,56 +722,56 @@ class WallJoint extends Component {
   }
 
   get incoming(): Wall | null {
-    return this._incoming;
+    return this.incRef.get();
   }
 
   get outgoing(): Wall | null {
-    return this._outgoing;
+    return this.outRef.get();
   }
 
   attachIncoming(wall: Wall) {
-    if (this._incoming === wall) return;
-    this._incoming = wall;
-    this.updateCorner();
+    this.incRef.set(wall);
   }
 
   attachOutgoing(wall: Wall) {
-    if (this._outgoing === wall) return;
-    this._outgoing = wall;
-    this.updateCorner();
+    this.outRef.set(wall);
   }
 
   detachIncoming() {
-    if (this._incoming?.dst === this) {
-      this._incoming.entity.destroy();
+    const incoming = this.incoming;
+    const outgoing = this.outgoing;
+    if (incoming?.dst === this) {
+      incoming.entity.destroy();
     }
-    this._incoming = null;
-    if (this._outgoing === null || this._outgoing.entity.isDestroyed) {
+    this.incRef.set(null);
+    if (outgoing === null || outgoing.entity.isDestroyed) {
       this.entity.destroy();
     }
-    this.updateCorner();
   }
 
   detachOutgoing() {
-    if (this._outgoing?.src === this) {
-      this._outgoing.entity.destroy();
+    const incoming = this.incoming;
+    const outgoing = this.outgoing;
+    if (outgoing?.src === this) {
+      outgoing.entity.destroy();
     }
-    this._outgoing = null;
-    if (this._incoming === null || this._incoming.entity.isDestroyed) {
+    this.outRef.set(null);
+    if (incoming === null || incoming.entity.isDestroyed) {
       this.entity.destroy();
     }
-    this.updateCorner();
   }
 
   override toJson(): SavedComponent {
     const angleConstraint = this.entity.only(AngleConstraint);
     const fixedConstraint = this.entity.only(FixedConstraint);
     const position = this.pos;
+    const incoming = this.incoming;
+    const outgoing = this.outgoing;
     return {
       factory: this.constructor.name,
       arguments: [
-        this._incoming === null ? -1 : unwrap(this._incoming.entity.id),
-        this._outgoing === null ? -1 : unwrap(this._outgoing.entity.id),
+        incoming === null ? -1 : unwrap(incoming.entity.id),
+        outgoing === null ? -1 : unwrap(outgoing.entity.id),
         {
           angle: angleConstraint.enabled 
             ? MoreJson.angle.to(angleConstraint.targetAngle) : false,
@@ -784,10 +783,12 @@ class WallJoint extends Component {
   }
 
   override tearDown() {
-    const out = this._outgoing;
-    const inc = this._incoming;
+    const out = this.outgoing;
+    const inc = this.incoming;
     if (out !== null && out.src === this) out.entity.destroy();
     if (inc !== null && inc.dst === this) inc.entity.destroy();
+    this.outRef.set(null);
+    this.incRef.set(null);
   }
 }
 
@@ -1100,17 +1101,14 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
   const canvas = App.canvas;
 
   for (const constraint of constraints) {
-    const corner = constraint.getCorner();
-    const center = corner.center.pos;
-    const leftVec = Vectors.between(center, corner.left.pos);
-    const rightVec = Vectors.between(center, corner.right.pos);
+    const { center, left, right } = constraint.getCorner();
 
-    if (leftVec.get('model').mag2() === 0 || rightVec.get('model').mag2() === 0) {
+    if (!left.mag2().nonzero || !right.mag2().nonzero) {
       continue;
     }
 
-    const leftAngle = leftVec.angle(); 
-    const rightAngle = rightVec.angle();
+    const leftAngle = left.angle(); 
+    const rightAngle = right.angle();
 
     const arcRadius = Distance(15, 'screen');
     const textDistance = arcRadius.map(r => r + 20);
@@ -1122,7 +1120,7 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       return Degrees(Math.round(unwrap(toDegrees(delta))));
     }, constraint.currentAngle, constraint.targetAngle);
     
-    const middle = rightVec.rotate(constraint.currentAngle.scale(0.5)).to('model').unit();
+    const middle = right.rotate(constraint.currentAngle.scale(0.5)).to('model').unit();
 
     if (constraint.entity.maybe(FixedConstraint)?.enabled) {
       const icon = IconImages.lockSmall;
@@ -1164,10 +1162,9 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       shadow: highlight,
     });
 
-
     const arc = (arcRadius: Distance, fill: string | null, stroke: string | null) => {
       canvas.beginPath();
-      canvas.moveTo(center.splus(arcRadius, rightVec.unit()));
+      canvas.moveTo(center.splus(arcRadius, right.unit()));
       canvas.arc(
         center,
         arcRadius,
