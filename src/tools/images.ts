@@ -260,8 +260,8 @@ class Imaged extends Component {
     Positions.zero('model'),
     (a, b) => Distances.between(a, b).lt(Distance(1, 'screen')),
   );
-  public readonly width: Ref<Distance> = Refs.of(Distance(0, 'screen'));
-  public readonly height: Ref<Distance> = Refs.of(Distance(0, 'screen'));
+  public readonly width: Ref<Distance> = Refs.of(Distance(0, 'model'));
+  public readonly height: Ref<Distance> = Refs.of(Distance(0, 'model'));
  
   constructor(entity: Entity) {
     super(entity);
