@@ -312,13 +312,18 @@ class Wall extends Component implements Solo {
       f.updateTargets([p.pos]);
     };
 
+    const lollipop = Polygon.lollipop(
+      Position(new Point(10, 0), 'screen'),
+      Position(new Point(40, 0), 'screen'),
+      Distance(10, 'screen'),
+    );
+
     handle.createKnob({
       poly: () => {
         const edge = this.getEdge();
-        const normal = edge.normal;
-        const src = edge.midpoint.splus(Distance(10, 'screen'), normal);
-        const dst = src.splus(Distance(50, 'screen'), normal);
-        return Polygon.lollipop(src, dst, Distance(10, 'screen'));
+        return lollipop
+          .rotate(edge.normal.angle())
+          .translate(edge.midpoint.toVector());
       },
       fill: BLUE,
     }, {
@@ -643,10 +648,6 @@ class WallJoint extends Component {
       });
     });
     entity.add(AngleConstraint, this.node, Refs.ro(leftRef), Refs.ro(rightRef));
-
-    leftRef.onChange(p => {
-      console.log(`${this.name}.left = ${p.name} (${p.entity.maybe(WallJoint)?.name})`);
-    });
 
     entity.add(FixedConstraint,
       () => [ this.pos ],

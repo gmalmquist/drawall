@@ -852,6 +852,12 @@ class Polygon extends SDF {
     return new Polygon(this.vertices.map(v => v.plus(delta)));
   }
 
+  rotate(angle: Angle): Polygon {
+    return new Polygon(this.vertices.map(
+      v => v.toVector().rotate(angle).toPosition()
+    ));
+  }
+
   get vertices(): Position[] {
     return [...this._vertices];
   }
@@ -885,12 +891,13 @@ class Polygon extends SDF {
   }
 
   get bounds(): Rect {
+    const space = this._vertices.length > 0 ? this._vertices[0].space : 'model';
     let minX = 0;
     let maxX = 0;
     let minY = 0;
     let maxY = 0;
     for (let i = 0; i < this._vertices.length; i++) {
-      const v = this._vertices[i].get('model');
+      const v = this._vertices[i].get(space);
       if (i === 0) {
         minX = v.x;
         minY = v.y;
@@ -904,8 +911,8 @@ class Polygon extends SDF {
       maxY = Math.max(maxY, v.y);
     }
     return new Rect(
-      Position(new Point(minX, minY), 'model'),
-      Position(new Point(maxX, maxY), 'model'),
+      Position(new Point(minX, minY), space),
+      Position(new Point(maxX, maxY), space),
     );
   }
 
@@ -921,7 +928,7 @@ class Polygon extends SDF {
       const b = verts[(i + 1) % verts.length].toVector().get(space);
       area += a.x * b.y - a.y * b.x;
     }
-    return Distance(Math.abs(area / 2), 'model');
+    return Distance(Math.abs(area / 2), space);
   }
 
   public override sdist(point: Position): Distance {
@@ -966,9 +973,9 @@ class Polygon extends SDF {
     const edges = this.edges;
     for (let attempt = 0; attempt < 10; attempt++) {
       const ray = attempt === 0
-        ? new SpaceRay(point, Vector(Axis.X, 'model'))
+        ? new SpaceRay(point, Vector(Axis.X, point.space))
         : new SpaceRay(point, Vector(new Vec(
-          0.5, Math.random() * 2 - 1), 'model').unit())
+          0.5, Math.random() * 2 - 1), point.space).unit())
       ;
       const check = this.raycastCheck(ray, edges);
       if (check === 'inside') return true;
@@ -1046,9 +1053,10 @@ class Polygon extends SDF {
   }
 
   public static lollipop(src: Position, dst: Position, width: Distance): Polygon {
-    const headWidth = width.scale(3);
-    const headHeight = headWidth.scale(1);
     const vector = Vectors.between(src, dst);
+    const length = vector.mag();
+    const headWidth = width.scale(3).min(length.scale(0.9));
+    const headHeight = headWidth.scale(1);
     const tangent = vector.unit();
     const shaftLength = vector.mag().minus(headHeight)
       .max(Distances.zero(src.space));
@@ -1066,12 +1074,12 @@ class Polygon extends SDF {
       // arc from start[2] to dst to end[0]
       const a = start[1];
       const b = end[0];
-      const mid = a.lerp(0.5, b);
+      const mid = a.lerp(0.5, b).splus(headWidth.scale(0.5), tangent);
       const ma = Vectors.between(mid, a)
         .unit()
         .scale(headWidth)
         .scale(0.5);
-      const angle = Angle(Radians(-s * Math.PI * 1.9 + Math.PI/2), src.space);
+      const angle = Angle(Radians(-s * Math.PI * 1.9 + Math.PI/3), src.space);
       return mid.plus(ma.rotate(angle));
     });
     return new Polygon([

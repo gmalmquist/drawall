@@ -121,7 +121,7 @@ class PointerTool extends Tool {
   override update() {
     if (App.rendering.get()) return;
 
-    this.renderNearbyKnobs();
+    this.renderKnobs();
 
     const rect = this.selectionRect.get();
     if (rect === null) return;
@@ -140,31 +140,19 @@ class PointerTool extends Tool {
     App.canvas.stroke();
   }
 
-  private renderNearbyKnobs() {
+  private renderKnobs() {
     const selectionSize = App.ui.selection.size;
     const handleDrawRadius = Distance(100, 'screen');
     const shouldRender = (h: Handle): boolean => {
       if (h.knob === null) return false;
       if (h.dragging) return true;
-      if (selectionSize === 1 && h.knob.parent.only(Handle).isSelected) return true;
-      if (h.knob.poly().sdist(App.ui.mousePos).lt(handleDrawRadius)) return true;
-      return false;
+      const parent = h.knob.parent.only(Handle);
+      return selectionSize <= 1 && parent.isActive;
     };
     const handles = App.ecs.getComponents(Handle).filter(shouldRender);
-    if (handles.length === 0) return;
-    const [first, ...others] = handles;
-    const closest = others.reduce((a, b) => {
-      if (a.dragging) return a;
-      if (b.dragging) return b;
-      if (a.knob!.poly().sdist(App.ui.mousePos).le(b.knob!.poly().sdist(App.ui.mousePos))) {
-        return a;
-      }
-      return b;
-    }, first);
-    if (!closest.dragging && App.ecs.getComponents(Dragging).length > 0) {
-      return;
+    for (const h of handles) {
+      App.ui.renderKnob(h);
     }
-    App.ui.renderKnob(closest);
   }
 
   private getDrawSelectDispatcher(): UiEventDispatcher {
