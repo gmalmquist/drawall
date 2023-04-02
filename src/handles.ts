@@ -74,6 +74,14 @@ class Selected extends Component implements Solo {
   }
 }
 
+class Rectangular extends Component implements Solo {
+  public readonly [SOLO] = true;
+
+  constructor(entity: Entity) {
+    super(entity);
+  }
+}
+
 class Handle extends Component implements Solo {
   public readonly [SOLO] = true;
 

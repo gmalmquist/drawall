@@ -35,6 +35,26 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
 
 const areEq = <V>(a: V, b: V) => a === b;
 
+const Memo = <V>(f: () => V, fingerprint?: () => readonly any[]): (() => V)  => {
+  const s: { value?: V, print?: readonly any[] } = {};
+  return () => {
+    if (typeof fingerprint !== 'undefined') {
+      const print = fingerprint();
+      if (typeof s.print === 'undefined' 
+        || print.length !== s.print.length
+        || print.some((e, i) => e !== s.print![i])) {
+        s.print = print;
+        s.value = f();
+        return s.value;
+      }
+    }
+    if (typeof s.value === 'undefined') {
+      s.value = f();
+    }
+    return s.value;
+  };
+};
+
 interface Eq<T> {
   eq: (other: T) => boolean;
 }
@@ -377,60 +397,6 @@ interface RefExternalUpdate {
 }
 
 type Ref<V> = RefImpl<V>;
-
-class Memo<T, D extends readonly unknown[]> {
-  private last: {
-    value: T,
-    deps: D,
-    time: number,
-  } | null = null;
-
-  constructor(
-    private readonly get: () => T,
-    private readonly dependencies: () => D,
-    private readonly maxAgeSeconds?: number,
-  ) {
-  }
-
-  get value(): T {
-    if (this.isExpired()) {
-      this.invalidate();
-    }
-    const last = this.last;
-    const deps = this.dependencies();
-    if (last !== null && this.compareDeps(last.deps, deps)) {
-      return last.value;
-    }
-    return this.updateCache(deps);
-  }
-
-  public invalidate() {
-    this.last = null;
-  }
-
-  private isExpired(): boolean {
-    if (typeof this.maxAgeSeconds === 'undefined') {
-      return false;
-    }
-    const last = this.last;
-    return last !== null && last.time + this.maxAgeSeconds < Time.now;
-  }
-
-  private updateCache(deps: D): T {
-    const value = this.get();
-    const time = Time.now;
-    this.last = { deps, time, value };
-    return value;
-  }
-
-  private compareDeps(one: D, two: D): boolean {
-    const arr1: any[] = [...one];
-    const arr2: any[] = [...two];
-    if (arr1.length !== arr2.length) return false;
-    return arr1.every((d, i) => d === arr2[i]);
-  }
-}
-
 
 class DefaultMap<K, V> {
   private readonly map = new Map<K, V>();

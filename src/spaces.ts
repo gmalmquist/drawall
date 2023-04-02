@@ -722,6 +722,8 @@ abstract class SDF {
   public contains(point: Position): boolean {
     return this.sdist(point).sign <= 0;
   }
+
+  public abstract get centroid(): Position;
 }
 
 interface Surface {
@@ -757,6 +759,10 @@ class Line extends SDF {
   public override sdist(point: Position): Distance {
     return Vectors.between(this.origin, point).dot(this.normal);
   }
+
+  public override get centroid(): Position {
+    return this.origin;
+  }
 }
 
 class HalfPlane extends SDF {
@@ -772,6 +778,10 @@ class HalfPlane extends SDF {
 
   get tangent(): Vector {
     return this.tangent.unit();
+  }
+
+  public override get centroid(): Position {
+    return this.origin;
   }
 }
 
@@ -824,7 +834,7 @@ class Rect extends SDF {
       new SpaceEdge(c, this.corners[(i + 1) % this.corners.length]));
   }
 
-  get centroid(): Position {
+  public override get centroid(): Position {
     return this.topLeft.lerp(0.5, this.bottomRight);
   }
 
@@ -835,17 +845,32 @@ class Rect extends SDF {
 
 class Polygon extends SDF {
   private readonly _vertices: Position[];
-  private readonly radius: Distance;
+  private readonly _centroid = Memo(() => Positions.centroid(this._vertices));
+  private readonly _convex = Memo(() => {
+    if (this._vertices.length < 3) return false;
+    for (let i = 0; i < this._vertices.length; i++) {
+      const a = this._vertices[i];
+      const b = this._vertices[(i + 1) % this._vertices.length];
+      const c = this._vertices[(i + 2) % this._vertices.length];
+      const ab = Vectors.between(a, b);
+      const bc = Vectors.between(b, c);
+      if (ab.r90().dot(bc).sign > 0) {
+        return false;
+      }
+    }
+    return true;
+  });
+  private readonly _radius = Memo(() => {
+    const centroid = this.centroid;
+    return this._vertices.map(v => Distances.between(centroid, v))
+      .reduce((a, b) => a.max(b), Distance(0, centroid.space))
+  });
 
   constructor(
     vertices: Position[],
   ) {
     super();
     this._vertices = [...vertices];
-    // optimization
-    const centroid = Positions.centroid(vertices); 
-    this.radius = vertices.map(v => Distances.between(centroid, v))
-      .reduce((a, b) => a.max(b), Distance(0, centroid.space));
   }
 
   translate(delta: Vector): Polygon {
@@ -858,6 +883,10 @@ class Polygon extends SDF {
     ));
   }
 
+  get radius(): Distance {
+    return this._radius();
+  }
+
   get vertices(): Position[] {
     return [...this._vertices];
   }
@@ -868,7 +897,7 @@ class Polygon extends SDF {
   }
 
   get centroid(): Position {
-    return Positions.centroid(this._vertices);
+    return this._centroid();
   }
 
   get isDegenerate(): boolean {
@@ -876,18 +905,7 @@ class Polygon extends SDF {
   }
 
   get isConvex(): boolean {
-    if (this.isDegenerate) return false;
-    for (let i = 0; i < this._vertices.length; i++) {
-      const a = this._vertices[i];
-      const b = this._vertices[(i + 1) % this._vertices.length];
-      const c = this._vertices[(i + 2) % this._vertices.length];
-      const ab = Vectors.between(a, b);
-      const bc = Vectors.between(b, c);
-      if (ab.r90().dot(bc).sign > 0) {
-        return false;
-      }
-    }
-    return true;
+    return this._convex();
   }
 
   get bounds(): Rect {
