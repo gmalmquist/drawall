@@ -60,8 +60,23 @@ interface RefMapFBase<A, B> {
 
 type RefMapF<A, B> = RefMapFBase<A, B> & CompareFuncPartial<B>;
 
-interface RefDefBase<V> {
+type RefK = 'ro' | 'rw';
+
+interface RefBase<V> {
   readonly get: () => V;
+}
+
+interface RefView<V, K extends RefK> extends RefBase<V> {
+  readonly kind: K;
+  readonly onChange: (listener: (value: V) => void) => void;
+}
+
+interface RoRef<V> extends RefView<V, 'ro'> {
+  readonly map: <W>(f: (value: V) => W) => RoRef<W>;
+  readonly toString: () => string;
+}
+
+interface RefDefBase<V> extends RefBase<V> {
   readonly set: (value: V) => void;
 }
 
@@ -71,7 +86,7 @@ type RefValue<R extends RefDefBase<unknown>> = R extends RefDefBase<infer T> ? T
 
 type UnwrapRefArray<A extends readonly unknown[]> = A extends readonly []
   ? readonly []
-  : A extends readonly [RefDefBase<infer Start>, ...infer Rest]
+  : A extends readonly [RefBase<infer Start>, ...infer Rest]
     ? readonly [Start, ...UnwrapRefArray<Rest>]
     : never
 ;
@@ -137,6 +152,49 @@ const Refs = {
     to: (v: boolean) => !v,
     from: (v: boolean) => !v,
   }),
+  mapRo: <V, W>(ref: RefView<V, RefK>, f: (value: V) => W): RoRef<W> => ({
+    kind: 'ro',
+    get: () => f(ref.get()),
+    onChange: (l: (w: W) => void) => ref.onChange(v => l(f(v))),
+    toString: () => `Ro(${f(ref.get())})`,
+    map: <X>(g: (w: W) => X): RoRef<X> => Refs.mapRo(ref, (v: V): X => g(f(v))),
+  }),
+  ro: <V>(ref: RefView<V, RefK>): RoRef<V> => {
+    if (ref.kind === 'ro') {
+      return ref as RoRef<V>;
+    }
+    const r: { r?: RoRef<V> } = {};
+    r.r = {
+      kind: 'ro',
+      get: () => ref.get(),
+      onChange: l => ref.onChange(l),
+      toString: () => `Ro(${ref.get()})`,
+      map: f => Refs.mapRo(r.r!, f),
+    };
+    return r.r;
+  },
+  reduceRo: <A extends readonly RefView<any, RefK>[], B>(
+    map: (arr: UnwrapRefArray<A>) => B,
+    ...refs: A
+  ): RoRef<B> => {
+    const get = (): UnwrapRefArray<A> => {
+      const u = <V>(r: RefView<V, RefK>): V => r.get();
+      return refs.map(u) as UnwrapRefArray<A>;
+    };
+    const r: { r?: RoRef<B> } = {};
+    r.r = {
+      kind: 'ro',
+      get: () => map(get()),
+      onChange: (l: (value: B) => void) => {
+        refs.forEach(r => r.onChange(_ =>
+          l(map(get()))
+        ));
+      },
+      toString: () => `Ro(${map(get())})`,
+      map: <X>(g: (value: B) => X): RoRef<X> => Refs.mapRo(r.r!, g),
+    };
+    return r.r!;
+  },
 };
 
 interface PollingRefProps<V> {
@@ -145,9 +203,10 @@ interface PollingRefProps<V> {
   delayMillis: number;
 }
 
-class RefImpl<V> implements RefDefBase<V> {
+class RefImpl<V> implements RefDefBase<V>, RefView<V, 'rw'> {
   readonly upstream = new Set<RefImpl<any>>();
   readonly downstream = new Set<RefImpl<any>>();
+  public readonly kind = 'rw';
   private readonly listeners = new Set<(value: V) => void>();
   private readonly _get: () => V;
   private readonly _set: (value: V) => void;
@@ -249,7 +308,6 @@ interface RefExternalUpdate {
 }
 
 type Ref<V> = RefImpl<V>;
-
 
 class Memo<T, D extends readonly unknown[]> {
   private last: {
