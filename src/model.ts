@@ -261,18 +261,24 @@ class Wall extends Component implements Solo {
 
     entity.add(Surfaced, () => entity.ref(e => e.only(PhysEdge)));
 
-    this.vector = Refs.memo(Refs.reduceRo(
+    this.vector = Refs.memo(
+      Refs.reduceRo(
+        a => a,
+        Refs.flatMapRo(this.srcRef, j => j.position),
+        Refs.flatMapRo(this.dstRef, j => j.position),
+      ),
       ([src, dst]) => Vectors.between(src, dst),
-      Refs.flatMapRo(this.srcRef, j => j.position),
-      Refs.flatMapRo(this.dstRef, j => j.position),
-    ));
-    this.tangent = Refs.memoMap(this.vector, v => v.unit());
-    this.normal = Refs.memoMap(this.tangent, v => v.r90());
-    this.midpoint = Refs.memo(Refs.reduceRo(
+    );
+    this.tangent = Refs.memo(this.vector, v => v.unit());
+    this.normal = Refs.memo(this.tangent, v => v.r90());
+    this.midpoint = Refs.memo(
+      Refs.reduceRo(
+        a => a,
+        Refs.flatMapRo(this.srcRef, j => j.position),
+        Refs.flatMapRo(this.dstRef, j => j.position),
+      ),
       ([src, dst]) => src.lerp(0.5, dst),
-      Refs.flatMapRo(this.srcRef, j => j.position),
-      Refs.flatMapRo(this.dstRef, j => j.position),
-    ));
+    );
 
     const handle = entity.add(Handle, {
       getPos: () => this.src.pos,
@@ -310,7 +316,7 @@ class Wall extends Component implements Solo {
     // here. the issue is that the conversion between screen and model space is
     // only valid until the view changes, so it doesn't hold for cached values
     // like this.
-    const lollipopRef = Refs.memoMap(
+    const lollipopRef = Refs.memo(
       Refs.reduceRo(x => x, this.midpoint, this.normal, App.viewport.changedRef),
       ([midpoint, normal, _]) => {
         return lollipopBase

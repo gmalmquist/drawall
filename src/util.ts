@@ -195,10 +195,7 @@ const Refs = {
     };
     return r.self;
   },
-  memo: <V>(ref: RefView<V, RefK>): RoRef<V> => {
-    return Refs.memoMap(ref, x => x);
-  },
-  memoMap: <V, W>(ref: RefView<V, RefK>, f: (v: V) => W): RoRef<W> => {
+  memo: <V, W>(ref: RefView<V, RefK>, f: (v: V) => W): RoRef<W> => {
     const initial = ref.get();
     const state: {
       value: V,

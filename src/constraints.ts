@@ -274,23 +274,26 @@ class AngleConstraint extends Constraint {
       if (this.enabled) App.project.requestSave('target angle changed');
     });
 
-    this.corner = Refs.memo(Refs.reduceRo(
+    this.corner = Refs.memo(
+      Refs.reduceRo(
+        a => a,
+        center.position,
+        Refs.flatMapRo(left, n => n.position),
+        Refs.flatMapRo(right, n => n.position),
+      ),
       ([center, left, right]) => ({
         center,
         left: Vectors.between(center, left),
         right: Vectors.between(center, right),
       }),
-      center.position,
-      Refs.flatMapRo(left, n => n.position),
-      Refs.flatMapRo(right, n => n.position),
-    ));
+    );
 
-    this.currentAngleRef = Refs.memo(this.corner.map(({center, left, right}) => {
+    this.currentAngleRef = Refs.memo(this.corner, ({center, left, right}) => {
       if (!left.mag2().nonzero || !right.mag2().nonzero) {
         return Angles.zero('model');
       }
       return left.angle().minus(right.angle()).normalize();
-    }));
+    });
 
     this.entity.add(Form).setFactory(() => {
       const form = new AutoForm();
