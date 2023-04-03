@@ -264,11 +264,41 @@ class Rectangular extends Component implements Surface, Solo {
     const resize = (
       name: string,
       frame: RoRef<Frame>,
+      priority: number,
     ): Handle => {
+      const distanceFunc: RoRef<(p: Position) => Distance> = Refs.memoReduce(
+        (frame, horizontal, vertical) => {
+          const hasX = frame.horizontal.mag2().nonzero;
+          const hasY = frame.vertical.mag2().nonzero;
+          if (hasX && hasY) {
+            const circle = new Circle(frame.origin, Distance(10, 'screen'));
+            return (p: Position) => circle.sdist(p);
+          }
+          if (hasX) {
+            // left or right edge
+            const edge = new MemoEdge(
+              frame.origin.splus(-0.5, vertical),
+              frame.origin.splus(+0.5, vertical),
+            );
+            return (p: Position) => edge.distanceFrom(p);
+          }
+          if (hasY) {
+            // top or bottom edge
+            const edge = new MemoEdge(
+              frame.origin.splus(-0.5, horizontal),
+              frame.origin.splus(+0.5, horizontal),
+            );
+            return (p: Position) => edge.distanceFrom(p);
+          }
+          // we got passed in all zeroes, what gives
+          return (p: Position) => Distance(Number.POSITIVE_INFINITY, 'model');
+        },
+        frame, this.horizontal, this.vertical,
+      );
       return this.entity.ecs.createEntity().add(Handle, {
-        priority: priority + 0.1,
+        priority: priority,
         getPos: () => frame.get().origin,
-        distance: p => Distances.between(frame.get().origin, p),
+        distance: p => distanceFunc.get()(p),
         cursor: () => getResizeCursor(Vectors.between(this.center, frame.get().origin), true),
         clickable: false,
         selectable: false,
@@ -315,14 +345,14 @@ class Rectangular extends Component implements Surface, Solo {
     );
 
     return [
-      resize('top', frameOf(this.topRef, zero, up)),
-      resize('bottom', frameOf(this.bottomRef, zero, down)),
-      resize('left', frameOf(this.leftRef, left, zero)),
-      resize('right', frameOf(this.rightRef, right, zero)),
-      resize('top-left', frameOf(this.topLeftRef, left, up)),
-      resize('top-right', frameOf(this.topRightRef, right, up)),
-      resize('bottom-left', frameOf(this.bottomLeftRef, left, down)),
-      resize('bottom-right', frameOf(this.bottomRightRef, right, down)),
+      resize('top', frameOf(this.topRef, zero, up), priority),
+      resize('bottom', frameOf(this.bottomRef, zero, down), priority),
+      resize('left', frameOf(this.leftRef, left, zero), priority),
+      resize('right', frameOf(this.rightRef, right, zero), priority),
+      resize('top-left', frameOf(this.topLeftRef, left, up), priority + 0.1),
+      resize('top-right', frameOf(this.topRightRef, right, up), priority + 0.1),
+      resize('bottom-left', frameOf(this.bottomLeftRef, left, down), priority + 0.1),
+      resize('bottom-right', frameOf(this.bottomRightRef, right, down), priority + 0.1),
     ];
   }
 
