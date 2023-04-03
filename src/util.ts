@@ -257,6 +257,16 @@ const Refs = {
     };
     return r.self!;
   },
+  memoReduce: <A extends readonly RefView<any, RefK>[], B>(
+    map: (...arr: UnwrapRefArray<A>) => B,
+    ...refs: A
+  ): RoRef<B> => {
+    const reduced: RoRef<UnwrapRefArray<A>> = Refs.reduceRo(
+      a => a, ...refs
+    );
+    const memoized: RoRef<B> = Refs.memo(reduced, arr => map(...arr));
+    return memoized;
+  },
   flatMapRo: <V, W>(
     ref: RefView<V, RefK>,
     f: (value: V) => RefView<W, RefK>,

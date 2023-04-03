@@ -77,8 +77,113 @@ class Selected extends Component implements Solo {
 class Rectangular extends Component implements Solo {
   public readonly [SOLO] = true;
 
+  private static posEq = (one: Position, two: Position): boolean => {
+    if (one.space !== two.space) return false;
+    const a = one.get(one.space);
+    const b = two.get(two.space);
+    return Math.abs(a.x - b.x) < 0.01
+      && Math.abs(a.y - b.y) < 0.01;
+  };
+
+  private static distEq = (one: Distance, two: Distance) => {
+    if (one.space !== two.space) return false;
+    const a = one.get(one.space);
+    const b = two.get(two.space);
+    return Math.abs(a - b) < 0.01;
+  };
+
+  public readonly centerRef = Refs.of(Positions.zero('model'), Rectangular.posEq);
+  public readonly widthRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
+  public readonly heightRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
+  // vectors from left to right and top to bottom
+  private readonly horizontal: RoRef<Vector>;
+  private readonly vertical: RoRef<Vector>;
+  // horizontal & vertical extents from center
+  private readonly leftSpan: RoRef<Vector>;
+  private readonly rightSpan: RoRef<Vector>;
+  private readonly upSpan: RoRef<Vector>;
+  private readonly downSpan: RoRef<Vector>;
+  // edge centers
+  private readonly topRef: RoRef<Position>;
+  private readonly leftRef: RoRef<Position>;
+  private readonly rightRef: RoRef<Position>;
+  private readonly bottomRef: RoRef<Position>;
+  // corners
+  private readonly topLeftRef: RoRef<Position>;
+  private readonly topRightRef: RoRef<Position>;
+  private readonly bottomLeftRef: RoRef<Position>;
+  private readonly bottomRightRef: RoRef<Position>;
+
   constructor(entity: Entity) {
     super(entity);
+
+    this.horizontal = Refs.memoReduce(
+      (width: Distance, _: boolean) =>
+        Vector(Axis.X, 'screen').to('model').unit().scale(width),
+      this.widthRef, App.viewport.changedRef,
+    );
+    this.vertical = Refs.memoReduce(
+      (height: Distance, _: boolean) =>
+        Vector(Axis.Y, 'screen').to('model').unit().scale(height),
+      this.heightRef, App.viewport.changedRef,
+    );
+
+    const spanCalc = (scale: number) => (extent: Vector): Vector => extent.scale(scale);
+
+    // directional extents from centroid
+    this.upSpan = Refs.memoReduce(spanCalc(-0.5), this.vertical);
+    this.downSpan = Refs.memoReduce(spanCalc(0.5), this.vertical);
+    this.leftSpan = Refs.memoReduce(spanCalc(-0.5), this.horizontal);
+    this.rightSpan = Refs.memoReduce(spanCalc(0.5), this.horizontal);
+
+    const aplusb = (a: Position, b: Vector) => a.plus(b);
+
+    // edge midpoints
+    this.topRef = Refs.memoReduce(aplusb, this.centerRef, this.upSpan);
+    this.bottomRef = Refs.memoReduce(aplusb, this.centerRef, this.downSpan);
+    this.leftRef = Refs.memoReduce(aplusb, this.centerRef, this.leftSpan);
+    this.rightRef = Refs.memoReduce(aplusb, this.centerRef, this.rightSpan);
+
+    // corners
+    this.topLeftRef = Refs.memoReduce(aplusb, this.topRef, this.leftSpan);
+    this.topRightRef = Refs.memoReduce(aplusb, this.topRef, this.rightSpan);
+    this.bottomLeftRef = Refs.memoReduce(aplusb, this.bottomRef, this.leftSpan);
+    this.bottomRightRef = Refs.memoReduce(aplusb, this.bottomRef, this.rightSpan);
+  }
+
+  public contains(position: Position) {
+    const halfplanes: Array<readonly [RoRef<Position>, RoRef<Vector>]> = [
+      [this.topRef, this.downSpan],
+      [this.bottomRef, this.upSpan],
+      [this.leftRef, this.rightSpan],
+      [this.rightRef, this.leftSpan],
+    ];
+    return halfplanes.every(([origin, normal]) =>
+      Vectors.between(origin.get(), position).dot(normal.get()).sign >= 0
+    );
+  }
+
+  public containedBy(sdf: SDF) {
+    return [this.topRef, this.bottomRef, this.leftRef, this.rightRef].every(pos =>
+      sdf.contains(pos.get())
+    );
+  }
+
+  public intersects(sdf: SDF) {
+    if (this.containedBy(sdf)) return true;
+    const edges: Array<readonly [RoRef<Position>, RoRef<Vector>]> = [
+      [this.topLeftRef, this.horizontal],
+      [this.bottomLeftRef, this.horizontal],
+      [this.topLeftRef, this.vertical],
+      [this.topRightRef, this.vertical],
+    ];
+    for (const [corner, extent] of edges) {
+      const hit = sdf.raycast(new SpaceRay(corner.get(), extent.get()));
+      if (hit !== null && hit.time >= 0 && hit.time <= 1) {
+        return true;
+      }
+    }
+    return false;
   }
 }
 

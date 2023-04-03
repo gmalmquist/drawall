@@ -160,7 +160,6 @@ class MinLengthConstraint extends Constraint {
 
 class LengthConstraint extends Constraint {
   public readonly targetLength = Refs.of(0);
-  public lengthReference: LengthReference | null = null;
 
   private readonly node: PhysEdge;
   private readonly _label: RoRef<ConstraintLabel>;
@@ -249,10 +248,6 @@ class LengthConstraint extends Constraint {
   }
 
   enforce() {
-    if (this.lengthReference !== null) {
-      this.length = this.lengthReference.getLength().get('model');
-    }
-
     const node = this.node;
     const delta = Distance(this.length, 'model').minus(node.edge.length);
     const correction = node.edge.tangent.scale(delta.scale(this.springConstant/2));

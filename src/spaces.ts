@@ -724,6 +724,34 @@ abstract class SDF {
   }
 
   public abstract get centroid(): Position;
+
+  public raycast(ray: SpaceRay): SpaceRayHit | null {
+    // in model space this will typically be ~1 mm, in screen space
+    // it's a tenth of a pixel. ie, it's small enough.
+    const eps = 0.1;
+
+    const direction = ray.direction.unit();
+    let point = ray.origin;
+    let distance = this.sdist(point);
+    let traveled = Distance(0, distance.space);
+    while (distance.get(distance.space) > eps) {
+      point = point.splus(distance, direction);
+      const newDistance = this.sdist(point);
+      if (newDistance.gt(distance)) {
+        // we're getting farther away, treat this as a miss
+        return null;
+      }
+      distance = newDistance;
+    }
+    if (distance.get(distance.space) > eps) {
+      return null; // we never made it :/
+    }
+    return {
+      point,
+      time: traveled.div(ray.direction.mag()), // nb: v sci-fi
+      distance: traveled,
+    };
+  }
 }
 
 interface Surface {

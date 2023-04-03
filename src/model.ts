@@ -816,17 +816,6 @@ ComponentFactories.register(WallJoint, (
   return joint;
 });
 
-// reference the length of something else
-interface LengthReference {
-  name: string;
-  getLength: () => Distance;
-}
-
-interface AngleReference {
-  name: string;
-  getAngle: () => Angle;
-}
-
 // cleanup broken geometry
 const Recycler = (ecs: EntityComponentSystem) => {
   for (const wall of ecs.getComponents(Wall)) {
@@ -1041,7 +1030,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
     const pos = joint.pos;
     const radius = Distance(5, 'screen');
     if (active) {
-      canvas.fillStyle = BLUE;
+      canvas.fillStyle = 'white';
       canvas.strokeStyle = PINK;
       canvas.lineWidth = 4;
     } else if (locked) {
