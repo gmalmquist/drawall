@@ -79,6 +79,8 @@ class App {
     App.ecs.registerSystem(RulerRenderer);
     App.ecs.registerSystem(MarkupRenderer);
 
+    App.ecs.registerSystem(DebugRenderer);
+
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
 

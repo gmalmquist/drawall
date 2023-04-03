@@ -575,26 +575,15 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
     const distance = edge.length.get('model');
 
     const constraint = ruler.entity.only(LengthConstraint);
-    const error = constraint?.enabled ? edge.length.get('model') - constraint.length : 0;
-    const dispLength = App.project.displayUnit.from(
-      App.project.modelUnit.newAmount(edge.length.get('model'))
-    );
-    const dispError = App.project.modelUnit.newAmount(error);
-    dispError.value = Math.round(dispError.value);
-    const hasError = Math.abs(dispError.value) > 0;
-    const decimals = App.project.displayDecimals;
-    const lengthText = App.project.displayUnit.format(dispLength, decimals);
-    const errorTextU = App.project.displayUnit.format(dispError, decimals);
-    const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
-    const distanceLabel = hasError ? `${lengthText} (${errorText})` : lengthText;
+    const label = constraint.label;
 
     App.canvas.text({
-      text: distanceLabel,
+      text: label.text,
       fill: rulerActive ? 'black' : 'grey',
       point: edge.midpoint,
       align: 'center',
       baseline: 'middle',
-      shadow: hasError ? PINK : undefined,
+      shadow: label.status !== 'satisfied' ? PINK : undefined,
     });
 
     const primaryColor = BLUE;

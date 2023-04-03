@@ -964,18 +964,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     if (!App.settings.showLengths.get()) continue;
 
     const constraint = wall.entity.only(LengthConstraint);
-    const error = constraint?.enabled ? length.get('model') - constraint.length : 0;
-    const decimals = App.project.displayDecimals;
-    const dispLength = App.project.displayUnit.from(
-      App.project.modelUnit.newAmount(length.get('model'))
-    );
-    const dispError = App.project.modelUnit.newAmount(error);
-    dispError.value = Math.round(dispError.value);
-    const hasError = Math.abs(dispError.value) > 0;
-    const lengthText = App.project.displayUnit.format(dispLength, decimals);
-    const errorTextU = App.project.displayUnit.format(dispError, decimals);
-    const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
-    const label = hasError ? `${lengthText} (${errorText})` : lengthText;
+    const label = constraint.label;
     const textOffset = Distance(App.settings.fontSize/2 + 10, 'screen');
     const textPosition = wall.midpoint.get().splus(textOffset.neg(), normal);
 
@@ -998,13 +987,19 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
       }
     }
 
+    const shadowMap: ConstraintColoring = {
+      'satisfied': undefined,
+      'over': PINK,
+      'under': BLUE,
+    };
+
     canvas.text({
       point: textPosition,
       axis: tangent,
       keepUpright: true,
-      text: label,
+      text: label.text,
       fill: 'black',
-      shadow: hasError ? (dispError.value > 0 ? PINK : BLUE) : undefined,
+      shadow: shadowMap[label.status],
       align: 'center',
       baseline: 'middle',
     });
@@ -1131,13 +1126,6 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
 
     const arcRadius = Distance(15, 'screen');
     const textDistance = arcRadius.map(r => r + 20);
-
-    const angle = Degrees(Math.round(unwrap(toDegrees(constraint.currentAngle.get('model')))));
-    const error = Spaces.getCalc('model', (current: Radians, target: Radians) => {
-      if (!constraint.enabled) return Degrees(0);
-      const delta = Radians(unwrap(current) - unwrap(target));
-      return Degrees(Math.round(unwrap(toDegrees(delta))));
-    }, constraint.currentAngle, constraint.targetAngle);
     
     const middle = right.rotate(constraint.currentAngle.scale(0.5)).to('model').unit();
 
@@ -1155,30 +1143,27 @@ const AngleRenderer = (ecs: EntityComponentSystem) => {
       );
     }
 
-    let label = formatDegrees(angle);
-    if (unwrap(error) > 0) {
-      label = `${label} (+${formatDegrees(error)})`;
-    } else if (unwrap(error) < 0) {
-      label = `${label} (${formatDegrees(error)})`;
-    }
-
     const color = (opaque: boolean) => {
       if (constraint.enabled) {
         return `hsla(0, 0%, 0%, ${opaque ? 1 : 0.75})`;
       }
       return `hsla(0, 0%, 50%, ${opaque ? 1 : 0.25})`;
     };
-    const highlight = error === Degrees(0) ? undefined
-        : error > Degrees(0) ? PINK
-        : BLUE;
+
+    const label = constraint.label;
+
+    const shadowMap: ConstraintColoring = {
+      over: PINK,
+      under: BLUE,
+    };
 
     canvas.text({
-      text: label,
+      text: label.text,
       align: 'center',
       baseline: 'middle',
       point: center.splus(textDistance, middle),
       fill: color(true),
-      shadow: highlight,
+      shadow: shadowMap[label.status],
     });
 
     const arc = (arcRadius: Distance, fill: string | null, stroke: string | null) => {

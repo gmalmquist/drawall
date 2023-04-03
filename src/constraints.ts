@@ -1,3 +1,23 @@
+type ConstraintStatus = 'satisfied' | 'under' | 'over';
+
+interface ConstraintLabel {
+  text: string;
+  status: ConstraintStatus;
+}
+
+interface ConstraintColoring {
+  satisfied?: string;
+  under?: string;
+  over?: string;
+}
+
+const signToErrorStatus = (s: Sign): ConstraintStatus => {
+  if (s === -1) return 'under';
+  if (s === 0) return 'satisfied';
+  if (s === 1) return 'over';
+  return impossible(s);
+};
+
 class Constraint extends Component {
   protected readonly enabledRef = Refs.of(false);
   protected readonly tensionRef = Refs.of(0.5);
@@ -143,6 +163,7 @@ class LengthConstraint extends Constraint {
   public lengthReference: LengthReference | null = null;
 
   private readonly node: PhysEdge;
+  private readonly _label: RoRef<ConstraintLabel>;
 
   constructor(entity: Entity, node?: PhysEdge) {
     super(entity);
@@ -195,6 +216,24 @@ class LengthConstraint extends Constraint {
         this.targetLength.set(value.length.get('model'));
       }
     });
+
+    this._label = Refs.memo(
+      Refs.reduceRo(
+        a => a,
+        App.project.modelUnitRef,
+        App.project.displayUnitRef,
+        this.enabledRef,
+        this.targetLength,
+        this.node.edgeRef.map(e => e.length.get('model')),
+      ),
+      (args: readonly [
+        Unit, Unit, boolean, number, number
+      ]) => LengthConstraint.generateLabel(...args),
+    );
+  }
+
+  get label() {
+    return this._label.get();
   }
 
   get length() {
@@ -236,6 +275,29 @@ class LengthConstraint extends Constraint {
       ],
     };
   }
+
+  private static generateLabel(
+    modelUnit: Unit,
+    displayUnit: Unit,
+    enabled: boolean,
+    targetLength: number,
+    currentLength: number,
+  ): ConstraintLabel {
+    const error = enabled ? currentLength - targetLength : 0;
+    const decimals = App.project.displayDecimals;
+    const dispLength = displayUnit.from(modelUnit.newAmount(currentLength));
+    const dispError = modelUnit.newAmount(error);
+    dispError.value = Math.round(dispError.value);
+    const hasError = Math.abs(dispError.value) > 0;
+    const lengthText = displayUnit.format(dispLength, decimals);
+    const errorTextU = displayUnit.format(dispError, decimals);
+    const errorText = dispError.value >= 0 ? `+${errorTextU}` : errorTextU;
+    const text = hasError ? `${lengthText} (${errorText})` : lengthText;
+    return {
+      text,
+      status: signToErrorStatus(Math.sign(dispError.value) as Sign),
+    };
+  }
 }
 
 ComponentFactories.register(LengthConstraint, (
@@ -259,8 +321,10 @@ interface Corner {
 class AngleConstraint extends Constraint {
   public readonly targetAngleRef = Refs.of(Angle(Radians(Math.PI/2), 'model'));
 
+  private _label: RoRef<ConstraintLabel>;
   private readonly currentAngleRef: RoRef<Angle>;
   public readonly corner: RoRef<Corner>;
+
 
   constructor(
     entity: Entity,
@@ -322,17 +386,28 @@ class AngleConstraint extends Constraint {
         min: 0,
         max: 1,
       });
-      Refs.polling({
-        poll: () => this.currentAngle,
-        stopWhen: () => this.entity.isDestroyed,
-        delayMillis: 250,
-      }).onChange(value => {
-        if (!this.enabled) {
-          this.targetAngle = value;
-        }
-      });
       return form;
     });
+
+    this.currentAngleRef.onChange(value => {
+      if (!this.enabled) {
+        this.targetAngle = value;
+      }
+    });
+
+    this._label = Refs.memo(
+      Refs.reduceRo(
+        a => a,
+        this.enabledRef,
+        this.currentAngleRef,
+        this.targetAngleRef,
+      ),
+      (args: readonly [boolean, Angle, Angle]) => AngleConstraint.generateLabel(...args),
+    );
+  }
+
+  public get label(): ConstraintLabel {
+    return this._label.get();
   }
 
   public getCorner(): Corner {
@@ -393,6 +468,31 @@ class AngleConstraint extends Constraint {
 
   onEnable() {
     this.targetAngle = this.currentAngle;
+  }
+
+  private static generateLabel(
+    enabled: boolean,
+    currentAngle: Angle,
+    targetAngle: Angle,
+  ): ConstraintLabel {
+    const angle = Degrees(Math.round(unwrap(toDegrees(currentAngle.get('model')))));
+    const error = Spaces.getCalc('model', (current: Radians, target: Radians) => {
+      if (!enabled) return Degrees(0);
+      const delta = Radians(unwrap(current) - unwrap(target));
+      return Degrees(Math.round(unwrap(toDegrees(delta))));
+    }, currentAngle, targetAngle);
+
+    let label = formatDegrees(angle);
+    if (unwrap(error) > 0) {
+      label = `${label} (+${formatDegrees(error)})`;
+    } else if (unwrap(error) < 0) {
+      label = `${label} (${formatDegrees(error)})`;
+    }
+
+    return {
+      text: label,
+      status: signToErrorStatus(Math.sign(unwrap(error)) as Sign),
+    };
   }
 }
 
