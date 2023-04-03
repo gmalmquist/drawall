@@ -86,7 +86,7 @@ class GUI {
           <h4>why did u do this</h4>
           <p>I made it 'cause <span style="text-decoration: line-through; font-size: 0.9em;">it was my project during a manic episode</span> I've moved into a lot of apartments, and I always end up spending wayyyy too much time figuring out how to arrange furniture in applications that are either totally overkill (Sketchup, Blender, OpenSCAD, FreeCAD), or lacking features I wanted. And none of them did a great job of supporting measurements that were a little bit fuzzy!
           <h4>is this rly free???</h4>
-          <p>This is always totally free to use if you're an individual, system, polycule, socialist co-op, etc that's trying to plan out your living space. It's also free if you're a student and this helps you with your education somehow. It is never free if you're a landlord or an agent thereof using this for advertising.
+          <p>yeah.
           <h4>ok but i feel like it <em>shouldn't</em> be free???</h4>
           <p>If you like this tool and wanna support me and my polycule, feel free to click on <a target="blank_" href="https://ko-fi.com/gwenverbsnouns">this ko-fi link</a>. I'll prolly spend it on getting bubble tea with my gf. My financial situation isn't dire, but I <em>am</em> burned out af and not working rn, which is p stressful at times.
           <h4>privacy?</h4>

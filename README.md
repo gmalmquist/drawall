@@ -1,9 +1,11 @@
 # drawall
-This is a CAD tool for making quick and easy mockups of floor plans.
+This is a CAD tool for making quick and easy mockups of floor plans. It's a static web app.
 
 It's designed to support fuzzy constraints given imprecise measurements—because we've all had the experience of taking a thousand measurements, then trying to draw it up and finding that the inches don't *quite* add up! Or trying to plan a move based off of vague dimensions provided by a landlord.
 
 ![screenshot of the drawall ui](docs/ui.png)
+
+This is a hobby project; I make no guarantees of future maintenance, functionality, or quality.
 
 ## constraints
 To support imprecise and possibly conflicting measurements, constraints are "soft," and are applied with kinematic spring forces. Currently supported are constraints on the angle of a corner, the length of a wall or ruler, and alignment to the X/Y axes. The strength of constraints can be controlled with tension sliders.
