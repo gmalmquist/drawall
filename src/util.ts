@@ -181,6 +181,13 @@ const Refs = {
     toString: () => `Ro(${f(ref.get())})`,
     map: <X>(g: (w: W) => X): RoRef<X> => Refs.mapRo(ref, (v: V): X => g(f(v))),
   }),
+  ofRo: <V>(value: V): RoRef<V> => ({
+    kind: 'ro',
+    get: () => value,
+    onChange: _ => {/* noop, can't change */},
+    toString: () => `Ro(${value})`,
+    map: f => Refs.ofRo(f(value)),
+  }),
   ro: <V>(ref: RefView<V, RefK>): RoRef<V> => {
     if (ref.kind === 'ro') {
       return ref as RoRef<V>;

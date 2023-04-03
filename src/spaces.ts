@@ -865,6 +865,7 @@ class Polygon extends SDF {
     return this._vertices.map(v => Distances.between(centroid, v))
       .reduce((a, b) => a.max(b), Distance(0, centroid.space))
   });
+  private readonly _area = Memo(() => Polygon.computeArea(this._vertices));
 
   constructor(
     vertices: Position[],
@@ -935,18 +936,7 @@ class Polygon extends SDF {
   }
 
   get area(): Distance {
-    const verts = this._vertices;
-    if (verts.length === 0) {
-      return Distance(0, 'model');
-    }
-    const space = verts[0]!.space;
-    let area = 0;
-    for (let i = 0; i < verts.length; i++) {
-      const a = verts[i].toVector().get(space);
-      const b = verts[(i + 1) % verts.length].toVector().get(space);
-      area += a.x * b.y - a.y * b.x;
-    }
-    return Distance(Math.abs(area / 2), space);
+    return this._area();
   }
 
   public override sdist(point: Position): Distance {
@@ -1035,6 +1025,20 @@ class Polygon extends SDF {
       }
     }
     return hits % 2 === 0 ? 'outside' : 'inside';
+  }
+
+  private static computeArea(verts: Position[]): Distance {
+    if (verts.length === 0) {
+      return Distance(0, 'model');
+    }
+    const space = verts[0]!.space;
+    let area = 0;
+    for (let i = 0; i < verts.length; i++) {
+      const a = verts[i].toVector().get(space);
+      const b = verts[(i + 1) % verts.length].toVector().get(space);
+      area += a.x * b.y - a.y * b.x;
+    }
+    return Distance(Math.abs(area / 2), space);
   }
 
   public static regular(

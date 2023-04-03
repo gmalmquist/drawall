@@ -1,4 +1,9 @@
-class PhysNode extends Component implements Solo, Surface {
+interface PointMass {
+  readonly position: RefView<Position, RefK>,
+  readonly addForce: (force: Vector) => void;
+}
+
+class PhysNode extends Component implements Solo, Surface, PointMass {
   readonly [SOLO] = true;
 
   private static readonly CMP_POINT = (a: Point, b: Point) => {
@@ -85,52 +90,96 @@ ComponentFactories.register(PhysNode, (
   return node;
 });
 
+class MemoEdge {
+  private readonly _vector = Memo((): Vector => Vectors.between(this.src, this.dst));
+  private readonly _tangent = Memo((): Vector => this.tangent.unit());
+  private readonly _normal = Memo((): Vector => this.tangent.r90());
+  private readonly _midpoint = Memo((): Position => this.lerp(0.5));
+  private readonly _length = Memo((): Distance => Distances.between(this.src, this.dst));
+
+  constructor(
+    public readonly src: Position,
+    public readonly dst: Position,
+  ) {
+  }
+
+  public get vector() { return this._vector(); }
+  public get tangent() { return this._tangent(); }
+  public get normal() { return this._normal(); }
+  public get midpoint() { return this._midpoint(); }
+  public get length() { return this._length(); }
+
+  public lerp(s: number): Position {
+    return this.src.lerp(s, this.dst);
+  }
+
+  public unlerp(p: Position): number {
+    const vector = this.vector;
+    return Vectors.between(this.src, p).dot(vector).div(vector.mag2());
+  }
+
+  public closestPoint(pos: Position): Position {
+    const s = this.unlerp(pos);
+    if (s <= 0) return this.src;
+    if (s >= 1) return this.dst;
+    return this.lerp(s);
+  }
+
+  public distanceFrom(pos: Position): Distance {
+    return Distances.between(pos, this.closestPoint(pos));
+  }
+}
+
 class PhysEdge extends Component implements Solo, Surface {
   public readonly [SOLO] = true;
 
+  public readonly edgeRef: RoRef<MemoEdge>;
+
   constructor(
     entity: Entity,
-    private readonly _src: () => EntityRef<PhysNode>,
-    private readonly _dst: () => EntityRef<PhysNode>,
+    public readonly srcRef: RoRef<PointMass>,
+    public readonly dstRef: RoRef<PointMass>,
   ) {
     super(entity);
+    this.edgeRef = Refs.memo(
+      Refs.reduceRo(a => a,
+        Refs.flatMapRo(srcRef, p => p.position), 
+        Refs.flatMapRo(dstRef, p => p.position), 
+      ),
+      ([a, b]) => new MemoEdge(a, b),
+    );
   }
 
-  get src(): EntityRef<PhysNode> {
-    return this._src();
+  get edge(): MemoEdge {
+    return this.edgeRef.get();
   }
 
-  get dst(): EntityRef<PhysNode> {
-    return this._dst();
-  }
-
-  get edge(): EntityRef<SpaceEdge> {
-    return this.src.and(this.dst).map(([src, dst]) => new SpaceEdge(src.pos, dst.pos));
+  addForces({src, dst}: { src: Vector, dst: Vector }) {
+    this.srcRef.get().addForce(src);
+    this.dstRef.get().addForce(dst);
   }
 
   addForce(force: Vector) {
-    this.src.and(this.dst).with(([a, b]) => {
-      a.addForce(force);
-      b.addForce(force);
+    this.addForces({
+      src: force,
+      dst: force,
     });
   }
 
   intersects(sdf: SDF): boolean {
     if (this.containedBy(sdf)) return true;
-    return this.src.and(this.dst).map(([a, b]) => {
-      // lazy sampling is good enough for now
-      const samples = 100;
-      for (let i = 0; i < samples; i++) {
-        if (sdf.contains(a.pos.lerp(1.0*i/samples, b.pos))) return true;
-      }
-      return false;
-    }).or(false);
+    const edge = this.edge;
+    // lazy sampling is good enough for now
+    const samples = 100;
+    for (let i = 0; i < samples; i++) {
+      if (sdf.contains(edge.lerp(1.0*i/samples))) return true;
+    }
+    return false;
   }
 
   containedBy(sdf: SDF): boolean {
-    return this.src.and(this.dst).map(([a, b]) => {
-      return a.containedBy(sdf) && b.containedBy(sdf);
-    }).or(false);
+    const edge = this.edge;
+    return sdf.contains(edge.src) && sdf.contains(edge.dst);
   }
 }
 

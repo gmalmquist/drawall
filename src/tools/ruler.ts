@@ -76,16 +76,20 @@ class RulerTool extends Tool {
 
         App.pane.style.cursor = this.cursor;
         const ruler = App.ecs.createEntity().add(Ruler);
-        ruler.start.with(s => s.dragTo(e.start));
-        ruler.end.with(s => s.dragTo(e.start.plus(e.delta)));
+        ruler.start.dragTo(e.start);
+        ruler.end.dragTo(e.start.plus(e.delta));
         return { ruler };
       },
       onUpdate: (e, { ruler, events }) => {
-        ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
+        if (ruler) {
+          ruler.end.dragTo(e.start.plus(e.delta));
+        }
         events?.handleDrag(e);
       },
       onEnd: (e, { ruler, events }) => {
-        ruler?.end?.with(s => s.dragTo(e.start.plus(e.delta)));
+        if (ruler) {
+          ruler.end.dragTo(e.start.plus(e.delta));
+        }
         events?.handleDrag(e);
         if (ruler) {
           App.ui.setSelection(ruler.entity.only(Handle));
@@ -102,8 +106,7 @@ class RulerTool extends Tool {
     }
 
     if (handle.entity.has(PhysEdge)) {
-      const edge = handle.entity.only(PhysEdge).edge.unwrap();
-      if (edge === null) return;
+      const edge = handle.entity.only(PhysEdge).edge;
       const point = edge.closestPoint(App.ui.mousePos);
       const flip = edge.normal.dot(Vectors.between(point, App.ui.mousePos)).sign;
       const offsetX = edge.tangent.to('screen').unit()
@@ -145,36 +148,42 @@ type RulerAttachment = RulerAttachmentCanvas | RulerAttachmentVertex | RulerAtta
 
 interface RulerAttachmentCanvas {
   kind: 'canvas';
-  position: EntityRef<PhysNode>;
+  node: PhysNode;
 }
 
 interface RulerAttachmentVertex {
   kind: 'vertex';
-  position: EntityRef<PhysNode>;
+  node: PhysNode;
 }
 
 interface RulerAttachmentEdge {
   kind: 'edge',
-  edge: EntityRef<PhysEdge>;
+  node: PhysEdge;
   at?: number;
 }
 
-class RulerEndpoint extends PhysNode implements Solo {
+class RulerEndpoint extends Component implements PointMass, Solo {
   public readonly [SOLO] = true;
 
-  private _attachment: RulerAttachment;
+  private _attachment: Ref<RulerAttachment>;
+  public readonly position: RoRef<Position>;
 
   constructor(
     entity: Entity,
-    private readonly ruler: EntityRef<Ruler>,
-    private readonly twin: EntityRef<RulerEndpoint>,
+    private readonly ruler: Ruler,
   ) {
     super(entity);
-    this._attachment = {
+
+    this._attachment = Refs.of<RulerAttachment>({
       kind: 'canvas',
-      position: entity.ecs.createEntity().add(PhysNode).ref(),
-    };
-    
+      node: entity.ecs.createEntity().add(PhysNode),
+    }, areEq);
+
+    this.position = Refs.flatMapRo(Refs.memo(
+      this._attachment,
+      attach => this.getAttachmentPosition(attach)
+    ), x => x);
+
     const handle = entity.add(Handle, {
       priority: 2,
       visible: Ruler.areRulersVisible,
@@ -182,30 +191,28 @@ class RulerEndpoint extends PhysNode implements Solo {
       setPos: p => this.dragTo(p),
       distance: p => {
         const attach = this.attachment;
-        const position = this.posRef.unwrap();
+        const position = this.position.get();
         if (position === null) return Distance(Number.POSITIVE_INFINITY, 'screen');
         if (attach.kind === 'vertex') {
           return Vectors.between(p, position).mag()
             .minus(this.handleRingRadius).abs();
         }
         if (attach.kind === 'edge') {
-          return attach.edge.flatMap(e => e.edge).map(edge => {
-            const w = this.handlebarWidth;
-            const offset = this.handlebarOffset;
-            return new SpaceEdge(
-              position.splus(w.scale(0.5), edge.tangent).plus(offset),
-              position.splus(w.scale(-0.5), edge.tangent).plus(offset),
-            ).distance(p);
-          }).or(Vectors.between(p, position).mag());
+          const edge = attach.node.edge;
+          const w = this.handlebarWidth;
+          const offset = this.handlebarOffset;
+          return new SpaceEdge(
+            position.splus(w.scale(0.5), edge.tangent).plus(offset),
+            position.splus(w.scale(-0.5), edge.tangent).plus(offset),
+          ).distance(p);
         }
         if (attach.kind === 'canvas') {
-          return this.ruler.flatMap(r => r.edge).map(edge => {
-            const w = this.handlebarWidth;
-            return new SpaceEdge(
-              position.splus(w.scale(0.5), edge.normal),
-              position.splus(w.scale(-0.5), edge.normal)
-            ).distance(p);
-          }).or(Vectors.between(p, position).mag());
+          const edge = this.ruler.edge;
+          const w = this.handlebarWidth;
+          return new SpaceEdge(
+            position.splus(w.scale(0.5), edge.normal),
+            position.splus(w.scale(-0.5), edge.normal)
+          ).distance(p);
         }
         return impossible(attach);
       },
@@ -216,74 +223,45 @@ class RulerEndpoint extends PhysNode implements Solo {
         set: p => this.dragTo(p),
       }),
       onDelete: () => {
-        this.ruler.map(x => x.entity).with(x => x.destroy());
-        this.twin.map(x => x.entity).with(x => x.destroy());
+        this.ruler.entity.destroy();
+        this.twin.entity.destroy();
         this.entity.destroy();
         return 'kill';
       },
     });
 
     handle.events.onMouse('down', e => {
-      this.ruler.with(r => {
-        const h = r.entity.only(Handle);
-        h.selected = true;
-      });
+      this.ruler.entity.only(Handle).selected = true;
     });
 
     handle.events.onMouse('move', e => {
-      this.ruler.with(r => {
-        const h = r.entity.only(Handle);
-        h.hovered = true;
-      });
+      this.ruler.entity.only(Handle).hovered = true;
     });
   }
 
-  override addForce(force: Vector) {
+  private get twin(): RulerEndpoint {
+    return this.ruler.start === this ? this.ruler.end : this.ruler.start;
+  }
+
+  get pos(): Position {
+    return this.position.get();
+  }
+
+  addForce(force: Vector) {
     const attach = this.attachment;
-    if (attach.kind === 'canvas') {
-      attach.position.with(p => p.addForce(force));
+    if (attach.kind !== 'canvas' && this.twin.attachment.kind === 'canvas') {
+      this.twin.addForce(force.neg());
       return;
     }
-    if (attach.kind === 'vertex') {
-      if (this.twin.map(twin => twin.attachment.kind === 'canvas').or(false)) {
-        this.twin.with(twin => twin.addForce(force.neg()));
-        return;
-      }
-      attach.position.with(p => p.addForce(force));
-      return;
-    }
-    if (attach.kind === 'edge') {
-      if (this.twin.map(twin => twin.attachment.kind === 'canvas').or(false)) {
-        this.twin.with(twin => twin.addForce(force.neg()));
-        return;
-      }
-      attach.edge.with(e => e.addForce(force));
-      return;
-    }
-    return impossible(attach);
-  }
-
-  override set pos(p: Position) {
-  }
-
-  override get pos(): Position {
-    const pos = this.posRef.unwrap();
-    if (pos === null) {
-      return Position(Point.ZERO, 'model');
-    }
-    return pos;
+    attach.node.addForce(force);
   }
 
   get handlebarOffset(): Vector {
     if (this.attachment.kind !== 'edge') {
       return Vector(Vec.ZERO, 'screen');
     }
-    const rulerMidpoint = this.ruler.flatMap(r => r.edge).map(e => e.midpoint).unwrap();
-    if (rulerMidpoint === null) {
-      return Vector(Vec.ZERO, 'screen');
-    }
-
-    const other = this.attachment.edge.flatMap(e => e.edge).unwrap()!;
+    const rulerMidpoint = this.ruler.edge.midpoint;
+    const other = this.attachment.node.edge;
     const flip = other.normal.dot(Vectors.between(this.pos, rulerMidpoint)).sign;
     return other.normal.scale(flip).scale(Distance(7, 'screen'));
   }
@@ -293,14 +271,12 @@ class RulerEndpoint extends PhysNode implements Solo {
   }
 
   get handlebarWidth(): Distance {
-    const edge = this.ruler.flatMap(ruler => ruler.edge).unwrap();
-    if (edge === null) return Distance(0, 'screen');
-
+    const edge = this.ruler.edge;
     const handlebarWidth = Distance(100, 'screen').to('model')
       .min(edge.length.scale(0.3));
 
     if (this.attachment.kind === 'edge') {
-      const other = this.attachment.edge.flatMap(e => e.edge).unwrap();
+      const other = this.attachment.node.edge;
       if (other !== null) {
         return handlebarWidth.min(other.length.scale(0.75));
       }
@@ -320,10 +296,11 @@ class RulerEndpoint extends PhysNode implements Solo {
       pos, 
       handle => filter(handle) && handle.entity.has(PhysNode),
     )?.entity?.only(PhysNode);
+
     if (vertex) {
       this.attachment = {
         kind: 'vertex',
-        position: vertex.ref(),
+        node: vertex,
       };
       return;
     }
@@ -332,28 +309,24 @@ class RulerEndpoint extends PhysNode implements Solo {
       pos, 
       handle => filter(handle) && handle.entity.has(PhysEdge),
     )?.entity?.only(PhysEdge);
+
     if (edge) {
-      if (this.twin.map(t => t.isAnchored).or(false)) {
-        this.attachment = { kind: 'edge', edge: edge.ref() };
+      const node = edge;
+      if (this.twin.isAnchored) {
+        this.attachment = { kind: 'edge', node };
         return;
       }
       this.attachment = {
         kind: 'edge',
-        edge: edge.ref(),
-        at: edge.edge.map(edge => {
-          const s = edge.unlerp(edge.closestPoint(pos));
-          App.canvas.lineWidth = 1;
-          App.canvas.strokeStyle = 'red';
-          App.canvas.strokeLine(pos, edge.lerp(s));
-          return s;
-        }).or(undefined),
+        node,
+        at: clamp01(node.edge.unlerp(pos)),
       };
       return;
     }
 
     const existing = this.attachment;
     if (existing.kind === 'canvas') {
-      existing.position.with(p => p.pos = pos);
+      existing.node.pos = pos;
       return;
     }
 
@@ -361,65 +334,49 @@ class RulerEndpoint extends PhysNode implements Solo {
     node.pos = pos;
     this.attachment = {
       kind: 'canvas',
-      position: node.ref(),
+      node,
     };
   }
 
   isAttachedTo(e: Entity): boolean {
-    const attach = this.attachment;
-    if (attach.kind === 'canvas' || attach.kind === 'vertex') {
-      return e === attach.position.map(v => v.entity).unwrap();
-    }
-    if (attach.kind === 'edge') {
-      return e === attach.edge.map(e => e.entity).unwrap();
-    }
-    return impossible(attach);
+    return e == this.attachment.node.entity;
   }
 
-  get posRef(): EntityRef<Position> {
-    return this.ref().flatMap((): EntityRef<Position> => {
-      const attach = this.attachment;
-      if (attach.kind === 'canvas' || attach.kind === 'vertex') {
-        return attach.position.map(p => p.pos);
-      }
-      if (attach.kind === 'edge') {
-        return attach.edge.flatMap(e => e.edge).map((edge): Position => {
-          if (typeof attach.at !== 'undefined') {
-            return edge.lerp(attach.at);
-          }
-          const twin = this.twin.unwrap();
-          if (twin === null) {
+  private getAttachmentPosition(attach: RulerAttachment): RoRef<Position> {
+    if (attach.kind === 'canvas' || attach.kind === 'vertex') {
+      return Refs.ro(attach.node.position);
+    }
+    if (attach.kind === 'edge') {
+      return attach.node.edgeRef.map(edge => {
+        if (typeof attach.at !== 'undefined') {
+          return edge.lerp(attach.at);
+        }
+        const twin = this.twin;
+        if (twin.attachment.kind === 'edge') {
+          const twinEdge = twin.attachment.node.edge;
+          if (typeof twin.attachment.at === 'undefined'
+            || !twin.attachment.node.entity.isAlive) {
+            // give up and use our midpoint.
             return edge.midpoint;
           }
-          if (twin.attachment.kind === 'edge') {
-            const twinEdge = twin.attachment.edge.flatMap(e => e.edge).unwrap();
-            if (twinEdge === null) {
-              return edge.midpoint;
-            }
-            if (typeof twin.attachment.at === 'undefined' || !twin.attachment.edge.isAlive) {
-              // this really shouldn't happen, but if it does,
-              // give up and use our midpoint.
-              return edge.midpoint;
-            }
-            //const ray = new SpaceRay(twinEdge.lerp(twin.attachment.at), twinEdge.normal);
-            //const hit = ray.intersection(edge);
-            //if (hit === null) return edge.midpoint;
-            //const at = clamp01(edge.unlerp(hit.point));
-            //return edge.lerp(at);
-            return edge.closestPoint(twinEdge.lerp(twin.attachment.at));
+          //const ray = new SpaceRay(twinEdge.lerp(twin.attachment.at), twinEdge.normal);
+          //const hit = ray.intersection(edge);
+          //if (hit === null) return edge.midpoint;
+          //const at = clamp01(edge.unlerp(hit.point));
+          //return edge.lerp(at);
+          return edge.closestPoint(twinEdge.lerp(twin.attachment.at));
+        }
+        if (twin.attachment.kind === 'vertex' || twin.attachment.kind === 'canvas') {
+          const position = twin.attachment.node.pos;
+          if (position !== null) {
+            return edge.closestPoint(position);
           }
-          if (twin.attachment.kind === 'vertex' || twin.attachment.kind === 'canvas') {
-            const position = twin.attachment.position.map(p => p.pos).unwrap();
-            if (position !== null) {
-              return edge.closestPoint(position);
-            }
-            return position !== null ? position : edge.midpoint; 
-          }
-          return impossible(twin.attachment);
-        });
-      }
-      return impossible(attach);
-    });
+          return position !== null ? position : edge.midpoint; 
+        }
+        return impossible(twin.attachment);
+      });
+    }
+    return impossible(attach);
   }
 
   get isAnchored(): boolean {
@@ -437,24 +394,24 @@ class RulerEndpoint extends PhysNode implements Solo {
   }
 
   get attachment(): RulerAttachment {
-    return this._attachment;
+    return this._attachment.get();
   }
 
   set attachment(attach: RulerAttachment) {
-    if (this._attachment === attach) {
+    if (this.attachment === attach) {
       return;
     }
-    const prev = this._attachment;
-    this._attachment = attach;
+    const prev = this.attachment;
+    this._attachment.set(attach);
 
     if (prev.kind === 'canvas') {
-      prev.position.with(node => node.entity.destroy());
+      prev.node.entity.destroy();
     }
   }
 
   tearDown() {
-    if (this._attachment.kind === 'canvas') {
-      this._attachment.position.with(node => node.entity.destroy());
+    if (this.attachment.kind === 'canvas') {
+      this.attachment.node.entity.destroy();
     }
   }
 }
@@ -467,61 +424,37 @@ class Ruler extends Component implements Solo {
   };
 
   public readonly [SOLO] = true;
-  public readonly start: EntityRef<RulerEndpoint>;
-  public readonly end: EntityRef<RulerEndpoint>;
-  public readonly phys: EntityRef<PhysEdge>;
+  public readonly start: RulerEndpoint;
+  public readonly end: RulerEndpoint;
+  public readonly phys: PhysEdge;
 
   constructor(entity: Entity) {
     super(entity);
 
-    this.start = entity.ecs.createEntity().add(
-      RulerEndpoint,
-      this.ref(),
-      this.ref().flatMap(r => r.end),
-    ).ref();
+    this.start = entity.ecs.createEntity().add(RulerEndpoint, this);
+    this.end = entity.ecs.createEntity().add(RulerEndpoint, this);
+    this.phys = entity.add(PhysEdge, Refs.ofRo(this.start), Refs.ofRo(this.end));
 
-    this.end = entity.ecs.createEntity().add(
-      RulerEndpoint,
-      this.ref(),
-      this.ref().flatMap(r => r.start),
-    ).ref();
-
-    this.phys = entity.add(PhysEdge, () => this.start, () => this.end).ref();
-
-    entity.add(
-      LengthConstraint,
-      () => this.start.unwrap()!,
-      () => this.end.unwrap()!,
-    );
+    entity.add(LengthConstraint);
 
     const handle = entity.add(Handle, {
-      getPos: () => this.phys.flatMap(e => e.edge)
-        .map(e => e.midpoint)
-        .or(Position(Point.ZERO, 'screen')),
+      getPos: () => this.phys.edge.midpoint,
       setPos: p => { /* todo */ },
-      distance: p => this.phys.flatMap(e => e.edge)
-        .map(e => e.distance(p))
-        .or(Distance(Number.POSITIVE_INFINITY, 'screen')),
+      distance: p => this.phys.edge.distanceFrom(p),
       visible: Ruler.areRulersVisible,
       drag: () => ({
         kind: 'group',
         aggregate: 'all',
         name: this.name,
-        items: [ this.start, this.end ]
-          .map(ref => ref.unwrap())
-          .filter(r => r !== null)
-          .map(e => e!.entity.only(Handle).getDragItem()),
+        items: [ this.start, this.end ].map(e => e.entity.only(Handle).getDragItem()),
       }),
     });
 
     handle.events.addDragListener({
       onStart: e => {
-        const edge = this.phys.flatMap(phys => phys.edge).unwrap();
-        if (edge === null) {
-          return null;
-        }
-        const start = this.start.unwrap()!;
-        const end = this.end.unwrap()!;
+        const edge = this.phys.edge;
+        const start = this.start;
+        const end = this.end;
         return {
           start,
           end,
@@ -539,8 +472,8 @@ class Ruler extends Component implements Solo {
     });
   }
 
-  public get edge(): EntityRef<SpaceEdge> {
-    return this.phys.flatMap(e => e.edge);
+  public get edge(): MemoEdge {
+    return this.phys.edge;
   }
 
   override toJson(): SavedComponent {
@@ -549,42 +482,33 @@ class Ruler extends Component implements Solo {
       if (attach.kind === 'canvas') {
         return {
           kind: attach.kind,
-          position: MoreJson.position.to(
-            attach.position.map(p => p.pos).or(Positions.zero('model'))
-          ),
+          node: MoreJson.position.to(attach.node.pos),
         };
       }
       if (attach.kind === 'vertex') {
         return {
           kind: attach.kind,
-          position: attach.position.map(p => p.entity.id).or(-1),
+          position: attach.node.entity.id,
         };
       }
       if (attach.kind === 'edge') {
         return {
           kind: attach.kind,
-          edge: attach.edge.map(e => e.entity.id).or(-1),
+          edge: attach.node.entity.id,
           at: typeof attach.at !== 'undefined' ? attach.at : false,
         };
       }
       return impossible(attach);
     };
-    const lc = this.entity.only(LengthConstraint);
     return {
       factory: this.constructor.name,
-      arguments: [
-        this.start.map(attach).or(false),
-        this.end.map(attach).or(false),
-        lc.enabled 
-          ? MoreJson.distance.to(Distance(lc.length, 'model'))
-          : false,
-      ],
+      arguments: [attach(this.start), attach(this.end)],
     };
   }
 
   tearDown() {
-    this.start.with(x => x.entity.destroy());
-    this.end.with(x => x.entity.destroy());
+    this.start.entity.destroy();
+    this.end.entity.destroy();
   }
 }
 
@@ -592,7 +516,6 @@ ComponentFactories.register(Ruler, (
   entity: Entity,
   startJson: JsonObject,
   endJson: JsonObject,
-  length: JsonObject | false,
 ) => {
   const ruler = entity.getOrCreate(Ruler);
 
@@ -611,7 +534,7 @@ ComponentFactories.register(Ruler, (
     }
     if (kind === 'edge') {
       const edge = entity.ecs.getEntity(a.edge as Eid)
-        ?.maybe(PhysEdge)?.edge?.unwrap();
+        ?.maybe(PhysEdge)?.edge;
       if (!edge || edge.length.get('model') === 0) return false;
       if (a.at === false) {
         end.dragTo(edge.midpoint);
@@ -623,8 +546,8 @@ ComponentFactories.register(Ruler, (
     throw new Error(`unrecognized ruler endpoint kind: '${kind}'`);
   };
 
-  const start = ruler.start.unwrap();
-  const end = ruler.end.unwrap();
+  const start = ruler.start;
+  const end = ruler.end;
 
   if (start !== null && !load(start, startJson)) {
     return 'not ready';
@@ -634,12 +557,6 @@ ComponentFactories.register(Ruler, (
     return 'not ready';
   }
 
-  const lc = entity.only(LengthConstraint);
-  if (length !== false) {
-    lc.length = MoreJson.distance.from(length).get('model');
-  }
-  lc.enabled = length !== false; 
-
   return ruler;
 });
 
@@ -647,15 +564,14 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
   if (!Ruler.areRulersVisible()) return;
 
   for (const ruler of ecs.getComponents(Ruler)) {
-    const edge = ruler.edge.unwrap();
-    if (edge === null) {
+    if (!ruler.start.attachment.node.entity.isAlive
+      || !ruler.end.attachment.node.entity.isAlive) {
+      ruler.entity.destroy();
       continue;
     }
+    const edge = ruler.edge;
   
-    const rulerActive = ruler.entity.ref(r => r.only(Handle))
-      .map(h => h.isActive)
-      .or(false);
-
+    const rulerActive = ruler.entity.maybe(Handle)?.isActive;
     const distance = edge.length.get('model');
 
     const constraint = ruler.entity.only(LengthConstraint);
@@ -706,11 +622,7 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.strokeStyle = endpointActive ? primaryColor : 'gray';
       const handlebarWidth = endpoint.handlebarWidth;
 
-      const position = endpoint.posRef.unwrap();
-      if (position === null) {
-        return;
-      }
-
+      const position = endpoint.position.get();
       const attachment = endpoint.attachment;
 
       if (attachment.kind === 'canvas') {
@@ -722,8 +634,7 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
       }
 
       if (attachment.kind === 'edge') {
-        const other = attachment.edge.flatMap(e => e.edge).unwrap();
-        if (other === null) return;
+        const other = attachment.node.edge;
 
         const inward = other.normal.dot(Vectors.between(position, edge.midpoint)).sign < 0
           ? other.normal.neg() : other.normal;
@@ -751,8 +662,8 @@ const RulerRenderer = (ecs: EntityComponentSystem) => {
       return impossible(attachment);
     };
 
-    ruler.start.with(renderEndpoint);
-    ruler.end.with(renderEndpoint);
+    renderEndpoint(ruler.start);
+    renderEndpoint(ruler.end);
     App.canvas.setLineDash([]);
   }
 };

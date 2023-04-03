@@ -8,10 +8,12 @@ class Room extends Component implements Solo {
   private _triangulation: Array<Triangle> = [];
   private _triangulatedAt: number = 0;
   private _triangulatedWith: Array<Position> = [];
+  private readonly _polygon: () => RoRef<Polygon> | null;
   private readonly relativeLabelPos = Refs.of(
     Vectors.zero('model'),
     (a, b) => Distances.between(a.toPosition(), b.toPosition()).get('model') < 0.001,
   );
+  private readonly _inverted: () => boolean;
 
   constructor(entity: Entity) {
     super(entity);
@@ -54,6 +56,22 @@ class Room extends Component implements Solo {
       labelInput.setValue(this.name);
       popup.show();
     });
+
+    this._polygon = Memo(() => {
+      const loop = this.loop;
+      if (loop.length < 3) return null;
+      return Refs.memo(
+        Refs.reduceRo(a => a, ...loop.map(w => Refs.flatMapRo(w.srcRef, s => s.position))),
+        (points: Position[]) => {
+          return new Polygon(points);
+        },
+      );
+    }, () => this.loop);
+
+    this._inverted = Memo(
+      () => this.calcInverted(this.polygon),
+      () => [this.polygon],
+    );
   }
 
   get labelPos(): Position {
@@ -80,7 +98,10 @@ class Room extends Component implements Solo {
   }
 
   get isInverted(): boolean {
-    const poly = this.polygon;
+    return this._inverted();
+  }
+
+  private calcInverted(poly: Polygon | null): boolean {
     if (poly === null || poly.isDegenerate) return false;
     const vertices = poly.vertices;
     let inversity = 0;
@@ -128,10 +149,6 @@ class Room extends Component implements Solo {
     const poly = this.polygon;
     if (!poly) return Distance(0, 'model');
     return poly.area;
-    //return this.triangulation.map(t => t.area).reduce(
-    //  (a, b) => a.plus(b),
-    //  Distance(0, 'model'),
-    //);
   }
 
   get triangulation(): Triangle[] {
@@ -140,12 +157,9 @@ class Room extends Component implements Solo {
   }
 
   get polygon(): Polygon | null {
-    for (const wall of this._walls) {
-      return new Polygon(
-        wall.getConnectedLoop().map(w => w.src.pos)
-      );
-    }
-    return null;
+    const poly = this._polygon();
+    if (poly === null) return null;
+    return poly.get();
   }
 
   get loop(): Wall[] {
@@ -157,16 +171,7 @@ class Room extends Component implements Solo {
   }
 
   get centroid(): Position {
-    const zerop = Position(Point.ZERO, 'model');
-    const loop = this.loop;
-    if (loop.length === 0) {
-      return zerop;
-    }
-    const zerov = Vector(Vec.ZERO, 'model');
-    const sum = this.loop.map(w => w.src.pos)
-      .map(w => Vectors.between(zerop, w))
-      .reduce((a, b) => a.plus(b), zerov)!;
-    return zerop.splus(1.0 / loop.length, sum);
+    return this.polygon?.centroid || Position(Point.ZERO, 'model');
   }
 
   private checkTriangulation() {
@@ -255,8 +260,8 @@ class Wall extends Component implements Solo {
 
     entity.add(
       PhysEdge,
-      () => this.src.ref().map(x => x.entity.only(PhysNode)),
-      () => this.dst.ref().map(x => x.entity.only(PhysNode)),
+      Refs.memo(this.srcRef, j => j.entity.only(PhysNode)),
+      Refs.memo(this.dstRef, j => j.entity.only(PhysNode)),
     );
 
     entity.add(Surfaced, () => entity.ref(e => e.only(PhysEdge)));
@@ -367,16 +372,8 @@ class Wall extends Component implements Solo {
       },
     });
 
-    entity.add(LengthConstraint,
-      () => this.src.entity.only(PhysNode),
-      () => this.dst.entity.only(PhysNode),
-    );
-
-    entity.add(MinLengthConstraint,
-      () => this.src.entity.only(PhysNode),
-      () => this.dst.entity.only(PhysNode),
-    );
-
+    entity.add(LengthConstraint);
+    entity.add(MinLengthConstraint);
     entity.add(AxisConstraint);
   }
 
@@ -514,9 +511,6 @@ class Wall extends Component implements Solo {
     }
 
     const rest = this.entity.ecs.createEntity().add(Wall);
-    if (this.room !== null) {
-      this.room.addWall(rest);
-    }
     rest.src.pos = edge.lerp(s);
     rest.dst = this.dst;
     this.dst = rest.src;
@@ -534,6 +528,10 @@ class Wall extends Component implements Solo {
 
     length1.entity.only(AxisConstraint).enabled = false;
 
+    if (this.room !== null) {
+      this.room.addWall(rest);
+    }
+
     return [this, rest];
   }
 
@@ -543,7 +541,7 @@ class Wall extends Component implements Solo {
     return {
       factory: this.constructor.name,
       arguments: [
-        lc.enabled ? MoreJson.distance.to(Distance(lc.length, 'model')) : false,
+        false,
         ac.enabled ? ac.axisToggle.get() : 0,
       ],
     };
@@ -558,17 +556,11 @@ class Wall extends Component implements Solo {
 
 ComponentFactories.register(Wall, (
   entity: Entity,
-  length: JsonObject | false,
+  ignore: false,
   axis: boolean | 0,
 ) => {
   const wall = entity.add(Wall);
-  const lc = wall.entity.only(LengthConstraint);
   const ac = wall.entity.only(AxisConstraint);
-
-  if (length !== false) {
-    lc.enabled = true;
-    lc.length = MoreJson.distance.from(length).get('model');
-  }
 
   if (axis !== 0) {
     ac.enabled = true;
@@ -840,6 +832,11 @@ const Recycler = (ecs: EntityComponentSystem) => {
   for (const wall of ecs.getComponents(Wall)) {
     if (wall.dst.entity.isDestroyed || wall.src.entity.isDestroyed) {
       wall.entity.destroy();
+      continue;
+    }
+    if (!wall.src.incoming || !wall.src.outgoing) {
+      wall.entity.destroy();
+      continue;
     }
   }
   for (const joint of ecs.getComponents(WallJoint)) {
@@ -861,21 +858,22 @@ const AxisConstraintRenderer = (ecs: EntityComponentSystem) => {
   for (const constraint of constraints) {
     if (!constraint.enabled) continue;
 
-    const phys = constraint.entity.only(PhysEdge);
+    const edge = constraint.entity.maybe(PhysEdge)?.edge;
+    if (!edge) {
+      continue;
+    }
 
-    phys.edge.with(edge => {
-      const center = edge.midpoint;
-      const axis = constraint.axis.get().to(center.space).unit();
-      const scale = 1.5;
-      const left = center.splus(edge.length.scale(scale/2), axis);
-      const right = center.splus(edge.length.scale(scale/2), axis.neg());
+    const center = edge.midpoint;
+    const axis = constraint.axis.get().to(center.space).unit();
+    const scale = 1.5;
+    const left = center.splus(edge.length.scale(scale/2), axis);
+    const right = center.splus(edge.length.scale(scale/2), axis.neg());
 
-      canvas.strokeStyle = BLUE;
-      canvas.lineWidth = 1;
-      canvas.setLineDash([8, 4]);
-      canvas.strokeLine(left, right);
-      canvas.setLineDash([]);
-    });
+    canvas.strokeStyle = BLUE;
+    canvas.lineWidth = 1;
+    canvas.setLineDash([8, 4]);
+    canvas.strokeLine(left, right);
+    canvas.setLineDash([]);
   }
 };
 

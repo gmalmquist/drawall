@@ -106,43 +106,35 @@ class FixedConstraint extends Constraint {
 }
 
 class MinLengthConstraint extends Constraint {
-  constructor(
-    entity: Entity,
-    private readonly getSrc: () => PhysNode,
-    private readonly getDst: () => PhysNode,
-  ) {
+  private readonly node: PhysEdge;
+
+  constructor(entity: Entity) {
     super(entity);
     this.enabled = true;
     this.tension = 1;
+    this.node = entity.only(PhysEdge);
   }
 
   private get springConstant(): number {
     return this.tension * 3;
   }
 
-  private getEdge(): Edge {
-    return Spaces.getCalc(
-      'model',
-      (a: Point, b: Point) => new Edge(a, b),
-      this.getSrc().pos, this.getDst().pos,
-    );
-  }
-
   enforce() {
-    if (this.entity.get(LengthConstraint).some(c => c.enabled)) {
+    if (this.entity.maybe(LengthConstraint)?.enabled) {
       // only apply this constraint in the absense of another length constraint.
       return;
     }
     const length = App.project.modelUnit.from({ value: 3, unit: 'inch' }).value;
-    const edge = this.getEdge();
-    if (edge === null) return;
-    const delta = length - edge.vector().mag();
-    if (delta < 0) {
+    const edge = this.node.edge;
+    const delta = Distance(length, 'model').minus(edge.length);
+    if (delta.sign < 0) {
       return;
     }
-    const correction = edge.vector().unit().scale(delta/2 * this.springConstant);
-    this.getSrc().addForce(Vector(correction.neg(), 'model'));
-    this.getDst().addForce(Vector(correction, 'model'));
+    const correction = edge.tangent.scale(delta.scale(this.springConstant/2));
+    this.node.addForces({
+      src: correction.neg(),
+      dst: correction,
+    });
   }
 }
 
@@ -150,13 +142,13 @@ class LengthConstraint extends Constraint {
   public readonly targetLength = Refs.of(0);
   public lengthReference: LengthReference | null = null;
 
-  constructor(
-    entity: Entity,
-    private readonly getSrc: () => PhysNode,
-    private readonly getDst: () => PhysNode,
-  ) {
+  private readonly node: PhysEdge;
+
+  constructor(entity: Entity, node?: PhysEdge) {
     super(entity);
     this.enabled = false;
+
+    this.node = node || this.entity.only(PhysEdge);
 
     this.targetLength.onChange(_ => {
       if (this.enabled) App.project.requestSave('target length changed');
@@ -198,13 +190,9 @@ class LengthConstraint extends Constraint {
       return form;
     });
 
-    Refs.polling({
-      poll: () => this.getEdge().length,
-      stopWhen: () => this.entity.isDestroyed,
-      delayMillis: 250,
-    }).onChange(value => {
+    this.node.edgeRef.onChange(value => {
       if (!this.enabled) {
-        this.targetLength.set(value);
+        this.targetLength.set(value.length.get('model'));
       }
     });
   }
@@ -221,34 +209,46 @@ class LengthConstraint extends Constraint {
     return this.tension * 3;
   }
 
-  private getEdge(): Edge {
-    return Spaces.getCalc(
-      'model',
-      (a: Point, b: Point) => new Edge(a, b),
-      this.getSrc().pos, this.getDst().pos,
-    );
-  }
-
   enforce() {
     if (this.lengthReference !== null) {
       this.length = this.lengthReference.getLength().get('model');
     }
 
-    const edge = this.getEdge();
-    if (edge === null) return;
-    const delta = this.length - edge.vector().mag();
-    const correction = edge.vector().unit().scale(delta/2 * this.springConstant);
-    this.getSrc().addForce(Vector(correction.neg(), 'model'));
-    this.getDst().addForce(Vector(correction, 'model'));
+    const node = this.node;
+    const delta = Distance(this.length, 'model').minus(node.edge.length);
+    const correction = node.edge.tangent.scale(delta.scale(this.springConstant/2));
+    node.addForces({
+      src: correction.neg(),
+      dst: correction,
+    });
   }
 
   onEnable() {
-    const mag = this.getEdge()?.vector()?.mag();
-    if (typeof mag !== 'undefined') {
-      this.length = mag;
-    }
+    this.length = this.node.edge.length.get('model');
+  }
+
+  override toJson(): SavedComponent {
+    return {
+      factory: this.constructor.name,
+      arguments: [
+        this.enabled,
+        MoreJson.distance.to(Distance(this.length, 'model'))
+      ],
+    };
   }
 }
+
+ComponentFactories.register(LengthConstraint, (
+  entity: Entity,
+  enabled: boolean,
+  length: JsonObject,
+) => {
+  if (!entity.has(PhysEdge)) return 'not ready';
+  const constraint = entity.getOrCreate(LengthConstraint);
+  constraint.enabled = enabled;
+  constraint.length = MoreJson.distance.from(length).get('model');
+  return constraint;
+});
 
 interface Corner {
   center: Position;
@@ -448,32 +448,21 @@ class AxisConstraint extends Constraint {
 
   onEnable() {
     for (const phys of this.entity.get(PhysEdge)) {
-      const edge = phys.edge.unwrap();
-      if (edge === null) continue;
-      const tangent = edge.tangent;
+      const tangent = phys.edge.tangent;
       const x = Vector(Axis.X, 'screen').to(tangent.space);
       const y = Vector(Axis.Y, 'screen').to(tangent.space);
       this.axis.set(tangent.dot(x).abs().gt(tangent.dot(y).abs()) ? x : y);
     }
   }
 
-  enforce() {
-    if (!this.entity.has(PhysEdge)) {
-      return;
-    }
-    const phys = this.entity.only(PhysEdge);
-    const edge = phys.edge.unwrap();
-    if (edge === null) {
-      return;
-    }
- 
+  private calculateForces(edge: MemoEdge): { src: Vector, dst: Vector } {
     const tangent = edge.tangent;
+    const normal = edge.normal;
+    const center = edge.midpoint;
+    const length = edge.length.scale(0.5);
 
     const axis = this.axis.get().to('model').unit();
     const flip = axis.dot(tangent) > axis.neg().dot(tangent) ? 1 : -1;
-
-    const center = edge.lerp(0.5);
-    const length = edge.length.scale(0.5);
 
     const targetSrc = center.splus(length, axis.scale(-flip));
     const targetDst = center.splus(length, axis.scale(flip));
@@ -483,29 +472,23 @@ class AxisConstraint extends Constraint {
 
     // now enforce the deltas to be normal to the current position
     // so we hopefully rotate with out changing size, all else equal.
-    const normDeltaSrc = deltaSrc.onAxis(edge.normal).unit().scale(deltaSrc.mag());
-    const normDeltaDst = deltaDst.onAxis(edge.normal).unit().scale(deltaDst.mag());
+    const normDeltaSrc = deltaSrc.onAxis(normal).unit().scale(deltaSrc.mag());
+    const normDeltaDst = deltaDst.onAxis(normal).unit().scale(deltaDst.mag());
 
     const k = 3 * this.tension; // spring constant
 
-    phys.src.with(s => s.addForce(normDeltaSrc.scale(k / 2)));
-    phys.dst.with(s => s.addForce(normDeltaDst.scale(k / 2)));
+    return {
+      src: normDeltaSrc.scale(k / 2),
+      dst: normDeltaDst.scale(k / 2),
+    };
+  }
 
-    App.ifDebug(() => {
-      App.canvas.lineWidth = 1;
-
-      App.canvas.strokeStyle = 'purple';
-      App.canvas.strokeLine(edge.src, edge.src.plus(normDeltaSrc));
-
-      App.canvas.strokeStyle = 'orange';
-      App.canvas.strokeLine(edge.dst, edge.dst.plus(normDeltaDst));
-
-      App.canvas.strokeStyle = BLUE;
-      App.canvas.strokeLine(
-        center.splus(Distance(1000, 'screen'), axis),
-        center.splus(Distance(-1000, 'screen'), axis),
-      );
-    })
+  enforce() {
+    const phys = this.entity.maybe(PhysEdge);
+    if (phys === null) {
+      return;
+    }
+    phys.addForces(this.calculateForces(phys.edge));
   }
 }
 
