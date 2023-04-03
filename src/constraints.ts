@@ -405,13 +405,36 @@ class AxisConstraint extends Constraint {
       return a.minus(b).mag() < 0.001;
     },
   );
+
   public readonly axisToggle = this.axis.map<boolean>({
     to: (axis: Vector) => Math.abs(axis.get('screen').x) < Math.abs(axis.get('screen').y),
     from: (vertical: boolean) => vertical ? Vector(Axis.Y, 'screen') : Vector(Axis.X, 'screen'),
   });
 
+  private readonly node: PhysEdge;
+
+  private readonly _forces: RoRef<{ src: Vector, dst: Vector }>;
+
   constructor(entity: Entity) {
     super(entity);
+
+    this.node = entity.only(PhysEdge);
+
+    this._forces = Refs.memo(
+      Refs.reduceRo(
+        a => a, 
+        this.axis,
+        this.node.edgeRef,
+        this.tensionRef,
+        App.viewport.changedRef,
+      ),
+      ([axis, edge, tension, _]) => AxisConstraint.calculateForces(
+        axis.to('model').unit(),
+        edge,
+        tension,
+      ),
+    );
+
     this.axis.onChange(_ => {
       if (this.enabled) App.project.requestSave('axis constraint changed');
     });
@@ -455,13 +478,20 @@ class AxisConstraint extends Constraint {
     }
   }
 
-  private calculateForces(edge: MemoEdge): { src: Vector, dst: Vector } {
+  enforce() {
+    this.node.addForces(this._forces.get());
+  }
+
+  private static calculateForces(
+    axis: Vector,
+    edge: MemoEdge,
+    tension: number,
+  ): { src: Vector, dst: Vector } {
     const tangent = edge.tangent;
     const normal = edge.normal;
     const center = edge.midpoint;
     const length = edge.length.scale(0.5);
 
-    const axis = this.axis.get().to('model').unit();
     const flip = axis.dot(tangent) > axis.neg().dot(tangent) ? 1 : -1;
 
     const targetSrc = center.splus(length, axis.scale(-flip));
@@ -475,20 +505,12 @@ class AxisConstraint extends Constraint {
     const normDeltaSrc = deltaSrc.onAxis(normal).unit().scale(deltaSrc.mag());
     const normDeltaDst = deltaDst.onAxis(normal).unit().scale(deltaDst.mag());
 
-    const k = 3 * this.tension; // spring constant
+    const k = 3 * tension; // spring constant
 
     return {
       src: normDeltaSrc.scale(k / 2),
       dst: normDeltaDst.scale(k / 2),
     };
-  }
-
-  enforce() {
-    const phys = this.entity.maybe(PhysEdge);
-    if (phys === null) {
-      return;
-    }
-    phys.addForces(this.calculateForces(phys.edge));
   }
 }
 

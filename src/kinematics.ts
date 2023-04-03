@@ -92,7 +92,7 @@ ComponentFactories.register(PhysNode, (
 
 class MemoEdge {
   private readonly _vector = Memo((): Vector => Vectors.between(this.src, this.dst));
-  private readonly _tangent = Memo((): Vector => this.tangent.unit());
+  private readonly _tangent = Memo((): Vector => this.vector.unit());
   private readonly _normal = Memo((): Vector => this.tangent.r90());
   private readonly _midpoint = Memo((): Position => this.lerp(0.5));
   private readonly _length = Memo((): Distance => Distances.between(this.src, this.dst));
