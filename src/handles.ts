@@ -73,7 +73,7 @@ class Selected extends Component implements Solo {
 }
 
 /** resizeable and draggable rectangles */
-class Rectangular extends Component implements Solo {
+class Rectangular extends Component implements Surface, Solo {
   public readonly [SOLO] = true;
 
   private static posEq = (one: Position, two: Position): boolean => {
@@ -94,6 +94,7 @@ class Rectangular extends Component implements Solo {
   public readonly centerRef = Refs.of(Positions.zero('model'), Rectangular.posEq);
   public readonly widthRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
   public readonly heightRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
+  public readonly rectRef;
 
   public readonly dragItem: RoRef<DragItem>;
 
@@ -115,6 +116,8 @@ class Rectangular extends Component implements Solo {
   private readonly topRightRef: RoRef<Position>;
   private readonly bottomLeftRef: RoRef<Position>;
   private readonly bottomRightRef: RoRef<Position>;
+
+  public readonly keepAspect: Ref<boolean> = Refs.of(false);
 
   constructor(entity: Entity) {
     super(entity);
@@ -157,6 +160,57 @@ class Rectangular extends Component implements Solo {
       (..._: readonly [Position, Distance, Distance]) => this.computeDragItem(),
       this.centerRef, this.widthRef, this.heightRef,
     );
+
+    this.rectRef = Refs.memoReduce(
+      (tl, br) => new Rect(tl, br),
+      this.topLeftRef, this.bottomRightRef,
+    );
+  }
+
+  public get rect(): Rect {
+    return this.rectRef.get();
+  }
+
+  public get center(): Position {
+    return this.centerRef.get();
+  }
+
+  public set center(pos: Position) {
+    this.centerRef.set(pos.to('model'));
+  }
+
+  public get width(): Distance {
+    return this.widthRef.get();
+  }
+
+  public set width(d: Distance) {
+    this.widthRef.set(d.to('model'));
+  }
+
+  public get height(): Distance {
+    return this.heightRef.get();
+  }
+
+  public set height(d: Distance) {
+    this.heightRef.set(d.to('model'));
+  }
+
+  public createHandle(props: Partial<HandleProps>) {
+    const main = this.entity.add(Handle, {
+      getPos: () => this.center,
+      distance: p => this.rect.sdist(p),
+      drag: () => this.dragItem.get(),
+      clickable: false,
+      draggable: true,
+      hoverable: true,
+      selectable: true,
+      ...props,
+    });
+
+    const knobs = this.createResizeHandles(main.priority + 0.1);
+    knobs.forEach(knob => main.addKnob(knob));
+
+    return main;
   }
 
   public contains(position: Position) {
@@ -192,6 +246,51 @@ class Rectangular extends Component implements Solo {
       }
     }
     return false;
+  }
+
+  private createResizeHandles(priority: number): Handle[] {
+    const memoEdge = (a: Position, b: Position) => new MemoEdge(a, b);
+    const top = Refs.memoReduce(memoEdge, this.topLeftRef, this.topRightRef);
+    const bottom = Refs.memoReduce(memoEdge, this.bottomRightRef, this.bottomLeftRef);
+    const left = Refs.memoReduce(memoEdge, this.bottomLeftRef, this.topLeftRef);
+    const right = Refs.memoReduce(memoEdge, this.topRightRef, this.bottomRightRef);
+
+    const edge = (
+      name: string,
+      edge: RoRef<MemoEdge>,
+      set: (delta: Distance, axis: Vector) => void,
+    ): Handle => {
+      return this.entity.ecs.createEntity().add(Handle, {
+        priority,
+        getPos: () => edge.get().midpoint,
+        distance: p => edge.get().distanceFrom(p),
+        cursor: () => getResizeCursor(edge.get().normal, true),
+        clickable: false,
+        selectable: false,
+        hoverable: false,
+        draggable: true,
+        drag: () => {
+          return {
+            kind: 'point',
+            name,
+            get: () => edge.get().midpoint,
+            set: p => {
+              const e = edge.get();
+              set(Vectors.between(e.midpoint, p).dot(e.normal), e.normal);
+            },
+            disableWhenMultiple: true,
+          };
+        },
+      });
+    };
+
+    return [
+      edge('top', top, (delta, axis) => {
+        const half = delta.scale(0.5);
+        this.center = this.center.splus(half, axis);
+        this.height = this.height.plus(delta);
+      }),
+    ];
   }
 
   private computeDragItem(): DragItem {

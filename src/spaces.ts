@@ -185,6 +185,13 @@ class SpaceDistance extends BaseSpaceValue<number> {
     return this.map((a: number, b: number) => a + b, d);
   }
 
+  splus(s: number | Spaced<number>, d: Spaced<number>): Distance {
+    if (typeof s === 'number') {
+      return this.map((a: number, b: number) => a + s * b, d);
+    }
+    return this.map((a: number, s: number, b: number) => a + s * b, s, d);
+  }
+
   minus(d: Spaced<number>): Distance {
     return this.map((a: number, b: number) => a - b, d);
   }
@@ -757,6 +764,24 @@ abstract class SDF {
 interface Surface {
   intersects: (sdf: SDF) => boolean;
   containedBy: (sdf: SDF) => boolean;
+}
+
+
+class Circle extends SDF {
+  constructor(
+    public readonly center: Position,
+    public readonly radius: Distance,
+  ) {
+    super();
+  }
+
+  public get centroid(): Position {
+    return this.center;
+  }
+
+  public override sdist(point: Position): Distance {
+    return Distances.between(this.center, point).minus(this.radius);
+  }
 }
 
 class Line extends SDF {

@@ -657,5 +657,14 @@ const DebugRenderer = (ecs: EntityComponentSystem) => {
     baseline: 'bottom',
     fill: 'black',
   });
+
+  App.canvas.strokeStyle = 'red';
+  App.canvas.lineWidth = 1;
+  App.canvas.setLineDash([2, 2]);
+  App.ecs.getComponents(Rectangular).forEach(rect => {
+    App.canvas.rect(rect.rect);
+    App.canvas.stroke();
+  });
+  App.canvas.setLineDash([]);
 };
 
