@@ -593,7 +593,7 @@ const GridRenderer = (ecs: EntityComponentSystem) => {
 
   const columns = Math.ceil(
     Distance(App.viewport.screen_width, 'screen').div(grid.spacing)
-  ) + 1;
+  ) + 2;
   const rows = Math.ceil(
     Distance(App.viewport.screen_height, 'screen').div(grid.spacing)
   ) + 1;

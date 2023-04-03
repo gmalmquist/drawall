@@ -6,7 +6,8 @@ class Time {
   private static MIN_DELTA = 0.01;
   private static _last = new Date().getTime() / 1000.0;
   private static _delta = 0.;
-  private static _fps = 0;
+  private static _fpsIndex = 0;
+  private static _fpsHistory = new Array(10).fill(0);
 
   static get delta() {
     return Time._delta;
@@ -21,14 +22,16 @@ class Time {
   }
 
   static get fps(): number {
-    return this._fps;
+    return Math.round(Time._fpsHistory.reduce((a, b) => a + b, 0) / Time._fpsHistory.length);
   }
 
   static tick() {
     const now = Time.now;
     Time._delta = clamp(now - Time._last, Time.MIN_DELTA, Time.MAX_DELTA);
     Time._last = now;
-    this._fps = Math.round(Time._delta <= 0 ? 0 : 1.0 / Time._delta);
+
+    const fps = Math.round(Time._delta <= 0 ? 0 : 1.0 / Time._delta);
+    Time._fpsHistory[Time._fpsIndex++] = fps;
   }
 }
 
