@@ -184,6 +184,11 @@ class Rectangular extends Component implements Surface, Solo {
   }
 
   public set width(d: Distance) {
+    const w = d.to('model');
+    if (w.get('model') < 0.1) {
+      this.widthRef.set(Distance(0.1, 'model'));
+      return;
+    }
     this.widthRef.set(d.to('model'));
   }
 
@@ -192,6 +197,11 @@ class Rectangular extends Component implements Surface, Solo {
   }
 
   public set height(d: Distance) {
+    const h = d.to('model');
+    if (h.get('model') < 0.1) {
+      this.heightRef.set(Distance(0.1, 'model'));
+      return;
+    }
     this.heightRef.set(d.to('model'));
   }
 
@@ -249,22 +259,17 @@ class Rectangular extends Component implements Surface, Solo {
   }
 
   private createResizeHandles(priority: number): Handle[] {
-    const memoEdge = (a: Position, b: Position) => new MemoEdge(a, b);
-    const top = Refs.memoReduce(memoEdge, this.topLeftRef, this.topRightRef);
-    const bottom = Refs.memoReduce(memoEdge, this.bottomRightRef, this.bottomLeftRef);
-    const left = Refs.memoReduce(memoEdge, this.bottomLeftRef, this.topLeftRef);
-    const right = Refs.memoReduce(memoEdge, this.topRightRef, this.bottomRightRef);
+    type Frame = { origin: Position, horizontal: Vector, vertical: Vector };
 
-    const edge = (
+    const resize = (
       name: string,
-      edge: RoRef<MemoEdge>,
-      set: (delta: Distance, axis: Vector) => void,
+      frame: RoRef<Frame>,
     ): Handle => {
       return this.entity.ecs.createEntity().add(Handle, {
-        priority,
-        getPos: () => edge.get().midpoint,
-        distance: p => edge.get().distanceFrom(p),
-        cursor: () => getResizeCursor(edge.get().normal, true),
+        priority: priority + 0.1,
+        getPos: () => frame.get().origin,
+        distance: p => Distances.between(frame.get().origin, p),
+        cursor: () => getResizeCursor(Vectors.between(this.center, frame.get().origin), true),
         clickable: false,
         selectable: false,
         hoverable: false,
@@ -273,10 +278,18 @@ class Rectangular extends Component implements Surface, Solo {
           return {
             kind: 'point',
             name,
-            get: () => edge.get().midpoint,
+            get: () => frame.get().origin,
             set: p => {
-              const e = edge.get();
-              set(Vectors.between(e.midpoint, p).dot(e.normal), e.normal);
+              const { origin, horizontal, vertical } = frame.get();
+              const delta = Vectors.between(origin, p);
+              const startWidth = this.width;
+              const startHeight = this.height;
+              this.width = this.width.plus(delta.dot(horizontal));
+              this.height = this.height.plus(delta.dot(vertical));
+              this.center = this.center
+                .splus(this.width.minus(startWidth).scale(0.5), horizontal)
+                .splus(this.height.minus(startHeight).scale(0.5), vertical)
+              ;
             },
             disableWhenMultiple: true,
           };
@@ -284,12 +297,32 @@ class Rectangular extends Component implements Surface, Solo {
       });
     };
 
-    return [
-      edge('top', top, (delta, axis) => {
-        const half = delta.scale(0.5);
-        this.center = this.center.splus(half, axis);
-        this.height = this.height.plus(delta);
+    const up = Refs.memo(this.upSpan, v => v.unit());
+    const down = Refs.memo(this.downSpan, v => v.unit());
+    const left = Refs.memo(this.leftSpan, v => v.unit());
+    const right = Refs.memo(this.rightSpan, v => v.unit());
+    const zero = Refs.ofRo(Vectors.zero('model'));
+
+    const frameOf = (
+      origin: RoRef<Position>,
+      horizontal: RoRef<Vector>,
+      vertical: RoRef<Vector>,
+    ): RoRef<Frame> => Refs.memoReduce(
+      (origin, horizontal, vertical) => ({
+        origin, horizontal, vertical,
       }),
+      origin, horizontal, vertical,
+    );
+
+    return [
+      resize('top', frameOf(this.topRef, zero, up)),
+      resize('bottom', frameOf(this.bottomRef, zero, down)),
+      resize('left', frameOf(this.leftRef, left, zero)),
+      resize('right', frameOf(this.rightRef, right, zero)),
+      resize('top-left', frameOf(this.topLeftRef, left, up)),
+      resize('top-right', frameOf(this.topRightRef, right, up)),
+      resize('bottom-left', frameOf(this.bottomLeftRef, left, down)),
+      resize('bottom-right', frameOf(this.bottomRightRef, right, down)),
     ];
   }
 
