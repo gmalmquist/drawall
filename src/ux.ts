@@ -2,19 +2,24 @@ const PINK = '#F5A9B8';
 const BLUE = '#5BCEFA';
 
 class Form extends Component {
+  private readonly factories: Array<() => AutoForm> = [];
+
   constructor(
     entity: Entity,
-    private factory: (() => AutoForm) | null = null,
+    factory?: () => AutoForm,
   ) {
     super(entity);
+    if (typeof factory !== 'undefined') {
+      this.factories.push(factory);
+    }
   }
 
-  setFactory(f: () => AutoForm) {
-    this.factory = f;
+  add(f: () => AutoForm) {
+    this.factories.push(f);
   }
 
   public get form(): AutoForm {
-    return this.factory === null ? new AutoForm() : this.factory();
+    return AutoForm.union(this.factories.map(f => f()));
   }
 }
 

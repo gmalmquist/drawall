@@ -84,7 +84,7 @@ class FixedConstraint extends Constraint {
     this.priority = 5;
     this.enabled = false;
 
-    this.entity.add(Form).setFactory(() => {
+    this.entity.add(Form, () => {
       const form = new AutoForm();
       const lockField = form.add({
         name: 'lock position',
@@ -174,7 +174,7 @@ class LengthConstraint extends Constraint {
       if (this.enabled) App.project.requestSave('target length changed');
     });
 
-    this.entity.add(Form).setFactory(() => {
+    this.entity.add(Form, () => {
       const form = new AutoForm();
       const lockField = form.add({
         name: 'lock length',
@@ -354,7 +354,7 @@ class AngleConstraint extends Constraint {
       return left.angle().minus(right.angle()).normalize();
     });
 
-    this.entity.add(Form).setFactory(() => {
+    this.entity.add(Form, () => {
       const form = new AutoForm();
       const lockField = form.add({
         name: 'lock angle',
@@ -533,7 +533,7 @@ class AxisConstraint extends Constraint {
     this.axis.onChange(_ => {
       if (this.enabled) App.project.requestSave('axis constraint changed');
     });
-    this.entity.add(Form).setFactory(() => {
+    this.entity.add(Form, () => {
       const form = new AutoForm();
       form.add({
         name: 'axis lock enabled',

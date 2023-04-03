@@ -91,10 +91,17 @@ class Rectangular extends Component implements Surface, Solo {
     return Math.abs(a - b) < 0.01;
   };
 
+  private static angleEq = (one: Angle, two: Angle) => {
+    if (one.space !== two.space) return false;
+    const a = unwrap(one.get('model'));
+    const b = unwrap(two.get('model'));
+    return Math.abs(a - b) < 0.001;
+  };
+
   public readonly centerRef = Refs.of(Positions.zero('model'), Rectangular.posEq);
   public readonly widthRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
   public readonly heightRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
-  public readonly rectRef;
+  public readonly rotationRef = Refs.of(Angle(Radians(0), 'model'), Rectangular.angleEq);
 
   public readonly dragItem: RoRef<DragItem>;
 
@@ -117,20 +124,23 @@ class Rectangular extends Component implements Surface, Solo {
   private readonly bottomLeftRef: RoRef<Position>;
   private readonly bottomRightRef: RoRef<Position>;
 
+  private readonly edgesRef: RoRef<MemoEdge[]>;
+  private readonly polyRef: RoRef<Polygon>;
+
   public readonly keepAspect: Ref<boolean> = Refs.of(false);
 
   constructor(entity: Entity) {
     super(entity);
 
     this.horizontal = Refs.memoReduce(
-      (width: Distance, _: boolean) =>
-        Vector(Axis.X, 'screen').to('model').unit().scale(width),
-      this.widthRef, App.viewport.changedRef,
+      (width: Distance, angle: Angle, _: boolean) =>
+        Vector(Axis.X, 'screen').to('model').rotate(angle).unit().scale(width),
+      this.widthRef, this.rotationRef, App.viewport.changedRef,
     );
     this.vertical = Refs.memoReduce(
-      (height: Distance, _: boolean) =>
-        Vector(Axis.Y, 'screen').to('model').unit().scale(height),
-      this.heightRef, App.viewport.changedRef,
+      (height: Distance, angle: Angle, _: boolean) =>
+        Vector(Axis.Y, 'screen').to('model').rotate(angle).unit().scale(height),
+      this.heightRef, this.rotationRef, App.viewport.changedRef,
     );
 
     const spanCalc = (scale: number) => (extent: Vector): Vector => extent.scale(scale);
@@ -161,14 +171,17 @@ class Rectangular extends Component implements Surface, Solo {
       this.centerRef, this.widthRef, this.heightRef,
     );
 
-    this.rectRef = Refs.memoReduce(
-      (tl, br) => new Rect(tl, br),
-      this.topLeftRef, this.bottomRightRef,
+    this.edgesRef = Refs.memoReduce(
+      (...points: Position[]) => points.map((p, i) =>
+        new MemoEdge(p, points[(i + 1) % points.length])
+      ),
+      this.topLeftRef, this.topRightRef, this.bottomRightRef, this.bottomLeftRef,
     );
-  }
 
-  public get rect(): Rect {
-    return this.rectRef.get();
+    this.polyRef = Refs.memoReduce(
+      (...points: Position[]) => new Polygon(points),
+      this.topLeftRef, this.topRightRef, this.bottomRightRef, this.bottomLeftRef,
+    );
   }
 
   public get center(): Position {
@@ -205,10 +218,18 @@ class Rectangular extends Component implements Surface, Solo {
     this.heightRef.set(d.to('model'));
   }
 
+  public get edges(): MemoEdge[] {
+    return this.edgesRef.get();
+  }
+
+  public get polygon(): Polygon {
+    return this.polyRef.get();
+  }
+
   public createHandle(props: Partial<HandleProps>) {
     const main = this.entity.add(Handle, {
       getPos: () => this.center,
-      distance: p => this.rect.sdist(p),
+      distance: p => this.sdist(p),
       drag: () => this.dragItem.get(),
       clickable: false,
       draggable: true,
@@ -220,7 +241,41 @@ class Rectangular extends Component implements Surface, Solo {
     const knobs = this.createResizeHandles(main.priority + 0.1);
     knobs.forEach(knob => main.addKnob(knob));
 
+    const compareAmount = (a: Amount, b: Amount) => a.unit === b.unit && a.value === b.value;
+
+    this.entity.add(Form, () => {
+      const form = new AutoForm();
+      form.add({
+        name: 'rect.width',
+        label: 'width',
+        kind: 'distance',
+        value: this.widthRef,
+        min: Distance(0.1, 'model'),
+      });
+      form.add({
+        name: 'rect.height',
+        label: 'height',
+        kind: 'distance',
+        value: this.heightRef,
+        min: Distance(0.1, 'model'),
+      });
+      form.add({
+        name: 'rect.angle',
+        label: 'rotation',
+        kind: 'angle',
+        value: this.rotationRef,
+      });
+      return form;
+    });
+
     return main;
+  }
+
+  public sdist(position: Position): Distance {
+    if (this.contains(position)) return Distance(0, 'model');
+    return this.edges
+      .map(edge => edge.distanceFrom(position))
+      .reduce((a, b) => a.min(b), Distance(Number.POSITIVE_INFINITY, 'model'));
   }
 
   public contains(position: Position) {

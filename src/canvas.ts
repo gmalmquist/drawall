@@ -658,11 +658,11 @@ const DebugRenderer = (ecs: EntityComponentSystem) => {
     fill: 'black',
   });
 
-  App.canvas.strokeStyle = 'red';
   App.canvas.lineWidth = 1;
   App.canvas.setLineDash([2, 2]);
   App.ecs.getComponents(Rectangular).forEach(rect => {
-    App.canvas.rect(rect.rect);
+    App.canvas.strokeStyle = rect.entity.maybe(Handle)?.isActive ? BLUE : 'gray';
+    App.canvas.polygon(rect.polygon);
     App.canvas.stroke();
   });
   App.canvas.setLineDash([]);

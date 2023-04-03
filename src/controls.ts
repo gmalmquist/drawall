@@ -254,6 +254,23 @@ class AutoForm {
         setHidden: h => input.setHidden(h),
       };
     }
+    if (field.kind === 'distance') {
+      const input = new AmountInput();
+      const d2a = (d: Distance): Amount => App.project.displayUnit.from(
+        App.project.modelUnit.newAmount(d.get('model')));
+      const a2d = (a: Amount): Distance => Distance(
+        App.project.modelUnit.from(a).value, 'model');
+      input.minValue = typeof field.min !== 'undefined' ? d2a(field.min) : null;
+      input.maxValue = typeof field.max !== 'undefined' ? d2a(field.max) : null;
+      input.onChange(value => this.updateHandle(field, a2d(value)));
+      return {
+        element: input,
+        setValue: v => input.setValue(d2a(v)),
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
+      };
+    }
     if (field.kind === 'slider') {
       const input = new SliderInput(field.min, field.max);
       input.onChange(value => this.updateHandle(field, value));
@@ -383,6 +400,7 @@ class AutoForm {
 
 type AutoField = AutoFieldNumber 
   | AutoFieldAmount 
+  | AutoFieldDistance
   | AutoFieldToggle
   | AutoFieldSlider
   | AutoFieldAngle
@@ -420,6 +438,12 @@ interface AutoFieldAmount extends AutoFieldBase<Amount> {
   unit: Units;
   min?: Amount;
   max?: Amount;
+}
+
+interface AutoFieldDistance extends AutoFieldBase<Distance> {
+  kind: 'distance';
+  min?: Distance;
+  max?: Distance;
 }
 
 interface AutoFieldToggle extends AutoFieldBase<boolean> {
