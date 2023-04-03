@@ -74,6 +74,7 @@ class Selected extends Component implements Solo {
   }
 }
 
+/** resizeable and draggable rectangles */
 class Rectangular extends Component implements Solo {
   public readonly [SOLO] = true;
 
@@ -95,6 +96,9 @@ class Rectangular extends Component implements Solo {
   public readonly centerRef = Refs.of(Positions.zero('model'), Rectangular.posEq);
   public readonly widthRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
   public readonly heightRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
+
+  public readonly dragItem: RoRef<DragItem>;
+
   // vectors from left to right and top to bottom
   private readonly horizontal: RoRef<Vector>;
   private readonly vertical: RoRef<Vector>;
@@ -149,6 +153,12 @@ class Rectangular extends Component implements Solo {
     this.topRightRef = Refs.memoReduce(aplusb, this.topRef, this.rightSpan);
     this.bottomLeftRef = Refs.memoReduce(aplusb, this.bottomRef, this.leftSpan);
     this.bottomRightRef = Refs.memoReduce(aplusb, this.bottomRef, this.rightSpan);
+
+    // dragging
+    this.dragItem = Refs.memoReduce(
+      (..._: readonly [Position, Distance, Distance]) => this.computeDragItem(),
+      this.centerRef, this.widthRef, this.heightRef,
+    );
   }
 
   public contains(position: Position) {
@@ -184,6 +194,38 @@ class Rectangular extends Component implements Solo {
       }
     }
     return false;
+  }
+
+  private computeDragItem(): DragItem {
+    const points: Array<{
+      name: string,
+      ref: RefView<Position, RefK>,
+    }> = [
+      { name: 'center', ref: this.centerRef },
+      { name: 'top midpoint', ref: this.topRef },
+      { name: 'bottom midpoint', ref: this.bottomRef },
+      { name: 'left midpoint', ref: this.leftRef },
+      { name: 'right midpoint', ref: this.rightRef },
+      { name: 'top-left corner', ref: this.topLeftRef },
+      { name: 'top-right corner', ref: this.topRightRef },
+      { name: 'bottom-left corner', ref: this.bottomLeftRef },
+      { name: 'bottom-right corner', ref: this.bottomRightRef },
+    ];
+    return {
+      kind: 'group',
+      name: 'rect',
+      aggregate: 'all',
+      items: points.map(({ name, ref }, i) => {
+        const delta = Vectors.between(this.centerRef.get(), ref.get());
+        return {
+          kind: 'point',
+          name,
+          get: () => ref.get(),
+          set: p => this.centerRef.set(p.minus(delta)),
+          disableWhenMultiple: i > 0,
+        };
+      }),
+    };
   }
 }
 
