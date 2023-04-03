@@ -208,7 +208,6 @@ class ImagesTool extends Tool {
     img.setSrc(url);
     entity.add(Handle, {
       getPos: () => img.position.get(),
-      setPos: () => {},
       distance: p => img.getBounds().sdist(p),
       selectable: false,
       clickable: false,

@@ -188,7 +188,6 @@ class RulerEndpoint extends Component implements PointMass, Solo {
       priority: 2,
       visible: Ruler.areRulersVisible,
       getPos: () => this.pos,
-      setPos: p => this.dragTo(p),
       distance: p => {
         const attach = this.attachment;
         const position = this.position.get();
@@ -439,7 +438,6 @@ class Ruler extends Component implements Solo {
 
     const handle = entity.add(Handle, {
       getPos: () => this.phys.edge.midpoint,
-      setPos: p => { /* todo */ },
       distance: p => this.phys.edge.distanceFrom(p),
       visible: Ruler.areRulersVisible,
       drag: () => ({

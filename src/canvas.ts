@@ -409,10 +409,6 @@ class Arrow extends Component {
 
     entity.add(Handle, {
       getPos: () => this.src.get(),
-      setPos: p => {
-        this.dst.set(p.plus(this.vector));
-        this.src.set(p);
-      },
       distance: p => new SpaceEdge(
         this.src.get(), this.dst.get(),
       ).distance(p),

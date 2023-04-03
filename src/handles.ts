@@ -7,8 +7,6 @@ interface KnobProps {
 
 interface HandleProps {
   getPos: () => Position;
-  // TODO obsolete; delete
-  setPos?: (p: Position) => void;
   distance?: (p: Position) => Distance;
   drag?: () => DragItem;
   clickable?: boolean;
@@ -288,7 +286,6 @@ class Handle extends Component implements Solo {
       knob: { ...props, parent: this.entity, },
       distance: p => props.poly().sdist(p).max(Distance(0, 'model')),
       getPos: () => props.poly().centroid,
-      setPos: _ => { /* noop */ },
     });
     this.addKnob(knob);
     return knob;
@@ -399,14 +396,6 @@ class Handle extends Component implements Solo {
 
   get pos(): Position {
     return this.props.getPos();
-  }
-
-  set pos(p: Position) {
-    const setPos = this.props.setPos;
-    if (typeof setPos === 'undefined') {
-      return;
-    }
-    setPos(p);
   }
 
   distanceFrom(p: Position): Distance {

@@ -19,7 +19,6 @@ class Room extends Component implements Solo {
     super(entity);
     
     const handle = entity.add(Handle, {
-      setPos: _ => {},
       getPos: () => this.labelPos,
       distance: p => Distances.between(this.labelPos, p)
         .minus(Distance(20, 'screen')),
@@ -287,8 +286,6 @@ class Wall extends Component implements Solo {
 
     const handle = entity.add(Handle, {
       getPos: () => this.src.pos,
-      setPos: p => {
-      },
       distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
       priority: 0,
       drag: () => ({
@@ -582,11 +579,6 @@ class WallJoint extends Component {
 
     const handle = entity.add(Handle, {
       getPos: () => this.pos,
-      setPos: point => {
-        const p = App.ui.selection.size === 1 ? App.ui.snapPoint(point) : point;
-        this.pos = p;
-        entity.get(FixedConstraint).forEach(c => c.updateTargets([p]));
-      },
       drag: () => ({
         kind: 'point',
         name: this.name,
