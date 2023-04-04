@@ -111,6 +111,7 @@ class Imaged extends Component {
 
     this.rect = typeof rect !== 'undefined'
       ? rect : entity.getOrCreate(Rectangular);
+    this.rect.keepAspect = true;
 
     this.element = new Image();
     this.element.style.position = 'absolute';
