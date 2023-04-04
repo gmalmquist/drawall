@@ -84,7 +84,7 @@ class App {
     App.ecs.registerSystem(ConstraintEnforcer);
     App.ecs.registerSystem(Kinematics);
 
-    //App.project.loadLocal();
+    App.project.loadLocal();
 
     console.log(`
       hi! if you're here u probably are savvy enough that you'd like some hotkeys:

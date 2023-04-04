@@ -374,7 +374,10 @@ class Rectangular extends Component implements Surface, Solo {
               if (this.keepAspect
                 && horizontal.mag2().nonzero
                 && vertical.mag2().nonzero) {
-                const axis = this.vertical.get().plus(this.horizontal.get()).unit();
+                const axis1 = this.vertical.get().plus(this.horizontal.get()).unit();
+                const axis2 = this.vertical.get().plus(this.horizontal.get().neg()).unit();
+                const hv = horizontal.plus(vertical);
+                const axis = hv.dot(axis1).abs().ge(hv.dot(axis2).abs()) ? axis1 : axis2;
                 delta = delta.onAxis(axis);
 
                 const startWidth = this.width;
