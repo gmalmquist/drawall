@@ -174,13 +174,14 @@ class GUI {
       from: a => !a,
     });
 
-    form.add({
-      name: 'Local Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToLocalRef,
-      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
-      hidden: snappingHidden,
-    });
+// not implemented
+//    form.add({
+//      name: 'Local Axes Snapping',
+//      kind: 'toggle',
+//      value: App.ui.snapping.snapToLocalRef,
+//      icons: { on: Icons.snapLocalOn, off: Icons.snapLocalOff },
+//      hidden: snappingHidden,
+//    });
 
     form.add({
       name: 'Global Axes Snapping',
@@ -190,13 +191,14 @@ class GUI {
       hidden: snappingHidden,
     });
 
-    form.add({
-      name: 'Geometry Axes Snapping',
-      kind: 'toggle',
-      value: App.ui.snapping.snapToGeometryRef,
-      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
-      hidden: snappingHidden,
-    });
+// not implemented
+//    form.add({
+//      name: 'Geometry Axes Snapping',
+//      kind: 'toggle',
+//      value: App.ui.snapping.snapToGeometryRef,
+//      icons: { on: Icons.snapGeomOn, off: Icons.snapGeomOff },
+//      hidden: snappingHidden,
+//    });
 
     form.add({
       name: 'Snap to Grid',
