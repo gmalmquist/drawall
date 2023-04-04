@@ -62,8 +62,10 @@ class ImageExporter {
               const t = g.getTransform();
               g.translate(pos.x, pos.y);
               g.rotate(angle);
+              g.globalAlpha = m.opacity.get();
               g.drawImage(m.image, -width/2, -height/2, width, height);
               g.setTransform(t);
+              g.globalAlpha = 1;
             });
           }
         }
