@@ -116,6 +116,8 @@ class ImagesTool extends Tool {
 App.tools.register(ImagesTool);
 
 class Imaged extends Component {
+  public static readonly DEFAULT_OPACITY = 0.5;
+
   private readonly element: HTMLImageElement;
   private readonly rect: Rectangular;
 
@@ -131,7 +133,7 @@ class Imaged extends Component {
       ? rect : entity.getOrCreate(Rectangular);
     this.rect.keepAspect = true;
 
-    this.opacity = Refs.of(0.3);
+    this.opacity = Refs.of(Imaged.DEFAULT_OPACITY);
 
     this.element = new Image();
     this.element.style.position = 'absolute';
@@ -257,7 +259,7 @@ class Imaged extends Component {
 ComponentFactories.register(Imaged, (entity: Entity, url: string, opacity: number) => {
   const imaged = entity.getOrCreate(Imaged);
   imaged.setSrc(url);
-  imaged.opacity.set(opacity || 0.3);
+  imaged.opacity.set(opacity || Imaged.DEFAULT_OPACITY);
   return imaged;
 });
 
