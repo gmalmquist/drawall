@@ -142,6 +142,8 @@ class Furniture extends Component implements Solo {
       priority: 2,
     });
 
+    const getDragPoints = () => this.entity.only(Handle).getDragClosure('complete').points;
+
     entity.getOrCreate(Form).add(() => {
       const form = new AutoForm();
       form.addButton({
@@ -154,11 +156,92 @@ class Furniture extends Component implements Solo {
       });
       form.addButton({
         name: 'Align to Wall',
+        icon: Icons.alignToWall,
         enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
         onClick: () => {
           const attach = this.attach;
           if (!attach) return;
           attach.rotation = Angle(Radians(0), 'model');
+          this.updateOrientation();
+        },
+      });
+      form.addButton({
+        name: 'Move to Wall',
+        icon: Icons.moveToWall,
+        enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
+        onClick: () => {
+          const attach = this.attach;
+          if (!attach) return;
+          const edge = attach.wall.edge;
+          if (attach.normal.sign === 0) {
+            this.rect.rotation = edge.tangent.angle();
+          }
+          const highest = argmin(
+            getDragPoints(),
+            point => point,
+            point => -Math.round(Vectors.between(edge.src, point.get())
+              .dot(edge.normal).get('screen'))
+          );
+          if (highest !== null) {
+            attach.point = highest.arg;
+            attach.normal = Distance(0, 'model');
+            attach.at = edge.unlerp(attach.point.get());
+            this.updateOrientation();
+          }
+        },
+      });
+      form.addButton({
+        name: 'Center on Wall',
+        icon: Icons.centerOnWall,
+        enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
+        onClick: () => {
+          const attach = this.attach;
+          if (!attach) return;
+          const edge = attach.wall.edge;
+          if (attach.point.name === 'center' && attach.normal.sign === 0) {
+            attach.rotation = Angle(Radians(0), 'model');
+          }
+          attach.point = this.entity.only(Handle).getDragClosure('complete').points
+            .filter(p => p.name === 'center')[0]!;
+          attach.normal = Distance(0, 'model');
+          attach.at = edge.unlerp(attach.point.get());
+          this.updateOrientation();
+        },
+      });
+      form.addButton({
+        name: 'Move to Corner',
+        icon: Icons.moveToCorner,
+        enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
+        onClick: () => {
+          const attach = this.attach;
+          if (!attach) return;
+          const points = getDragPoints();
+          if (points.length === 0) return;
+
+          const getClosestPoint = (e: MemoEdge) => argmin(
+            points,
+            point => ({ point, distance: e.distanceFrom(point.get()), }),
+            ({ distance }) => Math.round(distance.get('screen')),
+          )!.result;
+
+          const edge = attach.wall.edge;
+          const adj1 = attach.wall.src.incoming?.edge;
+          const adj2 = attach.wall.dst.outgoing?.edge;
+          const adj = argmin([adj1, adj2], edge => {
+            if (!edge) return 'invalid';
+            const { point, distance } = getClosestPoint(edge);
+            return { edge, point, distance };
+          }, ({ distance }) => Math.round(distance.get('screen')))?.result;
+
+          if (!adj) return;
+
+          const edgiest = getClosestPoint(edge).point;
+          const adjiest = getClosestPoint(adj.edge).point;
+          
+          adjiest.set(adj.edge.closestPoint(adjiest.get()));
+          attach.point = edgiest;
+          attach.normal = Distance(0, 'model');
+          attach.at = edge.unlerp(edgiest.get());
           this.updateOrientation();
         },
       });
@@ -176,6 +259,7 @@ class Furniture extends Component implements Solo {
         });
       }
       a.wall.edgeRef.onChange(edgeListeners.get(a.wall)!);
+      App.project.requestSave('attached to wall');
     });
 
     this.entity.only(Handle).events.addDragListener({
