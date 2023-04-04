@@ -217,6 +217,16 @@ class Rectangular extends Component implements Surface, Solo {
     this.entity.add(Form, () => {
       const form = new AutoForm();
       form.add({
+        name: 'rect.aspect',
+        tooltip: 'lock/unlock aspect ratio',
+        kind: 'toggle',
+        value: this.keepAspectRef,
+        icons: {
+          on: Icons.aspectLocked,
+          off: Icons.aspectUnlocked,
+        },
+      });
+      form.add({
         name: 'rect.width',
         label: 'width',
         kind: 'distance',
@@ -235,16 +245,6 @@ class Rectangular extends Component implements Surface, Solo {
         label: 'rotation',
         kind: 'angle',
         value: this.rotationRef,
-      });
-      form.add({
-        name: 'rect.aspect',
-        tooltip: 'lock/unlock aspect ratio',
-        kind: 'toggle',
-        value: this.keepAspectRef,
-        icons: {
-          on: Icons.aspectLocked,
-          off: Icons.aspectUnlocked,
-        },
       });
       return form;
     });

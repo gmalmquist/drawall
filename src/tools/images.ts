@@ -181,6 +181,11 @@ class Imaged extends Component {
         icon: Icons.toFront,
         onClick: () => this.toFront(),
       });
+      form.addButton({
+        name: 'Reset Aspect Ratio',
+        icon: Icons.resetAspectRatio,
+        onClick: () => this.resetAspectRatio(),
+      });
       return form;
     });
   }
@@ -260,6 +265,13 @@ class Imaged extends Component {
     this.element.style.height = `${height}px`;
     this.element.style.transform = `translate(-${width/2}px, -${height/2}px) rotate(${angle}deg)`;
     this.element.style.display = width > 0 && height > 0 ? 'block' : 'none';
+  }
+
+  private resetAspectRatio() {
+    this.rect.keepAspect = false;
+    const ratio = this.image.width / this.image.height;
+    this.rect.width = this.rect.height.scale(ratio);
+    this.rect.keepAspect = true;
   }
 
   private rectToImageDimensions() {
