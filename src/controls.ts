@@ -343,6 +343,7 @@ class AutoForm {
   }
 
   public static intersection(forms: AutoForm[]): AutoForm {
+    AutoForm.sortForms(forms);
     if (forms.length === 0) return new AutoForm();
     if (forms.length === 1) return forms[0];
     const [first, ...remainder] = forms;
@@ -376,6 +377,7 @@ class AutoForm {
   }
 
   public static union(forms: AutoForm[]): AutoForm {
+    AutoForm.sortForms(forms);
     const result = new AutoForm();
     for (const form of forms) {
       if (result.fields.length > 0) {
@@ -395,6 +397,18 @@ class AutoForm {
 
   public static fieldId(field: { name: string, kind: Kinds<AutoField> }): string {
     return `${field.kind}:${field.name}`;
+  }
+
+  private static sortForms(forms: AutoForm[]) {
+    forms.sort((a, b) => {
+      const cmpLen = a.fields.length - b.fields.length;
+      if (cmpLen !== 0) return cmpLen;
+      for (let i = 0; i < a.fields.length; i++) {
+        const c = a.fields[i].name.localeCompare(b.fields[i].name);
+        if (c !== 0) return c;
+      }
+      return 0;
+    });
   }
 }
 

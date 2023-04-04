@@ -43,6 +43,11 @@ class ImagesTool extends Tool {
       if (image) {
         App.ui.select(image);
       } else {
+        const handle = App.ui.getHandleAt(e.position, h => true, true);
+        if (handle !== null) {
+          handle.selectWithAppropriateTool();
+          return;
+        }
         App.ui.clearSelection();
       }
     });
@@ -116,6 +121,8 @@ class Imaged extends Component {
 
   public readonly image: HTMLImageElement;
 
+  public readonly opacity: Ref<number>;
+
   constructor(entity: Entity, rect?: Rectangular) {
     super(entity);
     this.image = new Image();
@@ -123,6 +130,8 @@ class Imaged extends Component {
     this.rect = typeof rect !== 'undefined'
       ? rect : entity.getOrCreate(Rectangular);
     this.rect.keepAspect = true;
+
+    this.opacity = Refs.of(0.3);
 
     this.element = new Image();
     this.element.style.position = 'absolute';
@@ -134,6 +143,20 @@ class Imaged extends Component {
     this.rect.widthRef.onChange(_ => this.updateElement());
     this.rect.heightRef.onChange(_ => this.updateElement());
     this.rect.rotationRef.onChange(_ => this.updateElement());
+    this.opacity.onChange(o => this.element.style.opacity = `${o}`);
+
+    entity.add(Form, () => {
+      const form = new AutoForm();
+      form.add({
+        kind: 'slider',
+        name: 'opacity',
+        label: 'opacity',
+        value: this.opacity,
+        min: 0,
+        max: 1,
+      });
+      return form;
+    });
   }
 
   get width() {
@@ -186,6 +209,7 @@ class Imaged extends Component {
     const width = this.width.get('screen');
     const height = this.height.get('screen');
     const angle = toDegrees(this.rect.rotation.get('screen'));
+    this.element.style.opacity = `${this.opacity.get()}`;
     this.element.style.left = `${pos.x}px`;
     this.element.style.top = `${pos.y}px`;
     this.element.style.width = `${width}px`;
@@ -225,14 +249,15 @@ class Imaged extends Component {
   toJson(): SavedComponent {
     return {
       factory: this.constructor.name,
-      arguments: [ this.getStableUrl() ],
+      arguments: [ this.getStableUrl(), this.opacity.get() ],
     };
   }
 }
 
-ComponentFactories.register(Imaged, (entity: Entity, url: string) => {
+ComponentFactories.register(Imaged, (entity: Entity, url: string, opacity: number) => {
   const imaged = entity.getOrCreate(Imaged);
   imaged.setSrc(url);
+  imaged.opacity.set(opacity || 0.3);
   return imaged;
 });
 

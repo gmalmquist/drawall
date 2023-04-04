@@ -8,7 +8,8 @@ class PointerTool extends Tool {
   });
   private readonly strictSelect = Refs.of<boolean>(false);
   private lastClickHandle: Handle | null = null;
-  private lastClickAt: number = 0;
+  private lastClickTime: number = 0;
+  private lastClickPoint: Point = Point.ZERO;
 
   constructor() {
     super('pointer tool');
@@ -45,14 +46,28 @@ class PointerTool extends Tool {
     });
 
     this.events.onMouse('click', e => {
+      const doubleClicking = (Time.now - this.lastClickTime) < 0.5
+        && Vec.between(e.position.get('screen'), this.lastClickPoint).mag() < 5;
+      this.lastClickTime = Time.now;
+      this.lastClickPoint = e.position.get('screen');
+
       const handle = App.ui.getHandleAt(e.position, h => h.clickable || h.selectable);
       if (handle === null) {
+        if (doubleClicking) {
+          const forOtherTool = App.ui.getHandleAt(e.position, h => h.clickable, true);
+          if (forOtherTool) {
+            forOtherTool.selectWithAppropriateTool();
+            return;
+          }
+        }
+
         App.ui.clearSelection();
+        this.lastClickHandle = null;
         return;
       }
 
       if (handle.clickable) {
-        if (this.lastClickHandle === handle && (Time.now - this.lastClickAt) < 0.5) {
+        if (this.lastClickHandle === handle && doubleClicking) {
           // handle double-click
           if (handle.entity.has(Wall)) {
             // nb: we could reference it directly, but this will
@@ -63,7 +78,6 @@ class PointerTool extends Tool {
           }
         }
         this.lastClickHandle = handle;
-        this.lastClickAt = Time.now;
         handle.events.handleMouse(e);
       }
 

@@ -536,7 +536,7 @@ class AxisConstraint extends Constraint {
     this.entity.add(Form, () => {
       const form = new AutoForm();
       form.add({
-        name: 'axis lock enabled',
+        name: 'lock axis',
         kind: 'toggle',
         value: this.enabledRef,
         icons: {

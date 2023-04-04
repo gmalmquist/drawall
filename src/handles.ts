@@ -181,6 +181,20 @@ class Handle extends Component implements Solo {
     return Array.from(this._tools);
   }
 
+  selectWithAppropriateTool() {
+    const tools = this.tools;
+    if (tools.length === 0) {
+      App.tools.set('pointer tool');
+      return;
+    }
+    for (const tool of tools) {
+      App.tools.set(tool);
+      App.ui.clearSelection();
+      App.ui.select(this);
+      return;
+    }
+  }
+
   get knob(): KnobProps | null {
     const k = this._knob;
     if (typeof k === 'undefined') {

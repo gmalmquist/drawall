@@ -482,6 +482,7 @@ class UiState {
   getHandleAt(
     position: Position,
     filter?: (h: Handle) => boolean,
+    includeOtherTools?: boolean,
   ): Handle | null {
     const radius = this.grabRadius;
     const handles = App.ecs.getComponents(Handle);
@@ -494,7 +495,7 @@ class UiState {
       if (!handle.visible) {
         continue;
       }
-      if (!handle.isForTool(App.tools.current.name)) {
+      if (!includeOtherTools && !handle.isForTool(App.tools.current.name)) {
         continue;
       }
       if (typeof filter !== 'undefined' && !filter(handle)) {
