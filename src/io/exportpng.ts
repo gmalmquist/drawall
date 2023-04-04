@@ -55,10 +55,15 @@ class ImageExporter {
           if (i === 0) {
             // now draw the html images
             App.ecs.getComponents(Imaged).forEach(m => {
-              const pos = m.position.get().get('screen');
-              const width = m.width.get().get('screen');
-              const height = m.height.get().get('screen');
-              g.drawImage(m.image, pos.x, pos.y, width, height);
+              const pos = m.center.get('screen');
+              const width = m.width.get('screen');
+              const height = m.height.get('screen');
+              const angle = unwrap(m.rotation.get('screen'));
+              const t = g.getTransform();
+              g.translate(pos.x, pos.y);
+              g.rotate(angle);
+              g.drawImage(m.image, -width/2, -height/2, width, height);
+              g.setTransform(t);
             });
           }
         }

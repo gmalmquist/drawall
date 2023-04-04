@@ -71,6 +71,7 @@ class App {
 
     // nb: order matters for these; it determines the
     // draw order
+    App.ecs.registerSystem(RectangularRenderer);
     App.ecs.registerSystem(AxisConstraintRenderer);
     App.ecs.registerSystem(RoomRenderer);
     App.ecs.registerSystem(AngleRenderer);

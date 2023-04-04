@@ -162,6 +162,7 @@ class Viewport {
 
 class Canvas2d {
   private readonly g: CanvasRenderingContext2D;
+  private readonly transforms: Array<DOMMatrix2DInit> = [];
 
   constructor(
     private readonly el: HTMLCanvasElement,
@@ -192,6 +193,27 @@ class Canvas2d {
 
   get height() {
     return Math.floor(this.el.clientHeight);
+  }
+
+  pushTransform() {
+    this.transforms.push(this.g.getTransform());
+  }
+
+  popTransform() {
+    const transform = this.transforms.pop();
+    if (transform) {
+      this.g.setTransform(transform);
+    }
+  }
+
+  translate(offset: Vector) {
+    const off = offset.get('screen');
+    this.g.translate(off.x, off.y);
+  }
+
+  rotate(angle: Angle) {
+    const radians = angle.get('screen');
+    this.g.rotate(unwrap(radians));
   }
 
   clear() {
@@ -657,14 +679,5 @@ const DebugRenderer = (ecs: EntityComponentSystem) => {
     baseline: 'bottom',
     fill: 'black',
   });
-
-  App.canvas.lineWidth = 1;
-  App.canvas.setLineDash([2, 2]);
-  App.ecs.getComponents(Rectangular).forEach(rect => {
-    App.canvas.strokeStyle = rect.entity.maybe(Handle)?.isActive ? BLUE : 'gray';
-    App.canvas.polygon(rect.polygon);
-    App.canvas.stroke();
-  });
-  App.canvas.setLineDash([]);
 };
 

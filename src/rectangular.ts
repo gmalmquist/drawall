@@ -497,3 +497,19 @@ ComponentFactories.register(Rectangular, (
   return rect;
 });
 
+const RectangularRenderer = (ecs: EntityComponentSystem) => {
+  App.canvas.lineWidth = 1;
+  App.canvas.setLineDash([2, 2]);
+  App.ecs.getComponents(Rectangular).forEach(rect => {
+    const active = rect.entity.maybe(Handle)?.isActive;
+    const hasImage = rect.entity.has(Imaged);
+    if (hasImage && !active) {
+      return; // don't need to render if image is there
+    }
+    App.canvas.strokeStyle = active ? BLUE : 'gray';
+    App.canvas.polygon(rect.polygon);
+    App.canvas.stroke();
+  });
+  App.canvas.setLineDash([]);
+};
+
