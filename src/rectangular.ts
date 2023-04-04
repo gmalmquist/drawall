@@ -192,7 +192,7 @@ class Rectangular extends Component implements Surface, Solo {
     return this.polyRef.get();
   }
 
-  public createHandle(props: Partial<Pick<HandleProps, 'clickable' | 'draggable' | 'hoverable' | 'selectable'>>) {
+  public createHandle(props: Partial<Pick<HandleProps, 'clickable' | 'draggable' | 'hoverable' | 'selectable' | 'tools'>>) {
     if (this.createdHandle) return;
     this.createdHandle = true;
 
@@ -200,7 +200,7 @@ class Rectangular extends Component implements Surface, Solo {
       getPos: () => this.center,
       distance: p => this.sdist(p),
       drag: () => this.dragItem.get(),
-      clickable: false,
+      clickable: true,
       draggable: true,
       hoverable: true,
       selectable: true,
@@ -306,6 +306,7 @@ class Rectangular extends Component implements Surface, Solo {
       ],
       compareValues: Rectangular.posEq,
     }, this.centerRef, this.rotationRef);
+
     main.entity.add(Lever, 
       main,
       Refs.ro(this.centerRef),
@@ -460,6 +461,7 @@ class Rectangular extends Component implements Surface, Solo {
   }
 
   public override toJson(): SavedComponent {
+    const handle = this.entity.maybe(Handle);
     return {
       factory: this.constructor.name,
       arguments: [{
@@ -469,6 +471,14 @@ class Rectangular extends Component implements Surface, Solo {
         rotation: MoreJson.angle.to(this.rotation),
         keepAspect: this.keepAspect,
         createdHandle: this.createdHandle,
+        handleProps: {
+          clickable: handle?.clickable,
+          draggable: handle?.draggable,
+          hoverable: handle?.hoverable,
+          selectable: handle?.selectable,
+          priority: handle?.priority,
+          tools: handle?.tools,
+        } as JsonObject,
       }],
     };
   }
@@ -483,16 +493,24 @@ ComponentFactories.register(Rectangular, (
     rotation: JsonObject,
     keepAspect: boolean,
     createdHandle: boolean,
+    handleProps: {
+      clickable?: boolean,
+      draggable?: boolean,
+      hoverable?: boolean,
+      selectable?: boolean,
+      priority?: number,
+      tools?: ToolName[],
+    },
   },
 ) => {
-  const rect = entity.add(Rectangular);
+  const rect = entity.getOrCreate(Rectangular);
   rect.center = MoreJson.position.from(props.center);
   rect.width = MoreJson.distance.from(props.width);
   rect.height = MoreJson.distance.from(props.height);
   rect.rotation = MoreJson.angle.from(props.rotation);
   rect.keepAspect = props.keepAspect;
   if (props.createdHandle) {
-    rect.createHandle({});
+    rect.createHandle(props.handleProps || {});
   }
   return rect;
 });

@@ -494,6 +494,9 @@ class UiState {
       if (!handle.visible) {
         continue;
       }
+      if (!handle.isForTool(App.tools.current.name)) {
+        continue;
+      }
       if (typeof filter !== 'undefined' && !filter(handle)) {
         continue;
       }

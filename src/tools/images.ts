@@ -38,21 +38,30 @@ class ImagesTool extends Tool {
 
     const resizeThreshold = Distance(20, 'screen');
 
+    this.events.onMouse('click', e => {
+      const image = App.ui.getHandleAt(e.position, h => h.isSpecificallyFor(this.name));
+      if (image) {
+        App.ui.select(image);
+      } else {
+        App.ui.clearSelection();
+      }
+    });
+
     this.events.onMouse('move', e => {
       if (App.ecs.getComponents(Dragging).length > 0) return;
 
-      const image = App.ui.getHandleAt(e.position, e => e.entity.has(Imaged));
+      const image = App.ui.getHandleAt(e.position, h => h.isSpecificallyFor(this.name));
 
       if (image === null) {
         App.pane.style.cursor = this.cursor;
       } else {
-        App.pane.style.cursor = 'grab';
+        App.pane.style.cursor = image.getContextualCursor();
       }
     });
 
     this.events.addDragListener<UiEventDispatcher>({
       onStart: e => {
-        const events = App.ui.getDefaultDragHandler(h => h.entity.has(Imaged));
+        const events = App.ui.getDefaultDragHandler(h => h.isSpecificallyFor(this.name));
         events.handleDrag(e);
         return events;
       },
@@ -91,7 +100,9 @@ class ImagesTool extends Tool {
 
   createImageEntity(url: string) {
     const entity = App.ecs.createEntity();
-    entity.add(Rectangular).createHandle({});
+    entity.add(Rectangular).createHandle({
+      tools: ['images tool'],
+    });
     const img = entity.add(Imaged);
     img.setSrc(url);
   }
@@ -155,7 +166,7 @@ class Imaged extends Component {
 
   public setSrc(url: string) {
     this.image.onload = () => {
-      if (!this.width.nonzero || !this.height.nonzero) {
+      if (!this.rectHasSize()) {
         this.width = Distance(this.image.width, 'screen');
         this.height = Distance(this.image.height, 'screen');
       }
@@ -163,7 +174,7 @@ class Imaged extends Component {
     };
     this.image.src = url;
     this.element.src = url;
-    if (!this.width.nonzero || !this.height.nonzero) {
+    if (!this.rectHasSize()) {
       this.width = Distance(this.image.width, 'screen');
       this.height = Distance(this.image.height, 'screen');
     }
@@ -181,6 +192,12 @@ class Imaged extends Component {
     this.element.style.height = `${height}px`;
     this.element.style.transform = `translate(-${width/2}px, -${height/2}px) rotate(${angle}deg)`;
     this.element.style.display = width > 0 && height > 0 ? 'block' : 'none';
+  }
+
+  private rectHasSize() {
+    const w = this.width.get('screen');
+    const h = this.height.get('screen');
+    return w > 1 && h > 1;
   }
 
   private getDataUrl() {
@@ -202,7 +219,7 @@ class Imaged extends Component {
   }
 
   tearDown() {
-    this.image.parentNode?.removeChild(this.image);
+    this.element.parentNode?.removeChild(this.element);
   }
 
   toJson(): SavedComponent {

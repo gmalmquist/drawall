@@ -18,6 +18,7 @@ interface HandleProps {
   onDelete?: () => 'keep' | 'kill';
   visible?: () => boolean;
   knob?: KnobProps;
+  tools?: Array<ToolName>,
 }
 
 class Surfaced extends Component implements Surface, Solo {
@@ -61,6 +62,7 @@ class Lever extends Component {
       distance: p => circle.get().sdist(p),
       cursor: typeof cursor === 'undefined' ? undefined : (() => cursor),
       priority: parent.priority + 0.5,
+      tools: Array.from(parent.tools),
       drag: () => ({
         name: 'handle',
         kind: 'point',
@@ -135,6 +137,7 @@ class Handle extends Component implements Solo {
   private readonly _drag: () => DragItem;
   private readonly _knob: KnobProps | undefined;
   private readonly knobs: Handle[] = [];
+  private readonly _tools: Set<ToolName>;
 
   public clickable: boolean = true;
   public draggable: boolean = true;
@@ -155,6 +158,8 @@ class Handle extends Component implements Solo {
     this._visible = typeof props.visible === 'undefined' ? (() => true) : props.visible;
     this._drag = typeof props.drag === 'undefined' ? Drags.empty : props.drag;
 
+    this._tools = new Set(props.tools || []);
+
     this.getPos = props.getPos;
     this._onDelete = props.onDelete;
     this._knob = props.knob;
@@ -162,6 +167,18 @@ class Handle extends Component implements Solo {
     const defaultDistanceFunc = (p: Position) => Distances.between(props.getPos(), p);
     this.distanceFunc = typeof props.distance === 'undefined'
       ? defaultDistanceFunc : props.distance;
+  }
+
+  isSpecificallyFor(name: ToolName) {
+    return this._tools.has(name);
+  }
+
+  isForTool(name: ToolName) {
+    return this._tools.size === 0 || this._tools.has(name);
+  }
+
+  get tools(): ToolName[] {
+    return Array.from(this._tools);
   }
 
   get knob(): KnobProps | null {
@@ -188,6 +205,7 @@ class Handle extends Component implements Solo {
 
   addKnob(knob: Handle) {
     this.knobs.push(knob);
+    this.tools.forEach(t => knob._tools.add(t));
   }
 
   getDragClosure(type: 'minimal' | 'complete'): DragClosure {
@@ -312,6 +330,7 @@ class Handle extends Component implements Solo {
         hoverable: this.hoverable,
         selectable: this.selectable,
         priority: this.priority,
+        tools: this.tools,
       }],
     };
   }
@@ -322,6 +341,7 @@ class Handle extends Component implements Solo {
     hoverable: boolean,
     selectable: boolean,
     priority: number,
+    tools: ToolName[],
   }): Handle | 'not ready' {
     const handle = entity.maybe(Handle);
     if (!handle) return 'not ready';
@@ -330,6 +350,7 @@ class Handle extends Component implements Solo {
     handle.hoverable = props.hoverable;
     handle.selectable = props.selectable;
     handle.priority = props.priority || 0;
+    (props.tools || []).forEach(t => handle._tools.add(t));
     return handle;
   }
 }

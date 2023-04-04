@@ -55,6 +55,8 @@ body {
 
 .canvas-wrap > div {
   overflow: clip;
+  user-select: none;
+  pointer-events: none;
 }
 
 .toolbar {

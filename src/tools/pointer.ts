@@ -171,7 +171,8 @@ class PointerTool extends Tool {
         const rect = rectFor(e);
         const strict = this.useStrictSelectFor(e);
         this.strictSelect.set(strict);
-        const selectables = App.ecs.getComponents(Handle).filter(h => h.selectable);
+        const selectables = App.ecs.getComponents(Handle)
+          .filter(h => h.selectable && h.isForTool(this.name));
         for (const s of selectables) {
           s.hovered = strict ? s.containedBy(rect) : s.intersects(rect);
         }
@@ -180,7 +181,8 @@ class PointerTool extends Tool {
         App.pane.style.cursor = 'default';
         const rect = rectFor(e);
         const strict = this.useStrictSelectFor(e);
-        const selected = App.ecs.getComponents(Handle).filter(h => h.selectable)
+        const selected = App.ecs.getComponents(Handle)
+          .filter(h => h.selectable && h.isForTool(this.name))
           .filter(h => strict ? h.containedBy(rect) : h.intersects(rect));
         App.ui.clearHovered(); 
         App.ui.addSelection(...selected);
