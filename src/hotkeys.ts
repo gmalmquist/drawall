@@ -28,6 +28,7 @@ class Keybindings {
     kb.bind('t').to('ruler tool'); // 't' as in tape measure, matches sketchup
     kb.bind('j').to('joint tool');
     kb.bind('n').to('joint tool'); // matches inkscape hotkey
+    kb.bind('f').to('furniture tool');
     kb.bind('Shift', '%').to('toggle-snap');
     kb.bind('k').to('toggle-kinematics');
     kb.bind('Control', 'l').to('loop-select'); // matches blender

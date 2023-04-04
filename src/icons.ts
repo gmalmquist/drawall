@@ -20,6 +20,7 @@ const Icons = {
   editRedo: iconUrl('redo.svg'),
   editUndo: iconUrl('undo.svg'),
   exportImage: iconUrl('export-png.svg'),
+  furniture: iconUrl('furniture.svg'),
   heartInfo: iconUrl('heart-info.svg'),
   hideAngles: iconUrl('hide-angles.svg'),
   hideGrid: iconUrl('hide-grid.svg'),

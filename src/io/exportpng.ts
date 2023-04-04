@@ -50,27 +50,33 @@ class ImageExporter {
         g.fillStyle = 'white';
         g.fillRect(0, 0, compositing.width+1, compositing.height+1);
 
+        const renderImages = (layer: ImageLayer) => {
+          const imgComponents = App.ecs.getComponents(Imaged)
+            .filter(img => img.layer === layer);
+          imgComponents.sort((a, b) => a.zindex - b.zindex);
+          imgComponents.forEach(m => {
+            const pos = m.center.get('screen');
+            const width = m.width.get('screen');
+            const height = m.height.get('screen');
+            const angle = unwrap(m.rotation.get('screen'));
+            const t = g.getTransform();
+            g.translate(pos.x, pos.y);
+            g.rotate(angle);
+            g.globalAlpha = m.opacity.get();
+            g.drawImage(m.image, -width/2, -height/2, width, height);
+            g.setTransform(t);
+            g.globalAlpha = 1;
+          });
+        };
+
+        renderImages('reference');
+
         for (let i = 0; i < images.length; i++) {
           const canvasImage = images[i];
           g.drawImage(canvasImage, 0, 0, canvasImage.width, canvasImage.height);
 
           if (i === 0) {
-            // now draw the html images
-            const imgComponents = App.ecs.getComponents(Imaged);
-            imgComponents.sort((a, b) => a.zindex - b.zindex);
-            imgComponents.forEach(m => {
-              const pos = m.center.get('screen');
-              const width = m.width.get('screen');
-              const height = m.height.get('screen');
-              const angle = unwrap(m.rotation.get('screen'));
-              const t = g.getTransform();
-              g.translate(pos.x, pos.y);
-              g.rotate(angle);
-              g.globalAlpha = m.opacity.get();
-              g.drawImage(m.image, -width/2, -height/2, width, height);
-              g.setTransform(t);
-              g.globalAlpha = 1;
-            });
+            renderImages('furniture');
           }
         }
         

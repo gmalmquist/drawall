@@ -2,8 +2,10 @@ class App {
   public static readonly ecs = new EntityComponentSystem();
   public static readonly pane: HTMLElement =
     document.getElementsByClassName('canvas-wrap')[0]! as HTMLElement;
-  public static readonly imageCanvas: HTMLElement =
-    document.getElementById('image-canvas') as HTMLElement;
+  public static readonly referenceImages: HTMLElement =
+    document.getElementById('reference-images') as HTMLElement;
+  public static readonly furnitureImages: HTMLElement =
+    document.getElementById('furniture-images') as HTMLElement;
   public static gui = new GUI();
   public static readonly tools = new Tools();
   public static readonly actions = new UserActions();

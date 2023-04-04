@@ -1,4 +1,5 @@
 type ToolName = 'none' 
+  | 'furniture tool'
   | 'images tool'
   | 'joint tool'
   | 'pan tool'
@@ -103,6 +104,7 @@ class Tools {
     .addSingle('room tool')
     .addSingle('ruler tool')
     .addSingle('joint tool')
+    .addSingle('furniture tool')
     .addSingle('images tool')
   ;
 

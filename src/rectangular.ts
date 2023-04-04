@@ -168,6 +168,30 @@ class Rectangular extends Component implements Surface, Solo {
     this.heightRef.set(d.to('model'));
   }
 
+  public setTop(position: Position) {
+    this.center = this.center.plus(
+      Vectors.between(this.topRef.get(), position).onAxis(this.upSpan.get())
+    );
+  }
+
+  public setBottom(position: Position) {
+    this.center = this.center.plus(
+      Vectors.between(this.bottomRef.get(), position).onAxis(this.downSpan.get())
+    );
+  }
+
+  public setLeft(position: Position) {
+    this.center = this.center.plus(
+      Vectors.between(this.leftRef.get(), position).onAxis(this.leftSpan.get())
+    );
+  }
+
+  public setRight(position: Position) {
+    this.center = this.center.plus(
+      Vectors.between(this.rightRef.get(), position).onAxis(this.rightSpan.get())
+    );
+  }
+
   public get rotation(): Angle {
     return this.rotationRef.get();
   }
@@ -192,7 +216,7 @@ class Rectangular extends Component implements Surface, Solo {
     return this.polyRef.get();
   }
 
-  public createHandle(props: Partial<Pick<HandleProps, 'clickable' | 'draggable' | 'hoverable' | 'selectable' | 'tools'>>) {
+  public createHandle(props: Partial<HandleProps>) {
     if (this.createdHandle) return;
     this.createdHandle = true;
 
