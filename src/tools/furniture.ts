@@ -210,15 +210,15 @@ class Furniture extends Component implements Solo {
     const best = argmin(App.ecs.getComponents(Wall), wall => {
       const edge = wall.entity.only(PhysEdge).edge;
       const wallToCenter = Vectors.between(edge.midpoint, this.rect.center);
-      if (edge.normal.dot(wallToCenter).gt(epsDistance)) {
-        return 'invalid'; // on the wrong side of the wall
-      }
       
       const closest = argmin(pointOrdering, i => {
         const p = positions[i];
         const s = edge.unlerp(p);
         if (s < 0 || s > 1) return 'invalid';
         const d = Vectors.between(edge.src, p).dot(edge.normal);
+        if (d.gt(epsDistance)) {
+          return 'invalid'; // on the wrong side of the wall
+        }
         return { at: s, distance: d };
       }, ({ distance }) => Math.round(Math.abs(distance.get('screen'))));
       if (closest === null) {
