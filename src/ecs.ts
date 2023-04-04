@@ -522,9 +522,9 @@ class EntityComponentSystem {
       tryAgain.forEach(item => toInflate.push(item));
     }
     if (toInflate.length > 0) {
-      console.warn('failed to inflate', toInflate.length, 'components.');
+      App.log('failed to inflate', toInflate.length, 'components.');
       for (const [entity, component] of toInflate) {
-        console.warn('FAIL', describe(entity, component));
+        App.log('FAIL', describe(entity, component));
       }
     }
 

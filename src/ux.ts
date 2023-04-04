@@ -101,6 +101,14 @@ class UiState {
     if (this.dragging) {
       this.renderSnap();
     }
+
+    for (const s of this.selection) {
+      for (const lever of s.entity.get(Lever)) {
+        if (lever.visible) {
+          this.renderLever(lever);
+        }
+      }
+    }
   }
 
   isKeyPressed(key: string): boolean {
@@ -388,6 +396,33 @@ class UiState {
       App.canvas.strokeStyle = knob.stroke;
       App.canvas.stroke();
     }
+  }
+
+  public renderLever(lever: Lever) {
+    App.canvas.lineWidth = 1;
+    App.canvas.setLineDash([]);
+    App.canvas.strokeStyle = BLUE;
+
+    const src = lever.origin.get();
+    const dst = lever.position.get();
+    const tangent = lever.tangent;
+
+    const srcRad = Distance(2, 'screen');
+    const dstRad = Distance(5, 'screen');
+    const margin = Distance(1, 'screen');
+
+    App.canvas.strokeCircle(src, srcRad);
+
+    App.canvas.strokeLine(
+      src.splus(srcRad.plus(margin), tangent),
+      dst.splus(dstRad.plus(margin), tangent.neg()),
+    );
+
+    App.canvas.lineWidth = 2;
+    App.canvas.strokeCircle(dst, dstRad);
+
+    App.canvas.lineWidth = 1;
+    App.canvas.setLineDash([]);
   }
 
   renderSnap() {

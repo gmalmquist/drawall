@@ -41,6 +41,7 @@ const Icons = {
   posUnlocked: iconUrl('pos-unlocked.svg'),
   recenter: iconUrl('recenter.svg'),
   roomTool: iconUrl('draw-room.svg'),
+  rotate: iconUrl('rotate.svg'),
   rulerCursor: iconUrl('ruler-cursor.svg'),
   rulerTool: iconUrl('ruler.svg'),
   showAngles: iconUrl('show-angles.svg'),

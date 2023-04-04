@@ -79,6 +79,7 @@ hotkeys.js
 dragging.js
 cursors.js
 handles.js
+rectangular.js
 uievents.js
 ux.js
 kinematics.js

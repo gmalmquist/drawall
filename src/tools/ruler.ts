@@ -480,13 +480,13 @@ class Ruler extends Component implements Solo {
       if (attach.kind === 'canvas') {
         return {
           kind: attach.kind,
-          node: MoreJson.position.to(attach.node.pos),
+          position: MoreJson.position.to(attach.node.pos),
         };
       }
       if (attach.kind === 'vertex') {
         return {
           kind: attach.kind,
-          position: attach.node.entity.id,
+          node: attach.node.entity.id,
         };
       }
       if (attach.kind === 'edge') {
@@ -525,7 +525,7 @@ ComponentFactories.register(Ruler, (
       return true;
     }
     if (kind === 'vertex') {
-      const v = entity.ecs.getEntity(a.position! as Eid)?.maybe(PhysNode);
+      const v = entity.ecs.getEntity(a.node! as Eid)?.maybe(PhysNode);
       if (!v) return false;
       end.dragTo(v.pos);
       return true;
