@@ -23,11 +23,30 @@ class FurnitureTool extends Tool {
   }
 
   override setup() {
+    this.events.onMouse('move', e => {
+      if (App.ui.dragging) return;
+      const handle = App.ui.getHandleAt(e.position, h => h.entity.has(Furniture));
+      if (handle !== null) {
+        App.pane.style.cursor = handle.getContextualCursor();
+        return;
+      }
+      App.pane.style.cursor = this.cursor;
+    })
+    this.events.onMouse('click', e => {
+      const handle = App.ui.getHandleAt(e.position, h => h.entity.has(Furniture));
+      if (handle !== null) {
+        App.ui.select(handle);
+        return;
+      }
+      App.pane.style.cursor = this.cursor;
+    });
     this.events.addDragListener({
       onStart: e => {
         const handle = App.ui.getHandleAt(e.start, h => h.entity.has(Furniture));
         if (handle) {
-          // ???
+          const events = App.ui.getDefaultDragHandler(h => h.entity.has(Furniture));
+          events.handleDrag(e);
+          return events;
         }
         return this.getDrawFurnishing(e);
       },
@@ -36,6 +55,7 @@ class FurnitureTool extends Tool {
       },
       onEnd: (e, events) => {
         events?.handleDrag(e);
+        App.pane.style.cursor = this.cursor;
       }
     });
   }
@@ -79,6 +99,15 @@ class FurnitureTool extends Tool {
 
 App.tools.register(FurnitureTool);
 
+interface FurnitureJson {
+}
+
+interface FurnitureAttach {
+  wall: Wall;
+  anchor: 'src' | 'dst' | 'center';
+  posNormal: Distance;
+  posTangent: number;
+}
 
 class Furniture extends Component implements Solo {
   public readonly [SOLO] = true;
@@ -105,5 +134,29 @@ class Furniture extends Component implements Solo {
       return form;
     });
   }
+
+  override toJson(): SavedComponent {
+    return {
+      factory: this.constructor.name,
+      arguments: [{
+      }],
+    };
+  }
 }
+
+ComponentFactories.register(Furniture, (
+  entity: Entity,
+  props: FurnitureJson,
+) => {
+  const furniture = entity.getOrCreate(Furniture);
+  return furniture;
+});
+
+
+const FurnitureRenderer = (ecs: EntityComponentSystem) => {
+  // most of the heavy-lifting is actually done by the rectangle and image
+  // renderers! this is 90% to handle the UI while dragging and stuff.
+
+
+};
 

@@ -9,7 +9,7 @@ class ImagesTool extends Tool {
   }
 
   override get cursor(): Cursor {
-    return 'default';
+    return 'cell';
   }
 
   override get description(): string {
@@ -21,16 +21,12 @@ class ImagesTool extends Tool {
   }
 
   override createUi(ui: AutoForm) {
-    ui.addButton({
-      name: 'Upload Image',
-      icon: Icons.imageUpload,
-      onClick: () => {
-        this.addReferenceImage();
-      },
-    });
   }
 
   override onToolSelected() {
+    App.ecs.getComponents(Imaged)
+      .filter(img => img.layer === 'reference')
+      .forEach(m => m.cleanup());
   }
 
   override setup() {
@@ -49,14 +45,9 @@ class ImagesTool extends Tool {
       const image = images.length > 0 ? images[0]! : null;
       if (image) {
         App.ui.select(image);
-      } else {
-        const handle = App.ui.getHandleAt(e.position, h => true, true);
-        if (handle !== null) {
-          handle.selectWithAppropriateTool();
-          return;
-        }
-        App.ui.clearSelection();
+        return;
       }
+      this.addReferenceImage(e.position);
     });
 
     this.events.onMouse('move', e => {
@@ -84,9 +75,10 @@ class ImagesTool extends Tool {
 
   override update() {}
 
-  addReferenceImage() {
+  addReferenceImage(position: Position) {
     const entity = App.ecs.createEntity();
     const rect = entity.add(Rectangular);
+    rect.center = position;
     rect.createHandle({
       tools: ['images tool'],
     });

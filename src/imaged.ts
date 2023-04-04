@@ -122,6 +122,7 @@ class Imaged extends Component {
 
   public setSrc(url: string) {
     this.image.onload = () => {
+      App.project.requestSave('image uploaded');
       if (!this.rectHasSize()) {
         this.rectToImageDimensions();
       }
@@ -134,7 +135,7 @@ class Imaged extends Component {
     }
     this.updateElement();
     // idk what race condition i have that makes this help =/
-    setTimeout(() => this.updateElement(), 500);
+    setTimeout(() => this.updateElement(), 100);
   }
 
   public toBack() {
@@ -183,15 +184,21 @@ class Imaged extends Component {
     element.style.opacity = '0';
     document.body.appendChild(element);
     element.addEventListener('change', () => {
-      if (element.files === null) return;
-      const files = Array.from(element.files);
+      const files = Array.from(element.files || []);
       for (const file of files) {
         this.setSrc(URL.createObjectURL(file));
         break;
       }
+      this.cleanup();
       element.parentNode?.removeChild(element);
     });
     element.click();
+  }
+
+  public cleanup() {
+    if (this.layer === 'reference' && !this.image.src) {
+      this.entity.destroy();
+    }
   }
 
   private resetAspectRatio() {
