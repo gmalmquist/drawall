@@ -47,6 +47,8 @@ class ImageExporter {
         App.rendering.set(false);
         document.body.prepend(compositing);
         const g = compositing.getContext('2d')!;
+        g.fillStyle = 'white';
+        g.fillRect(0, 0, compositing.width+1, compositing.height+1);
 
         for (let i = 0; i < images.length; i++) {
           const canvasImage = images[i];
