@@ -152,6 +152,16 @@ class Furniture extends Component implements Solo {
           img.showUploadForm();
         },
       });
+      form.addButton({
+        name: 'Align to Wall',
+        enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
+        onClick: () => {
+          const attach = this.attach;
+          if (!attach) return;
+          attach.rotation = Angle(Radians(0), 'model');
+          this.updateOrientation();
+        },
+      });
       return form;
     });
 

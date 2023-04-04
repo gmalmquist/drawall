@@ -100,8 +100,8 @@ interface AutoFieldUi<T> {
 
 interface AutoFieldHandle<V> {
   readonly value: Ref<V>;
-  readonly enabled: Ref<boolean>;
-  readonly hidden: Ref<boolean>;
+  readonly enabled: RefView<boolean, RefK>;
+  readonly hidden: RefView<boolean, RefK>;
 }
 
 type AutoFieldId = Pick<AutoField, 'name' | 'kind'>;
@@ -426,8 +426,8 @@ interface AutoFieldBase<V> {
   name: string;
   label?: string;
   value: Ref<V>;
-  enabled?: Ref<boolean>;
-  hidden?: Ref<boolean>;
+  enabled?: RefView<boolean, RefK>;
+  hidden?: RefView<boolean, RefK>;
   tooltip?: string;
 }
 

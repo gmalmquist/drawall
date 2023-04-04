@@ -132,6 +132,12 @@ class Rectangular extends Component implements Surface, Solo {
       }
       this.aspect.set(this.width.div(height));
     });
+
+    this.centerRef.onChange(() => App.project.requestSave('rect center'));
+    this.heightRef.onChange(() => App.project.requestSave('rect height'));
+    this.rotationRef.onChange(() => App.project.requestSave('rect rotation'));
+    this.widthRef.onChange(() => App.project.requestSave('rect width'));
+    this.keepAspectRef.onChange(() => App.project.requestSave('rect aspect keeping'));
   }
 
   public get center(): Position {

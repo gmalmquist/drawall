@@ -2,6 +2,8 @@ class Project {
   private static readonly STORAGE_VERSION = '0.0.1';
   private static readonly PROJECT_KEY = 'project-data';
   private static readonly SAVE_FREQUENCY_SECONDS = 0.5;
+  private static readonly LOAD_DELAY = 0.5;
+  private loadedAt: number = 0;
   private saveRequestedAt: number | null = 0;
 
   private historyIndex: number = 0;
@@ -120,6 +122,7 @@ class Project {
 
   public requestSave(reason: string) {
     if (App.history.isSuspended) return;
+    if (this.loadedAt + Project.LOAD_DELAY > Time.now) return;
     App.log(`requestSave(${reason})`);
     this.saveRequestedAt = Time.now;
   }
@@ -135,6 +138,7 @@ class Project {
   }
 
   public loadJson(json: JsonObject) {
+    this.loadedAt = Time.now;
     App.history.suspendWhile(() => {
       const p = json as unknown as ProjectJson;
 
@@ -157,6 +161,7 @@ class Project {
 
       App.ecs.loadJson(p.ecs);
     });
+    this.loadedAt = Time.now;
   }
 
   public setup() {
