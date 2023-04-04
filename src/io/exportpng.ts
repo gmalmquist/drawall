@@ -57,7 +57,7 @@ class ImageExporter {
           if (i === 0) {
             // now draw the html images
             const imgComponents = App.ecs.getComponents(Imaged);
-            imgComponents.sort((a, b) => b.zindex - a.zindex);
+            imgComponents.sort((a, b) => a.zindex - b.zindex);
             imgComponents.forEach(m => {
               const pos = m.center.get('screen');
               const width = m.width.get('screen');
