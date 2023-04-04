@@ -250,6 +250,9 @@ class UiState {
     selection: Handle[],
   ): DragClosure {
     const closure = Drags.closure(type, ...selection.map(s => s.getDragItem()));
+    if (this.multiSelecting) {
+      closure.points = closure.points.filter(p => !p.disableWhenMultiple);
+    }
     closure.snaps.push({
       kind: 'point',
       category: 'grid',
@@ -503,6 +506,10 @@ class UiState {
         continue;
       }
       if (typeof filter !== 'undefined' && !filter(handle)) {
+        continue;
+      }
+      if (this.multiSelecting && handle.getDragClosure('complete').points
+        .every(p => p.disableWhenMultiple)) {
         continue;
       }
       if (choice !== null && choice.priority > handle.priority) {

@@ -331,11 +331,14 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
     if (attach !== null) {
       const edge = attach.wall.edge;
       App.canvas.strokeStyle = PINK;
-      App.canvas.lineWidth = 1;
+      App.canvas.lineWidth = 2;
+      App.canvas.setLineDash([4, 2]);
       App.canvas.strokeLine(
         attach.point.get(),
         edge.lerp(attach.at),
       );
+      App.canvas.lineWidth = 1;
+      App.canvas.setLineDash([]);
     }
   }
 };
