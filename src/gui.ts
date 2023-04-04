@@ -22,8 +22,8 @@ class GUI {
 
     this.topbar.append(this.file);
     this.topbar.appendRuler();
-    this.topbar.append(this.selection);
     this.topbar.append(this.tool);
+    this.topbar.append(this.selection);
     this.topbar.appendSpacer();
     this.topbar.append(this.ux);
     this.topbar.appendRuler();
@@ -161,7 +161,7 @@ class GUI {
       from: _ => App.tools.current,
     });
 
-    const snappingHidden = Refs.reduce(
+    const snappingHidden = Refs.negate(Refs.reduce(
       {
         to: ([supported, enabled]) => supported && enabled,
         from: _ => [snappingSupported.get(), App.ui.snapping.enableByDefaultRef.get()],
@@ -169,10 +169,7 @@ class GUI {
       },
       snappingSupported,
       App.ui.snapping.enableByDefaultRef,
-    ).map<boolean>({
-      to: a => !a,
-      from: a => !a,
-    });
+    ));
 
 // not implemented
 //    form.add({
@@ -218,11 +215,14 @@ class GUI {
 
     form.addSeparator();
 
+    const hideVisibilityOptions = Refs.negate(App.settings.showVisibilityOptions);
+
     form.add({
       name: 'Show/Hide Grid',
       kind: 'toggle',
       value: App.settings.showGrid,
       icons: { on: Icons.showGrid, off: Icons.hideGrid },
+      hidden: hideVisibilityOptions,
     });
 
     form.add({
@@ -230,6 +230,7 @@ class GUI {
       kind: 'toggle',
       value: App.settings.showGuides,
       icons: { on: Icons.showGuides, off: Icons.hideGuides },
+      hidden: hideVisibilityOptions,
     });
 
     form.add({
@@ -237,6 +238,7 @@ class GUI {
       kind: 'toggle',
       value: App.settings.showLengths,
       icons: { on: Icons.showLengths, off: Icons.hideLengths },
+      hidden: hideVisibilityOptions,
     });
 
     form.add({
@@ -244,6 +246,7 @@ class GUI {
       kind: 'toggle',
       value: App.settings.showAngles,
       icons: { on: Icons.showAngles, off: Icons.hideAngles },
+      hidden: hideVisibilityOptions,
     });
 
     form.add({
@@ -251,6 +254,14 @@ class GUI {
       kind: 'toggle',
       value: App.settings.showJoints,
       icons: { on: Icons.showJoints, off: Icons.hideJoints },
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
+      name: 'Visibility Options',
+      kind: 'toggle',
+      value: App.settings.showVisibilityOptions,
+      icons: { on: Icons.visible, off: Icons.invisible },
     });
 
     form.addSeparator();

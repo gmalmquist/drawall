@@ -504,6 +504,8 @@ ComponentFactories.register(Rectangular, (
   },
 ) => {
   const rect = entity.getOrCreate(Rectangular);
+  // don't try to keep aspect while we're loading dimensions
+  rect.keepAspect = false; 
   rect.center = MoreJson.position.from(props.center);
   rect.width = MoreJson.distance.from(props.width);
   rect.height = MoreJson.distance.from(props.height);

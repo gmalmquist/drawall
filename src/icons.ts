@@ -61,6 +61,8 @@ const Icons = {
   snapLocalOn: iconUrl('snap-local-on.svg'),
   snapOff: iconUrl('snap-off.svg'),
   snapOn: iconUrl('snap-on.svg'),
+  toBack: iconUrl('to-back.svg'),
+  toFront: iconUrl('to-front.svg'),
   visible: iconUrl('eye-open.svg'),
 };
 

@@ -39,7 +39,12 @@ class ImagesTool extends Tool {
     const resizeThreshold = Distance(20, 'screen');
 
     this.events.onMouse('click', e => {
-      const image = App.ui.getHandleAt(e.position, h => h.isSpecificallyFor(this.name));
+      const images = App.ecs.getComponents(Imaged)
+        .filter(img => img.entity.has(Handle))
+        .filter(img => img.entity.only(Rectangular).contains(e.position))
+        .sort((a, b) => b.zindex - a.zindex)
+        .map(img => img.entity.only(Handle));
+      const image = images.length > 0 ? images[0]! : null;
       if (image) {
         App.ui.select(image);
       } else {
@@ -105,11 +110,13 @@ class ImagesTool extends Tool {
 
   createImageEntity(url: string) {
     const entity = App.ecs.createEntity();
-    entity.add(Rectangular).createHandle({
+    const rect = entity.add(Rectangular);
+    rect.createHandle({
       tools: ['images tool'],
     });
     const img = entity.add(Imaged);
     img.setSrc(url);
+    rect.keepAspect = true;
   }
 }
 
@@ -118,20 +125,25 @@ App.tools.register(ImagesTool);
 class Imaged extends Component {
   public static readonly DEFAULT_OPACITY = 0.5;
 
+  private static ZINDEX_ARRAY = Array<Imaged>();
+
+  private readonly canvas: HTMLElement;
   private readonly element: HTMLImageElement;
   private readonly rect: Rectangular;
+  private readonly zindexRef: Ref<number> = Refs.of(0);
 
   public readonly image: HTMLImageElement;
-
   public readonly opacity: Ref<number>;
 
   constructor(entity: Entity, rect?: Rectangular) {
     super(entity);
     this.image = new Image();
 
+    this.zindexRef.set(Imaged.ZINDEX_ARRAY.length);
+    Imaged.ZINDEX_ARRAY.push(this);
+
     this.rect = typeof rect !== 'undefined'
       ? rect : entity.getOrCreate(Rectangular);
-    this.rect.keepAspect = true;
 
     this.opacity = Refs.of(Imaged.DEFAULT_OPACITY);
 
@@ -139,7 +151,9 @@ class Imaged extends Component {
     this.element.style.position = 'absolute';
     this.element.style.display = 'none';
     this.updateElement();
-    App.imageCanvas.appendChild(this.element);
+
+    this.canvas = App.imageCanvas;
+    this.canvas.appendChild(this.element);
 
     this.rect.centerRef.onChange(_ => this.updateElement());
     this.rect.widthRef.onChange(_ => this.updateElement());
@@ -157,8 +171,22 @@ class Imaged extends Component {
         min: 0,
         max: 1,
       });
+      form.addButton({
+        name: 'Send to Back',
+        icon: Icons.toBack,
+        onClick: () => this.toBack(),
+      });
+      form.addButton({
+        name: 'Bring to Front',
+        icon: Icons.toFront,
+        onClick: () => this.toFront(),
+      });
       return form;
     });
+  }
+
+  get zindex(): number {
+    return this.zindexRef.get();
   }
 
   get width() {
@@ -192,18 +220,32 @@ class Imaged extends Component {
   public setSrc(url: string) {
     this.image.onload = () => {
       if (!this.rectHasSize()) {
-        this.width = Distance(this.image.width, 'screen');
-        this.height = Distance(this.image.height, 'screen');
+        this.rectToImageDimensions();
       }
       this.updateElement();
     };
     this.image.src = url;
     this.element.src = url;
     if (!this.rectHasSize()) {
-      this.width = Distance(this.image.width, 'screen');
-      this.height = Distance(this.image.height, 'screen');
+      this.rectToImageDimensions();
     }
     this.updateElement();
+  }
+
+  public toBack() {
+    this.canvas.removeChild(this.element);
+    this.canvas.prepend(this.element);
+    Imaged.ZINDEX_ARRAY.splice(this.zindexRef.get(), 1);
+    Imaged.ZINDEX_ARRAY.unshift(this);
+    this.zindexRef.set(0);
+  }
+
+  public toFront() {
+    this.canvas.removeChild(this.element);
+    this.canvas.appendChild(this.element);
+    Imaged.ZINDEX_ARRAY.splice(this.zindexRef.get(), 1);
+    Imaged.ZINDEX_ARRAY.push(this);
+    this.zindexRef.set(Imaged.ZINDEX_ARRAY.length - 1);
   }
 
   public updateElement() {
@@ -218,6 +260,14 @@ class Imaged extends Component {
     this.element.style.height = `${height}px`;
     this.element.style.transform = `translate(-${width/2}px, -${height/2}px) rotate(${angle}deg)`;
     this.element.style.display = width > 0 && height > 0 ? 'block' : 'none';
+  }
+
+  private rectToImageDimensions() {
+    const keepAspect = this.rect.keepAspect;
+    this.rect.keepAspect = false;
+    this.width = Distance(this.image.width, 'screen');
+    this.height = Distance(this.image.height, 'screen');
+    this.rect.keepAspect = keepAspect;
   }
 
   private rectHasSize() {
@@ -245,6 +295,9 @@ class Imaged extends Component {
   }
 
   tearDown() {
+    if (Imaged.ZINDEX_ARRAY[this.zindexRef.get()] === this) {
+      Imaged.ZINDEX_ARRAY.splice(this.zindexRef.get(), 1);
+    }
     this.element.parentNode?.removeChild(this.element);
   }
 

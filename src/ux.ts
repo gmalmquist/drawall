@@ -226,7 +226,8 @@ class UiState {
   }
 
   selectAll() {
-    this.setSelection(...App.ecs.getComponents(Handle).filter(h => h.selectable));
+    this.setSelection(...App.ecs.getComponents(Handle)
+      .filter(h => h.selectable && h.isForTool(App.tools.current.name)));
   }
 
   deleteSelected() {
@@ -644,6 +645,7 @@ class UiState {
     App.pane.addEventListener('contextmenu', e => e.preventDefault());
 
     App.pane.addEventListener('mousedown', e => {
+      e.preventDefault();
       this.mouse.buttons = e.buttons;
 
       const event = makeMouseEvent('down', e);
