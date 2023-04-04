@@ -244,10 +244,7 @@ class Wall extends Component implements Solo {
   public readonly [SOLO] = true;
   public readonly srcRef: Ref<WallJoint>;
   public readonly dstRef: Ref<WallJoint>;
-  public readonly vector: RoRef<Vector>;
-  public readonly tangent: RoRef<Vector>;
-  public readonly normal: RoRef<Vector>;
-  public readonly midpoint: RoRef<Position>;
+  public readonly edgeRef: RoRef<MemoEdge>;
   private _room: Room | null = null;
 
   constructor(entity: Entity) {
@@ -257,7 +254,7 @@ class Wall extends Component implements Solo {
     this.src.attachOutgoing(this);
     this.dst.attachIncoming(this);
 
-    entity.add(
+    const node = entity.add(
       PhysEdge,
       Refs.memo(this.srcRef, j => j.entity.only(PhysNode)),
       Refs.memo(this.dstRef, j => j.entity.only(PhysNode)),
@@ -265,28 +262,15 @@ class Wall extends Component implements Solo {
 
     entity.add(Surfaced, () => entity.ref(e => e.only(PhysEdge)));
 
-    this.vector = Refs.memo(
-      Refs.reduceRo(
-        a => a,
-        Refs.flatMapRo(this.srcRef, j => j.position),
-        Refs.flatMapRo(this.dstRef, j => j.position),
-      ),
-      ([src, dst]) => Vectors.between(src, dst),
-    );
-    this.tangent = Refs.memo(this.vector, v => v.unit());
-    this.normal = Refs.memo(this.tangent, v => v.r90());
-    this.midpoint = Refs.memo(
-      Refs.reduceRo(
-        a => a,
-        Refs.flatMapRo(this.srcRef, j => j.position),
-        Refs.flatMapRo(this.dstRef, j => j.position),
-      ),
-      ([src, dst]) => src.lerp(0.5, dst),
+    this.edgeRef = Refs.memoReduce(
+      (src, dst) => new MemoEdge(src, dst),
+      Refs.flatMapRo(this.srcRef, r => r.position),
+      Refs.flatMapRo(this.dstRef, r => r.position),
     );
 
     const handle = entity.add(Handle, {
       getPos: () => this.src.pos,
-      distance: (pt: Position) => new SpaceEdge(this.src.pos, this.dst.pos).distance(pt),
+      distance: (pt: Position) => this.edge.distanceFrom(pt),
       priority: 0,
       drag: () => ({
         kind: 'group',
@@ -319,11 +303,11 @@ class Wall extends Component implements Solo {
     // only valid until the view changes, so it doesn't hold for cached values
     // like this.
     const lollipopRef = Refs.memo(
-      Refs.reduceRo(x => x, this.midpoint, this.normal, App.viewport.changedRef),
-      ([midpoint, normal, _]) => {
+      Refs.reduceRo(x => x, this.edgeRef, App.viewport.changedRef),
+      ([edge, _]) => {
         return lollipopBase
-          .rotate(this.normal.get().angle())
-          .translate(this.midpoint.get().toVector());
+          .rotate(edge.normal.angle())
+          .translate(edge.midpoint.toVector());
       },
     );
 
@@ -337,16 +321,16 @@ class Wall extends Component implements Solo {
       drag: () => {
         const srcpos = this.src.pos;
         const dstpos = this.dst.pos;
-        const srctan = this.src.incoming?.tangent.get();
-        const dsttan = this.dst.outgoing?.tangent.get();
+        const srctan = this.src.incoming?.edge.tangent;
+        const dsttan = this.dst.outgoing?.edge.tangent;
         return {
           kind: 'point',
           name: 'edge',
-          get: this.midpoint.get,
+          get: () => this.edge.midpoint,
           set: (midpoint) => {
             if (typeof srctan !== 'undefined' && typeof dsttan !== 'undefined') {
-              const tangent = this.tangent.get();
-              const ray = new SpaceRay(midpoint, tangent);
+              const edge = this.edge;
+              const ray = new SpaceRay(midpoint, edge.tangent);
               const srchit = ray.intersection(new SpaceRay(srcpos, srctan));
               const dsthit = ray.intersection(new SpaceRay(dstpos, dsttan));
               if (srchit === null || dsthit === null) {
@@ -382,8 +366,8 @@ class Wall extends Component implements Solo {
     return Refs.ro(this.dstRef);
   }
 
-  getEdge(): SpaceEdge {
-    return new SpaceEdge(this.src.pos, this.dst.pos);
+  get edge(): MemoEdge {
+    return this.edgeRef.get();
   }
 
   getConnectedLoop(direction: 'forward' | 'backward' | 'both' = 'both'): Wall[] {
@@ -480,7 +464,7 @@ class Wall extends Component implements Solo {
   }
 
   get outsideNormal(): Vector {
-    return this.normal.get();
+    return this.edge.normal;
   }
 
   get insideNormal(): Vector {
@@ -488,7 +472,7 @@ class Wall extends Component implements Solo {
   }
 
   get length(): Distance {
-    return this.vector.get().mag();
+    return this.edge.length;
   }
 
   // split this wall into two walls, creating a new
@@ -895,10 +879,11 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     };
 
     const active = wall.entity.get(Handle).some(h => h.isActive);
-  
-    const normal = wall.normal.get();
-    const tangent = wall.tangent.get();
-    const length = wall.length;
+ 
+    const edge = wall.edge;
+    const normal = edge.normal;
+    const tangent = edge.tangent;
+    const length = edge.length;
     const wallColor = active ? rainbow : 'black'; 
 
     const getEndPad = (joint: WallJoint, offset: Distance): Distance => {
@@ -915,14 +900,15 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     ) => {
       const { src, dst } = cached(
         Memo(() => {
+          const edge = wall.edge;
           const srcpad = getEndPad(wall.src, offset);
           const dstpad = getEndPad(wall.dst, offset);
-          const normal = wall.normal.get();
-          const tangent = wall.tangent.get();
-          const src = wall.src.pos
+          const normal = wall.edge.normal;
+          const tangent = wall.edge.tangent;
+          const src = edge.src 
             .splus(offset, normal)
             .splus(srcpad, tangent);
-          const dst = wall.dst.pos
+          const dst = edge.dst
             .splus(offset, normal)
             .splus(dstpad, tangent.neg());
           return { src, dst };
@@ -947,7 +933,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
     const constraint = wall.entity.only(LengthConstraint);
     const label = constraint.label;
     const textOffset = Distance(App.settings.fontSize/2 + 10, 'screen');
-    const textPosition = wall.midpoint.get().splus(textOffset.neg(), normal);
+    const textPosition = edge.midpoint.splus(textOffset.neg(), normal);
 
     if (constraint.enabled) {
       const offCenter = Distance(App.settings.fontSize * 3, 'screen');

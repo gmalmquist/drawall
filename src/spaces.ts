@@ -589,6 +589,14 @@ const Positions = {
   centroid: SpacePos.centroid,
 };
 
+interface EdgeLike {
+  src: Position;
+  dst: Position;
+  vector?: Vector;
+  tangent?: Vector;
+  normal?: Vector;
+}
+
 class SpaceEdge {
   constructor(
     public readonly src: Position,

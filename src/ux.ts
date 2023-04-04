@@ -341,12 +341,13 @@ class UiState {
 
         App.pane.style.cursor = pickCursor(selection);
         selection.forEach(h => { h.dragging = true; });
+        selection.forEach(h => h.events.handleDrag(e));
 
         const closure = this.getDragClosure('minimal', selection);
         const starts = closure.points.map(point => point.get());
-        return { closure, starts };
+        return { closure, starts, selection };
       },
-      onUpdate: (e, { closure, starts }) => {
+      onUpdate: (e, { closure, starts, selection }) => {
         if (App.ecs.getComponents(Dragging).length === 0) return;
         const drag = new Drag(e.start, e.position);
         const preferred = this.preferredSnap !== null
@@ -365,8 +366,10 @@ class UiState {
         this.currentSnapResult = result;
         const delta = (result?.snapped || drag).delta;
         closure.points.forEach((point, i) => point.set(starts[i].plus(delta)));
+        selection.forEach(h => h.events.handleDrag(e));
       },
-      onEnd: (_e, _context) => {
+      onEnd: (e, { selection }) => {
+        selection.forEach(h => h.events.handleDrag(e));
         this.clearDragging();
         this.currentSnapResult = null;
         this.preferredSnap = null;

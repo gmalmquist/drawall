@@ -90,7 +90,7 @@ ComponentFactories.register(PhysNode, (
   return node;
 });
 
-class MemoEdge {
+class MemoEdge implements EdgeLike {
   private readonly _vector = Memo((): Vector => Vectors.between(this.src, this.dst));
   private readonly _tangent = Memo((): Vector => this.vector.unit());
   private readonly _normal = Memo((): Vector => this.tangent.r90());
@@ -127,6 +127,19 @@ class MemoEdge {
 
   public distanceFrom(pos: Position): Distance {
     return Distances.between(pos, this.closestPoint(pos));
+  }
+
+  public intersection(other: MemoEdge): Position | null {
+    const denominator = this.vector.dot(other.normal);
+    if (denominator.sign === 0) return null;
+    const time = Vectors.between(this.src, other.src).dot(other.normal)
+      .div(denominator);
+    if (time < 0 || time > 1) return null;
+    
+    const hit = this.lerp(time);
+    const s = other.unlerp(hit);
+    if (s < 0 || s > 1) return null;
+    return hit;
   }
 }
 

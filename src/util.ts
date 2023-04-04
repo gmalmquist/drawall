@@ -33,6 +33,29 @@ const reverseInPlace = <T>(arr: Array<T>): void => {
   }
 };
 
+interface ArgScore<T, R> {
+  arg: T;
+  result: R;
+  score: number;
+}
+
+const argmin = <T, R>(
+  args: Iterable<T>,
+  transform: (arg: T) => R | 'invalid',
+  scoreFunc: (result: R) => number,
+): ArgScore<T, R> | null => {
+  let min: ArgScore<T, R> | null = null;
+  for (const arg of args) {
+    const result = transform(arg);
+    if (result === 'invalid') continue;
+    const score = scoreFunc(result);
+    if (min === null || score < min.score) {
+      min = { arg, result, score };
+    }
+  }
+  return min;
+}
+
 const areEq = <V>(a: V, b: V) => a === b;
 
 const Memo = <V>(f: () => V, fingerprint?: () => readonly any[]): (() => V)  => {

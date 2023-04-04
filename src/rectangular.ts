@@ -474,12 +474,12 @@ class Rectangular extends Component implements Surface, Solo {
       name: 'rect',
       aggregate: 'all',
       items: points.map(({ name, ref }, i) => {
-        const delta = Vectors.between(this.centerRef.get(), ref.get());
+        const delta = () => Vectors.between(this.centerRef.get(), ref.get());
         return {
           kind: 'point',
           name,
           get: () => ref.get(),
-          set: p => this.centerRef.set(p.minus(delta)),
+          set: p => this.centerRef.set(p.minus(delta())),
           disableWhenMultiple: i > 0,
         };
       }),

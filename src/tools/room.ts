@@ -102,7 +102,7 @@ class DrawRoomTool extends Tool {
     const results = [];
     for (const wall1 of one.walls) {
       for (const wall2 of two.walls) {
-        const position = wall1.getEdge().intersection(wall2.getEdge());
+        const position = wall1.edge.intersection(wall2.edge);
         if (position === null) continue;
         results.push({
           position,
@@ -154,7 +154,7 @@ class DrawRoomTool extends Tool {
         const arrow = (w: Wall, l: string, c: string) => {
           const offset = w.outsideNormal
             .scale(Distance(5 * (1 + splitDepth.get(w.name)), 'screen'));
-          const tangent = w.tangent.get();
+          const tangent = w.edge.tangent;
           const shrink = Distance(10, 'screen')
             .min(w.length.scale(0.25));
           const src = w.src.pos.splus(shrink, tangent).plus(offset);
@@ -180,10 +180,10 @@ class DrawRoomTool extends Tool {
     while (frontier.length > 0) {
       const wa = frontier.pop()!;
       wallSetA.add(wa);
-      const ea = wa.getEdge();
+      const ea = wa.edge;
 
       for (const wb of new Set(wallSetB)) {
-        const eb = wb.getEdge();
+        const eb = wb.edge;
         const hit = ea.intersection(eb);
         if (hit === null) {
           continue;
