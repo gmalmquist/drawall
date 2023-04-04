@@ -11,6 +11,8 @@ const Icons = {
   //snapGuidesOn: iconUrl('snap-guides-on.svg'),
   angleLocked: iconUrl('angle-locked.svg'),
   angleUnlocked: iconUrl('angle-unlocked.svg'),
+  aspectLocked: iconUrl('aspect-locked.svg'),
+  aspectUnlocked: iconUrl('aspect-unlocked.svg'),
   axisLocked: iconUrl('axis-locked.svg'),
   axisUnlocked: iconUrl('axis-unlocked.svg'),
   axisX: iconUrl('axis-x.svg'),

@@ -236,6 +236,16 @@ class Rectangular extends Component implements Surface, Solo {
         kind: 'angle',
         value: this.rotationRef,
       });
+      form.add({
+        name: 'rect.aspect',
+        tooltip: 'lock/unlock aspect ratio',
+        kind: 'toggle',
+        value: this.keepAspectRef,
+        icons: {
+          on: Icons.aspectLocked,
+          off: Icons.aspectUnlocked,
+        },
+      });
       return form;
     });
 
@@ -357,11 +367,23 @@ class Rectangular extends Component implements Surface, Solo {
             get: () => frame.get().origin,
             set: p => {
               const { origin, horizontal, vertical } = frame.get();
-              const delta = Vectors.between(origin, p);
+              let delta = Vectors.between(origin, p);
               const startWidth = this.width;
               const startHeight = this.height;
-              this.width = this.width.plus(delta.dot(horizontal));
-              this.height = this.height.plus(delta.dot(vertical));
+
+              if (this.keepAspect
+                && horizontal.mag2().nonzero
+                && vertical.mag2().nonzero) {
+                const axis = this.vertical.get().plus(this.horizontal.get()).unit();
+                delta = delta.onAxis(axis);
+
+                const startWidth = this.width;
+                const startHeight = this.height;
+                this.width = this.width.plus(delta.dot(horizontal));
+              } else {
+                this.width = this.width.plus(delta.dot(horizontal));
+                this.height = this.height.plus(delta.dot(vertical));
+              }
               this.center = this.center
                 .splus(this.width.minus(startWidth).scale(0.5), horizontal)
                 .splus(this.height.minus(startHeight).scale(0.5), vertical)
