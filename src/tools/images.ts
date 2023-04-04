@@ -115,12 +115,14 @@ class Imaged extends Component {
 
     this.element = new Image();
     this.element.style.position = 'absolute';
+    this.element.style.display = 'none';
     this.updateElement();
     App.imageCanvas.appendChild(this.element);
 
     this.rect.centerRef.onChange(_ => this.updateElement());
     this.rect.widthRef.onChange(_ => this.updateElement());
     this.rect.heightRef.onChange(_ => this.updateElement());
+    this.rect.rotationRef.onChange(_ => this.updateElement());
   }
 
   get width() {
@@ -153,14 +155,18 @@ class Imaged extends Component {
 
   public setSrc(url: string) {
     this.image.onload = () => {
-      this.width = Distance(this.image.width, 'screen');
-      this.height = Distance(this.image.height, 'screen');
+      if (!this.width.nonzero || !this.height.nonzero) {
+        this.width = Distance(this.image.width, 'screen');
+        this.height = Distance(this.image.height, 'screen');
+      }
       this.updateElement();
     };
     this.image.src = url;
     this.element.src = url;
-    this.width = Distance(this.image.width, 'screen');
-    this.height = Distance(this.image.height, 'screen');
+    if (!this.width.nonzero || !this.height.nonzero) {
+      this.width = Distance(this.image.width, 'screen');
+      this.height = Distance(this.image.height, 'screen');
+    }
     this.updateElement();
   }
 
@@ -174,6 +180,7 @@ class Imaged extends Component {
     this.element.style.width = `${width}px`;
     this.element.style.height = `${height}px`;
     this.element.style.transform = `translate(-${width/2}px, -${height/2}px) rotate(${angle}deg)`;
+    this.element.style.display = width > 0 && height > 0 ? 'block' : 'none';
   }
 
   private getDataUrl() {
