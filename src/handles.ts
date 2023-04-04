@@ -51,7 +51,6 @@ class Lever extends Component {
     cursor?: Cursor,
   ) {
     super(entity);
-    const circle = Refs.memo(position, p => new Circle(p, Distance(5, 'screen')));
     this.handle = entity.ecs.createEntity().add(Handle, {
       draggable: true,
       clickable: false,
@@ -59,7 +58,7 @@ class Lever extends Component {
       hoverable: false,
       visible: () => this.visible,
       getPos: () => position.get(),
-      distance: p => circle.get().sdist(p),
+      distance: p => new Circle(position.get(), Distance(5, 'screen')).sdist(p),
       cursor: typeof cursor === 'undefined' ? undefined : (() => cursor),
       priority: parent.priority + 0.5,
       tools: Array.from(parent.tools),

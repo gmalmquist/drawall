@@ -295,11 +295,13 @@ class Rectangular extends Component implements Surface, Solo {
   }
 
   private createRotationLever(main: Handle) {
+    const calcPosition = (origin: Position, rotation: Angle) => (
+      origin.plus(Vector(Axis.X, 'screen')
+        .scale(this.width.scale(0.5).plus(Distance(50, 'screen')))
+        .rotate(rotation))
+    );
     const position = Refs.reduce({
-      to: ([origin, rotation]) =>
-        origin.plus(Vector(Axis.X, 'screen')
-          .scale(this.width.scale(0.5).plus(Distance(50, 'screen')))
-          .rotate(rotation)),
+      to: ([origin, rotation]) => calcPosition(origin, rotation),
       from: (position: Position) => [
         this.center,
         Vectors.between(this.center, position).angle()
