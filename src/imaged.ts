@@ -133,6 +133,8 @@ class Imaged extends Component {
       this.rectToImageDimensions();
     }
     this.updateElement();
+    // idk what race condition i have that makes this help =/
+    setTimeout(() => this.updateElement(), 500);
   }
 
   public toBack() {
