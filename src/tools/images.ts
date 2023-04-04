@@ -111,7 +111,6 @@ class Imaged extends Component {
 
     this.rect = typeof rect !== 'undefined'
       ? rect : entity.getOrCreate(Rectangular);
-    this.rect.keepAspect = true;
 
     this.element = new Image();
     this.element.style.position = 'absolute';
@@ -121,7 +120,6 @@ class Imaged extends Component {
     this.rect.centerRef.onChange(_ => this.updateElement());
     this.rect.widthRef.onChange(_ => this.updateElement());
     this.rect.heightRef.onChange(_ => this.updateElement());
-    this.rect.rotationRef.onChange(_ => this.updateElement());
   }
 
   get width() {
@@ -177,8 +175,39 @@ class Imaged extends Component {
     this.element.style.transform = `translate(-${width/2}px, -${height/2}px) rotate(${angle}deg)`;
   }
 
+  private getDataUrl() {
+    const canvas = document.createElement('canvas');
+    canvas.width = this.image.width;
+    canvas.height = this.image.height;
+    const g = canvas.getContext('2d')!;
+    g.drawImage(this.image, 0, 0);
+    const dataUrl = canvas.toDataURL('image/png');
+    return dataUrl;
+  }
+
+  private getStableUrl() {
+    const src = this.image.src;
+    if (src.startsWith('blob:')) {
+      return this.getDataUrl();
+    }
+    return src;
+  }
+
   tearDown() {
-    this.element.parentNode?.removeChild(this.element);
+    this.image.parentNode?.removeChild(this.image);
+  }
+
+  toJson(): SavedComponent {
+    return {
+      factory: this.constructor.name,
+      arguments: [ this.getStableUrl() ],
+    };
   }
 }
+
+ComponentFactories.register(Imaged, (entity: Entity, url: string) => {
+  const imaged = entity.getOrCreate(Imaged);
+  imaged.setSrc(url);
+  return imaged;
+});
 
