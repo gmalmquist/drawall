@@ -537,7 +537,7 @@ class UiState {
     return pos;
   }
 
-  private updateForms() {
+  public updateForms() {
     const forms = Array.from(this.selection)
       .map(handle => handle.entity.get(Form))
       .map(forms => AutoForm.union(forms.map(form => form.form)));

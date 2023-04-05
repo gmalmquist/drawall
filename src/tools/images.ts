@@ -24,6 +24,9 @@ class ImagesTool extends Tool {
   }
 
   override onToolSelected() {
+  }
+
+  override onToolDeselected() {
     App.ecs.getComponents(Imaged)
       .filter(img => img.layer === 'reference')
       .forEach(m => m.cleanup());

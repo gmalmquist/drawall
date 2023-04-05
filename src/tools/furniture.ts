@@ -122,7 +122,7 @@ interface FurnitureAttach {
   rotation: Angle;
 }
 
-type FurnitureMaterial = 'default' | 'wood';
+type FurnitureMaterial = 'image' | 'plain' | 'wood';
 
 class Furniture extends Component implements Solo {
   public readonly [SOLO] = true;
@@ -177,15 +177,29 @@ class Furniture extends Component implements Solo {
 
     const getDragPoints = () => this.entity.only(Handle).getDragClosure('complete').points;
 
-    entity.getOrCreate(Form).add(() => {
+    this.materialRef.onChange(m => {
+      const hadImage = entity.has(Imaged);
+      if (m === 'image') {
+        const img = entity.getOrCreate(Imaged, 'furniture');
+        img.showUploadForm();
+      } else {
+        entity.removeAll(Imaged);
+      }
+      if (hadImage !== entity.has(Imaged)) {
+        App.ui.updateForms();
+      }
+    });
+
+    entity.add(Form, () => {
       const form = new AutoForm();
-      form.addButton({
-        name: 'Upload Image',
-        icon: Icons.imageUpload,
-        onClick: () => {
-          const img = entity.getOrCreate(Imaged, 'furniture');
-          img.showUploadForm();
-        },
+      form.addSelect({
+        name: 'Furniture Type',
+        value: this.materialRef,
+        items: [
+          { value: 'plain', icon: Icons.plain, },
+          { value: 'wood', icon: Icons.wood, },
+          { value: 'image', icon: Icons.image, },
+        ],
       });
       form.addButton({
         name: 'Align to Wall',
@@ -474,7 +488,7 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
     const material = furniture.material;
     App.canvas.lineWidth = 1;
     App.canvas.setLineDash([]);
-    if (material === 'default') {
+    if (material === 'plain') {
       App.canvas.lineWidth = 2;
       App.canvas.fillStyle = 'lightgray';
       App.canvas.strokeStyle = 'darkgray';

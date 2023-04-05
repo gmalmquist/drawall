@@ -601,9 +601,10 @@ const RectangularRenderer = (ecs: EntityComponentSystem) => {
   App.canvas.lineWidth = 1;
   App.canvas.setLineDash([2, 2]);
   App.ecs.getComponents(Rectangular).forEach(rect => {
+    if (rect.entity.has(Furniture)) return;
     const active = rect.entity.maybe(Handle)?.isActive;
-    const hasImage = rect.entity.has(Imaged);
-    if (hasImage && !active) {
+    const hasTexture = rect.entity.has(Imaged) || rect.entity.has(Furniture);
+    if (hasTexture && !active) {
       return; // don't need to render if image is there
     }
     App.canvas.strokeStyle = active ? BLUE : 'gray';

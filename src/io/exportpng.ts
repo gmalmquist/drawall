@@ -63,7 +63,11 @@ class ImageExporter {
             g.translate(pos.x, pos.y);
             g.rotate(angle);
             g.globalAlpha = m.opacity.get();
-            g.drawImage(m.image, -width/2, -height/2, width, height);
+            try {
+              g.drawImage(m.image, -width/2, -height/2, width, height);
+            } catch (e) {
+              console.error(`error rendering a ${layer} image:`, e);
+            }
             g.setTransform(t);
             g.globalAlpha = 1;
           });

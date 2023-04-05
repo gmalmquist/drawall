@@ -15,6 +15,7 @@ class Imaged extends Component {
   private readonly element: HTMLImageElement;
   private readonly rect: Rectangular;
   private readonly zindexRef: Ref<number> = Refs.of(0);
+  private readonly form: Form;
 
   public readonly image: HTMLImageElement;
   public readonly opacity: Ref<number>;
@@ -52,7 +53,7 @@ class Imaged extends Component {
     this.rect.rotationRef.onChange(_ => this.updateElement());
     this.opacity.onChange(o => this.element.style.opacity = `${o}`);
 
-    entity.add(Form, () => {
+    this.form = entity.add(Form, () => {
       const form = new AutoForm();
       form.addButton({
         name: 'Upload Image',
@@ -246,6 +247,7 @@ class Imaged extends Component {
       Imaged.ZINDEX_ARRAY.splice(this.zindexRef.get(), 1);
     }
     this.element.parentNode?.removeChild(this.element);
+    this.entity.remove(this.form);
   }
 
   toJson(): SavedComponent {

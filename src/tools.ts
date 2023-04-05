@@ -40,6 +40,9 @@ abstract class Tool {
   onToolSelected() {
   }
 
+  onToolDeselected() {
+  }
+
   abstract update(): void;
 
   abstract setup(): void;
@@ -142,6 +145,7 @@ class Tools {
     if (this.current.name === name) {
       return;
     }
+    const previous = this.current;
     const tool = this.registry.get(name)!;
     this.toolListeners.forEach(listener => listener(name));
     this._current.set(tool);
@@ -150,6 +154,7 @@ class Tools {
     const ui = new AutoForm();
     tool.createUi(ui)
     ui.inflate(App.gui.tool);
+    previous.onToolDeselected();
     tool.onToolSelected();
   }
 

@@ -43,6 +43,7 @@ const Icons = {
   newPage: iconUrl('new-page.svg'),
   panTool: iconUrl('grab.svg'),
   pen: iconUrl('pen.svg'),
+  plain: iconUrl('plain.svg'),
   pointerTool: iconUrl('cursor.svg'),
   posLocked: iconUrl('pos-locked.svg'),
   posUnlocked: iconUrl('pos-unlocked.svg'),
@@ -70,6 +71,7 @@ const Icons = {
   toBack: iconUrl('to-back.svg'),
   toFront: iconUrl('to-front.svg'),
   visible: iconUrl('eye-open.svg'),
+  wood: iconUrl('wood.svg'),
 };
 
 type KeysOfToType<M extends { [key: string]: unknown }, T> = {

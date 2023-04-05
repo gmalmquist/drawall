@@ -1,11 +1,19 @@
 interface Anchor {
   position: Position;
+  halign: 'left' | 'center' | 'right';
+  valign: 'top' | 'middle' | 'bottom';
+  onCanvas: boolean;
 }
 
 class Popup extends Component {
-  readonly element: HTMLElement;
+  public readonly element: HTMLElement;
   private visible: boolean = false;
-  private anchor: Anchor = { position: Position(Point.ZERO, 'screen') };
+  private anchor: Anchor = {
+    position: Position(Point.ZERO, 'screen'),
+    halign: 'center',
+    valign: 'middle',
+    onCanvas: false,
+  };
   private readonly _uiBuilder;
   public closeOnUnfocus: boolean = true;
 
@@ -29,9 +37,16 @@ class Popup extends Component {
   }
 
   setPosition(pos: Position) {
-    this.anchor = {
+    this.setAnchor({
       position: pos,
-    };
+      onCanvas: true,
+      halign: 'center',
+      valign: 'middle',
+    });
+  }
+
+  setAnchor(anchor: Anchor) {
+    this.anchor = anchor;
     this.moveToAnchor();
   }
 
@@ -53,14 +68,32 @@ class Popup extends Component {
   }  
 
   private moveToAnchor() {
-    const pos = this.anchor.position.get('screen');
+    const { position, onCanvas, halign, valign } = this.anchor;
+    const pos = position.get('screen');
     const canvas = App.pane.getBoundingClientRect();
     const bounds = this.element.getBoundingClientRect();
     const width = bounds.width;
     const height = bounds.height;
 
-    const tx = pos.x - width / 2 + canvas.left;
-    const ty = pos.y - height / 2 + canvas.top;
+    let tx = pos.x;
+    let ty = pos.y;
+
+    if (halign === 'center') {
+      tx -= width/2;
+    } else if (halign === 'right') {
+      tx -= width;
+    }
+
+    if (valign === 'middle') {
+      ty -= height/2;
+    } else if (valign === 'bottom') {
+      ty -= height;
+    }
+    
+    if (onCanvas) {
+      tx -= canvas.left;
+      ty -= canvas.top;
+    }
 
     this.element.style.left = `${tx}px`;
     this.element.style.top = `${ty}px`;

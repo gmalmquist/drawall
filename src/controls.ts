@@ -1,6 +1,6 @@
 // ui controls like buttons n stuff
 class ElementWrap<E extends HTMLElement> {
-  constructor(readonly element: E) {
+  constructor(public readonly element: E) {
   }
 
   get classes(): Set<string> {
@@ -141,6 +141,13 @@ class AutoForm {
       kind: 'button',
       value: Refs.of('button'),
     });
+  }
+
+  addSelect<T extends string>(field: Omit<AutoFieldSelect<T>, 'kind'>): AutoFieldHandle<string> {
+    return this.add({
+      ...field,
+      kind: 'select',
+    } as unknown as AutoFieldSelect<string>);
   }
 
   add<Value>(field: AutoField & { value: Ref<Value> }): AutoFieldHandle<Value> {
@@ -318,6 +325,54 @@ class AutoForm {
         setHidden: h => input.setHidden(h),
       };
     }
+    if (field.kind === 'select') {
+      const defaultIcon = field.items
+        .filter(m => m.value === field.value.get())[0]?.icon;
+      const input = new IconButton(field.name, defaultIcon);
+      input.addClass('selected');
+
+      input.onClick(() => {
+        const popup = App.ecs.createEntity().add(Popup);
+
+        const subform = new AutoForm();
+        field.items.forEach(item => {
+          subform.addButton({
+            name: item.label || item.value,
+            icon: item.icon,
+            onClick: () => {
+              this.updateHandle(field, item.value);
+              popup.entity.destroy();
+            }
+          });
+        });
+
+        const bounds = input.element.getBoundingClientRect();
+        popup.setAnchor({
+          position: Position(new Point(bounds.left, bounds.top + bounds.height), 'screen'),
+          halign: 'left',
+          valign: 'top',
+          onCanvas: false,
+        });
+     
+        const mini = new MiniForm();
+        mini.layout = 'column';
+        subform.inflate(mini);
+        popup.element.appendChild(mini.element);
+        popup.show();
+
+        mini.element.addEventListener('mouseleave', () => popup.entity.destroy());
+      });
+
+      return {
+        element: input,
+        setValue: v => {
+          input.icon = field.items.filter(m => m.value === v)[0]?.icon || null;
+        },
+        clear: () => {},
+        setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
+      };
+    }
     if (field.kind === 'button') {
       const input = new IconButton(field.name, field.icon);
       input.onClick(field.onClick);
@@ -418,6 +473,7 @@ type AutoField = AutoFieldNumber
   | AutoFieldToggle
   | AutoFieldSlider
   | AutoFieldAngle
+  | AutoFieldSelect<string>
   | AutoFieldSeparator
   | AutoFieldButton
 ;
@@ -458,6 +514,17 @@ interface AutoFieldDistance extends AutoFieldBase<Distance> {
   kind: 'distance';
   min?: Distance;
   max?: Distance;
+}
+
+interface AutoFieldSelect<T extends string> extends AutoFieldBase<T> {
+  kind: 'select';
+  items: SelectItem<T>[];
+}
+
+interface SelectItem<T extends string> {
+  value: T;
+  label?: string;
+  icon?: URL | null;
 }
 
 interface AutoFieldToggle extends AutoFieldBase<boolean> {
