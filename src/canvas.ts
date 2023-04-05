@@ -659,19 +659,3 @@ const GridRenderer = (ecs: EntityComponentSystem) => {
   }
 };
 
-const DebugRenderer = (ecs: EntityComponentSystem) => {
-  App.canvas.text({
-    text: `fps: ${Time.fps}`,
-    point: Position(
-      new Point(
-        App.viewport.screen_width - 20,
-        App.viewport.screen_height - 20,
-      ), 
-      'screen',
-    ),
-    align: 'right',
-    baseline: 'bottom',
-    fill: 'black',
-  });
-};
-

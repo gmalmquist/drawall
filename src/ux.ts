@@ -592,6 +592,22 @@ class UiState {
         this.deleteSelected();
       }
 
+      if (e.key === 'Alt') {
+        if (App.tools.current.name !== 'pan tool') {
+          App.tools.pushTool();
+          App.tools.set('pan tool');
+          App.tools.current.events.handleDrag({
+            kind: 'start',
+            primary: true,
+            start: this.mousePos,
+            position: this.mousePos,
+            delta: Vectors.zero('screen'),
+          });
+        }
+        e.preventDefault();
+        return;
+      }
+
       if (App.actions.evaluateKeybindings()) {
         e.preventDefault();
       }
@@ -599,6 +615,9 @@ class UiState {
 
     this.events.onKey('keyup', e => {
       this.keysPressed.delete(e.key);
+      if (e.key === 'Alt') {
+        App.tools.popTool();
+      }
     });
 
     window.addEventListener('focus', () => this.keysPressed.clear());

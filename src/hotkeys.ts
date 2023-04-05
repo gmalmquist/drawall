@@ -8,8 +8,14 @@ interface Keybinding {
 }
 
 const formatKeyStroke = (stroke: KeyStroke): string => {
-  return stroke.keys.sort((a, b) => b.length - a.length).join(' + ');
+  return stroke.keys.sort((a, b) => b.length - a.length)
+    .map(k => k === ' ' ? '⎵' : k)
+    .join(' + ');
 };
+
+const formatKeyBinding = (keybinding: Keybinding): string => {
+  return `${formatKeyStroke(keybinding.stroke)}: ${keybinding.action}`;
+}
 
 interface PartialBinding {
   to: (action: UserActionId) => void;

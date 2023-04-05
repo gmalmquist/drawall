@@ -95,6 +95,7 @@ class ToolChain {
 class Tools {
   private readonly registry = new Map<ToolName, Tool>();
   private readonly toolListeners = new Array<(tool: ToolName) => void>();
+  private readonly stack = new Array<ToolName>();
 
   private _current: Ref<Tool> = Refs.of(
     new NoopTool(),
@@ -117,6 +118,17 @@ class Tools {
 
   public get currentRef(): Ref<Tool> {
     return this._current;
+  }
+
+  public pushTool() {
+    this.stack.push(this.current.name);
+  }
+
+  public popTool() {
+    const tool = this.stack.pop();
+    if (typeof tool !== 'undefined') {
+      this.set(tool);
+    }
   }
 
   public register<T extends Tool>(kind: ToolKind<T>) {
@@ -207,8 +219,7 @@ class Tools {
     const parts: string[] = [tool];
     const keybinds = App.keybindings.values()
       .filter(kb => kb.action === tool)
-      .map(kb => kb.stroke.keys.join('+'))
-      .map(s => s.replace(/ /g, 'Spacebar'))
+      .map(kb => formatKeyStroke(kb.stroke))
       .join(' or ');
     if (keybinds.length > 0) {
       parts.push(`(${keybinds})`);

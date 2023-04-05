@@ -92,7 +92,7 @@ class App {
 
     console.log(`
       hi! if you're here u probably are savvy enough that you'd like some hotkeys:
-      ${App.keybindings.values().map(binding => `\n${binding.stroke.keys.join('+')}: ${binding.action}`).join('')}
+      ${App.keybindings.values().map(binding => `\n${formatKeyBinding(binding)}`).join('')}
     `.trim());
   }
 
@@ -121,9 +121,52 @@ class App {
   }
 
   static start() {
+    App.pane.style.opacity = '0';
+
     App.init();
     setInterval(() => this.update(), 15);
+
+    setTimeout(() => {
+      // give images etc time to load and position, so
+      // things don't look like they're glitching tf out
+      // while the app is first loading.
+      App.pane.style.opacity = '1';
+    }, 100);
   }
 }
 
 setTimeout(() => App.start(), 10);
+
+const DebugRenderer = (ecs: EntityComponentSystem) => {
+  App.canvas.text({
+    text: `fps: ${Time.fps}`,
+    point: Position(
+      new Point(
+        App.viewport.screen_width - 20,
+        App.viewport.screen_height - 20,
+      ), 
+      'screen',
+    ),
+    align: 'right',
+    baseline: 'bottom',
+    fill: 'black',
+  });
+
+  const pressed = App.ui.pressedKeys;
+  if (pressed.length > 0) {
+    App.canvas.text({
+      text: `keys: ${pressed.map(k => k === ' ' ? '⎵' : k).join('+')}`,
+      point: Position(
+        new Point(
+          App.viewport.screen_width - 20,
+          App.viewport.screen_height - 20 - App.settings.fontSize * 1.25,
+        ), 
+        'screen',
+      ),
+      align: 'right',
+      baseline: 'bottom',
+      fill: 'black',
+    });
+  }
+};
+
