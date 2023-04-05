@@ -1,4 +1,5 @@
 class Project {
+  private static readonly DEFAULT_GRID_SPACING: Amount = { value: 2, unit: 'feet' };
   private static readonly STORAGE_VERSION = '0.0.1';
   private static readonly PROJECT_KEY = 'project-data';
   private static readonly SAVE_FREQUENCY_SECONDS = 0.5;
@@ -18,7 +19,7 @@ class Project {
     a.name === b.name
   ));
 
-  public readonly gridSpacingRef = Refs.of<Amount>({ unit: 'feet', value: 1 }, (a, b) => (
+  public readonly gridSpacingRef = Refs.of<Amount>(Project.DEFAULT_GRID_SPACING, (a, b) => (
     a.unit === b.unit && a.value === b.value
   ));
 
@@ -120,9 +121,39 @@ class Project {
   }
 
   public newProject() {
-    App.ecs.deleteEverything();
-    App.viewport.recenter();
-    window.localStorage.removeItem(Project.PROJECT_KEY);
+    const action = () => {
+      App.ecs.deleteEverything();
+      this.gridSpacing = Project.DEFAULT_GRID_SPACING;
+      App.viewport.recenter();
+      window.localStorage.removeItem(Project.PROJECT_KEY);
+    };
+    if (App.ecs.getComponents(Wall).length > 0) {
+      Popup.confirm({
+        title: 'Create New Project',
+        body: 'This will clear any unsaved work and open a new project.',
+        action,
+      });
+    } else {
+      action();
+    }
+  }
+
+  public saveProject() {
+    const data = JSON.stringify(this.serialize());
+    const dataUrl = `data:application/json;base64,${btoa(data)}`;
+    App.io.download(
+      'drawall-project.json',
+      dataUrl,
+    );
+  }
+
+  public openProject() {
+    App.io.open(
+      ['.json'],
+      url => fetch(url)
+        .then(response => response.json())
+        .then(json => this.loadJson(json))
+    );
   }
 
   public saveLocal() {
@@ -148,6 +179,7 @@ class Project {
 
   public serialize(): ProjectJson {
     return {
+      application: 'drawall',
       version: Project.STORAGE_VERSION,
       ecs: App.ecs.toJson(),
       gridSpacing: Units.distance.format(this.gridSpacing),
@@ -157,7 +189,13 @@ class Project {
   }
 
   public loadJson(json: JsonObject) {
+    if (!json || json.application !== 'drawall') {
+      // TODO: show a dialog to the user?
+      console.error('invalid project file', json);
+      return;
+    }
     this.loadedAt = Time.now;
+    App.pane.style.opacity = '0';
     App.history.suspendWhile(() => {
       const p = json as unknown as ProjectJson;
 
@@ -181,6 +219,7 @@ class Project {
       App.ecs.loadJson(p.ecs);
     });
     this.loadedAt = Time.now;
+    setTimeout(() => { App.pane.style.opacity = '1'; }, 100);
   }
 
   public setup() {
@@ -201,6 +240,7 @@ class Project {
 }
 
 interface ProjectJson {
+  application: string;
   version: string;
   ecs: SavedEcs;
   gridSpacing: string;

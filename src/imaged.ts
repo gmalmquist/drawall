@@ -122,7 +122,7 @@ class Imaged extends Component {
     return this.rect.rotation;
   }
 
-  public setSrc(url: string) {
+  public setSrc(url: string | URL) {
     this.image.onload = () => {
       App.project.requestSave('image uploaded');
       if (!this.rectHasSize()) {
@@ -130,8 +130,8 @@ class Imaged extends Component {
       }
       this.updateElement();
     };
-    this.image.src = url;
-    this.element.src = url;
+    this.image.src = url.toString();
+    this.element.src = url.toString();
     if (!this.rectHasSize()) {
       this.rectToImageDimensions();
     }
@@ -171,30 +171,14 @@ class Imaged extends Component {
   }
 
   public showUploadForm() {
-    const extensions = [
+    App.io.open([
       '.gif',
       '.jpeg',
       '.jpg',
       '.png',
       '.svg',
       '.webm',
-    ];
-    const element = document.createElement('input') as HTMLInputElement;
-    element.setAttribute('type', 'file');
-    element.setAttribute('accept', extensions.join(', '));
-    element.style.position = 'absolute';
-    element.style.opacity = '0';
-    App.uiJail.appendChild(element);
-    element.addEventListener('change', () => {
-      const files = Array.from(element.files || []);
-      for (const file of files) {
-        this.setSrc(URL.createObjectURL(file));
-        break;
-      }
-      this.cleanup();
-      element.parentNode?.removeChild(element);
-    });
-    element.click();
+    ], url => this.setSrc(url));
   }
 
   public cleanup() {

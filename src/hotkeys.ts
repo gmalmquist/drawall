@@ -49,6 +49,9 @@ class Keybindings {
     kb.bind('Control', '=').to('zoom-in');
     kb.bind('Control', '-').to('zoom-out');
     kb.bind('Control', '_').to('zoom-out');
+    kb.bind('Control', 's').to('save'); // universal
+    kb.bind('Control', 'n').to('new'); // universal
+    kb.bind('Control', 'o').to('open'); // universal
     return kb;
   }
 

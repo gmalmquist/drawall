@@ -83,15 +83,11 @@ class ImageExporter {
             renderImages('furniture');
           }
         }
-        
-        const download = document.createElement('a');
-        download.style.position = 'absolute';
-        download.style.opacity = '0';
-        download.href = compositing.toDataURL('image/png');
-        download.download = 'drawall-floor-plan.png';
-        document.body.prepend(download);
-        download.click();
-        document.body.removeChild(download);
+       
+        App.io.download(
+         'drawall-floor-plan.png',
+          compositing.toDataURL('image/png'),
+        );
         document.body.removeChild(compositing);
       };
 

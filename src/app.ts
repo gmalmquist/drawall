@@ -26,6 +26,7 @@ class App {
     document.getElementById('foreground-svg')!);
   public static readonly settings = new Settings();
   public static readonly project = new Project();
+  public static readonly io = new IoUtil();
   public static readonly history = new ProjectHistory();
   public static readonly imageExporter = new ImageExporter();
   public static readonly rendering = Refs.of<boolean>(false);

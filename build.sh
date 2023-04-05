@@ -89,6 +89,7 @@ popups.js
 project.js
 history.js
 settings.js
+ioutil.js
 app.js
 EOF
 )

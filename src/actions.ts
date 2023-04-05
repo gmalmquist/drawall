@@ -7,11 +7,14 @@ type UserActionId = ToolName
   | 'recenter'
   | 'undo'
   | 'redo'
-  | 'export-png'
   | 'flip-h'
   | 'flip-v'
   | 'zoom-in'
   | 'zoom-out'
+  | 'export-png'
+  | 'save'
+  | 'open'
+  | 'new'
 ;
 
 interface UserAction {
@@ -46,6 +49,10 @@ class UserActions {
 
     add('flip-h', () => App.ui.flip('horizontal'));
     add('flip-v', () => App.ui.flip('vertical'));
+
+    add('new', () => App.project.newProject());
+    add('open', () => App.project.openProject());
+    add('save', () => App.project.saveProject());
 
     add('export-png', () => App.imageExporter.export());
     // add('foo', () => doFoo());
