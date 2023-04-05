@@ -162,6 +162,7 @@ class Furniture extends Component implements Solo {
       hoverable: true,
       selectable: false,
       draggable: false,
+      control: true,
       getPos: () => this.rect.center,
       distance: p => labelLine.get().distanceFrom(p),
       priority: 4,

@@ -215,6 +215,7 @@ class Handle extends Component implements Solo {
       knob: { ...props, parent: this.entity, },
       distance: p => props.poly().sdist(p).max(Distance(0, 'model')),
       getPos: () => props.poly().centroid,
+      control: true,
     });
     this.addKnob(knob);
     return knob;

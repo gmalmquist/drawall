@@ -101,7 +101,11 @@ class PointerTool extends Tool {
 
       if (handle?.clickable || handle?.draggable) {
         App.pane.style.cursor = handle.getContextualCursor() || this.cursor;
-        App.ui.setHovered(handle);
+        if (handle.control) {
+          handle.hovered = true;
+        } else {
+          App.ui.setHovered(handle);
+        }
         return;
       }
 
