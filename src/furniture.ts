@@ -6,6 +6,7 @@ interface FurnitureJson {
     point: string,
     rotation: JsonObject,
   } | false,
+  material: FurnitureMaterial,
 }
 
 interface FurnitureAttach {
@@ -85,6 +86,7 @@ class Furniture extends Component implements Solo {
         App.ui.updateForms();
       }
       Furniture.defaultMaterial = m === 'image' ? 'wood' : m;
+      App.project.requestSave('changed furniture material');
     });
 
     entity.add(Form, () => {
@@ -340,6 +342,7 @@ class Furniture extends Component implements Solo {
         point: attach.point.name,
         rotation: MoreJson.angle.to(attach.rotation),
       },
+      material: this.material,
     };
     return {
       factory: this.constructor.name,
@@ -373,6 +376,9 @@ ComponentFactories.register(Furniture, (
         .filter(p => p.name === attach.point)[0]!,
       rotation: MoreJson.angle.from(attach.rotation),
     };
+  }
+  if (props.material) {
+    furniture.material = props.material;
   }
   return furniture;
 });

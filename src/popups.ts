@@ -91,8 +91,8 @@ class Popup extends Component {
     }
     
     if (onCanvas) {
-      tx -= canvas.left;
-      ty -= canvas.top;
+      tx += canvas.left;
+      ty += canvas.top;
     }
 
     this.element.style.left = `${tx}px`;
@@ -115,8 +115,8 @@ class Popup extends Component {
     ui.onChange((name, value) => {
       if (name === 'text') {
         props.text.set(value);
-        modal.entity.destroy();
       }
+      modal.entity.destroy();
     });
     modal.setPosition(props.position || Position(
       new Point(App.viewport.screen_width/2, App.viewport.screen_height/2),
@@ -338,6 +338,14 @@ class UiBuilder {
     );
     const input = e as HTMLInputElement;
     input.addEventListener('change', () => this.fireChange(name));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        this.changeListeners.forEach(l => l('Escape', ''));
+      }
+      if (e.key === 'Enter' || e.key === 'Return') {
+        setTimeout(() => this.changeListeners.forEach(l => l('Return', '')), 100);
+      }
+    });
     this.inputs.set(name, {
       value: () => input.value,
       reset: () => {
