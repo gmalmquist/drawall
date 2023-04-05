@@ -42,8 +42,8 @@ class FurnitureTool extends Tool {
       // create a lil' piece of furniture
       const furniture = App.ecs.createEntity().add(Furniture);
       furniture.rect.center = App.ui.mousePos;
-      furniture.rect.width = Distance(100, 'model');
-      furniture.rect.height = Distance(100, 'model');
+      furniture.rect.width = Distance(34, 'model');
+      furniture.rect.height = Distance(34, 'model');
       App.ui.setSelection(furniture.entity.only(Handle));
       App.pane.style.cursor = this.cursor;
     });

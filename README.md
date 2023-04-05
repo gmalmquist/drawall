@@ -15,12 +15,13 @@ Individual wall corners can also be locked in place (this is a hard constraint).
 ## feature todo list
 - [x] save/load json to localstorage
 - [ ] save/load json to disk
+- [x] various spring constraints
 - [x] export to PNG
+- [x] simple furniture drawing and arranging
+- [x] doors & windows
 - [ ] export to 3D obj
-- [ ] simple furniture drawing and arranging
-- [ ] doors & windows
-- [ ] 3D view
-- [ ] background reference images
+- [ ] 3D view (?)
+- [x] background reference images
 
 ## development setup
 Simple and absurd, because I've thus far avoided doing things properly (eg using webpack) for _reasons_ (I spent too long professionally maintaining build systems, and now it doesn't give me any dopamine). Requires python3 and tsc on the path.
