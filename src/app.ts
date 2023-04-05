@@ -6,6 +6,8 @@ class App {
     document.getElementById('reference-images') as HTMLElement;
   public static readonly furnitureImages: HTMLElement =
     document.getElementById('furniture-images') as HTMLElement;
+  public static readonly uiJail: HTMLElement =
+    document.getElementById('ui-jail') as HTMLElement;
   public static gui = new GUI();
   public static readonly tools = new Tools();
   public static readonly actions = new UserActions();

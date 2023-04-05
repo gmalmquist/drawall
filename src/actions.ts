@@ -8,7 +8,10 @@ type UserActionId = ToolName
   | 'undo'
   | 'redo'
   | 'export-png'
-  | 'flip'
+  | 'flip-h'
+  | 'flip-v'
+  | 'zoom-in'
+  | 'zoom-out'
 ;
 
 interface UserAction {
@@ -35,11 +38,14 @@ class UserActions {
     add('select-all', () => App.ui.selectAll());
 
     add('recenter', () => App.viewport.recenter());
+    add('zoom-in', () => App.viewport.zoomIn());
+    add('zoom-out', () => App.viewport.zoomOut());
 
     add('undo', () => App.history.undo());
     add('redo', () => App.history.redo());
 
-    add('flip', () => App.ui.flip());
+    add('flip-h', () => App.ui.flip('horizontal'));
+    add('flip-v', () => App.ui.flip('vertical'));
 
     add('export-png', () => App.imageExporter.export());
     // add('foo', () => doFoo());

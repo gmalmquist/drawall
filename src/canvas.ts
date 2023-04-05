@@ -63,6 +63,16 @@ class Viewport {
     this._changed.set(false);
   }
 
+  public zoomIn() {
+    this.radius = Math.max(10, this.radius / 1.1);
+    this.updateTransforms();
+  }
+
+  public zoomOut() {
+    this.radius = this.radius * 1.1;
+    this.updateTransforms();
+  }
+
   public setup() {
     this.handleResize();
     // sometimes the browser hasn't quite finished rendering things at the
@@ -209,6 +219,10 @@ class Canvas2d {
   translate(offset: Vector) {
     const off = offset.get('screen');
     this.g.translate(off.x, off.y);
+  }
+
+  translateTo(position: Position) {
+    this.translate(position.to('screen').toVector());
   }
 
   rotate(angle: Angle) {

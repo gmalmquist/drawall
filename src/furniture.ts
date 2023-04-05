@@ -6,7 +6,9 @@ interface FurnitureJson {
     point: string,
     rotation: JsonObject,
   } | false,
-  material: FurnitureMaterial,
+  furnitureType: FurnitureType,
+  flippedHorizontal: boolean,
+  flippedVertical: boolean,
 }
 
 interface FurnitureAttach {
@@ -17,14 +19,45 @@ interface FurnitureAttach {
   rotation: Angle;
 }
 
-// tbh i knew immediately when making this union type that i was gonna end up with shit
-// like 'door' in it. whatevs. it's fine. it's valid to be made of door.
-type FurnitureMaterial = 'image' | 'plain' | 'wood' | 'door' | 'window';
+interface FurnitureTypeProps {
+  flippable: boolean;
+  keepOnWall: boolean;
+  onInit: (f: Furniture) => void;
+}
+
+const createFurnitureType = (atts: Partial<FurnitureTypeProps>): FurnitureTypeProps => ({
+  flippable: false,
+  keepOnWall: false,
+  onInit: (_: Furniture) => {/* noop */},
+  ...atts,
+});
+
+//  'image' | 'plain' | 'wood' | 'door' | 'window';
+const FurnitureTypes = {
+  plain: createFurnitureType({}),
+  wood: createFurnitureType({}),
+  door: createFurnitureType({
+    keepOnWall: true,
+    flippable: true,
+  }),
+  window: createFurnitureType({
+    keepOnWall: true,
+  }),
+  image: createFurnitureType({
+    onInit: (f: Furniture) => {
+      if (!f.entity.has(Imaged)) {
+        f.entity.add(Imaged, 'furniture').showUploadForm();
+      }
+    },
+  }),
+};
+
+type FurnitureType = (keyof typeof FurnitureTypes) & string;
 
 class Furniture extends Component implements Solo {
   public readonly [SOLO] = true;
 
-  private static defaultMaterial: FurnitureMaterial = 'wood';
+  public static readonly defaultFurnitureType= Refs.of<FurnitureType>('wood');
 
   public readonly attachRef = Refs.of<FurnitureAttach | null>(
     null, (a, b) => {
@@ -38,9 +71,11 @@ class Furniture extends Component implements Solo {
   );
   public readonly rect: Rectangular;
   public readonly labelHandle: Handle;
-  public readonly materialRef = Refs.of<FurnitureMaterial>(Furniture.defaultMaterial);
-  public readonly flippedRef = Refs.of<boolean>(false);
+  public readonly furnitureTypeRef = Refs.of<FurnitureType>(Furniture.defaultFurnitureType.get());
+  public readonly flippedHorizontalRef = Refs.of<boolean>(false);
+  public readonly flippedVerticalRef = Refs.of<boolean>(false);
 
+  private readonly attachAllowedRef: RoRef<(name: string) => boolean>;
   private updatingOrientation: boolean = false;
 
   constructor(entity: Entity) {
@@ -48,6 +83,13 @@ class Furniture extends Component implements Solo {
     this.rect = entity.getOrCreate(Rectangular);
     this.rect.createHandle({
       priority: 2,
+    });
+
+    this.attachAllowedRef = Refs.mapRo(this.furnitureTypeRef, m => {
+      if (FurnitureTypes[m].keepOnWall) {
+        return (name: string) => name === 'center';
+      }
+      return (_: string) => true;
     });
 
     const labelLine = Refs.memoReduce(
@@ -66,7 +108,7 @@ class Furniture extends Component implements Solo {
       getPos: () => this.rect.center,
       distance: p => labelLine.get().distanceFrom(p),
       priority: 4,
-      visible: () => this.material !== 'door' && this.material !== 'window',
+      visible: () => this.furnitureType !== 'door' && this.furnitureType !== 'window',
     });
     this.labelHandle.events.onMouse('click', () => {
       Popup.input({
@@ -80,7 +122,7 @@ class Furniture extends Component implements Solo {
       const form = new AutoForm();
       form.addSelect({
         name: 'Furniture Type',
-        value: this.materialRef,
+        value: this.furnitureTypeRef,
         items: [
           { value: 'plain', icon: Icons.plain, },
           { value: 'wood', icon: Icons.wood, },
@@ -90,9 +132,16 @@ class Furniture extends Component implements Solo {
         ],
       });
       form.addButton({
-        name: 'Flip (f)',
+        name: 'Flip Horizontally (f)',
         icon: Icons.flipH,
-        onClick: () => this.flip(),
+        enabled: Refs.mapRo(this.furnitureTypeRef, f => FurnitureTypes[f].flippable),
+        onClick: () => this.flip('horizontal'),
+      });
+      form.addButton({
+        name: 'Flip Vertically (Shift + F)',
+        icon: Icons.flipV,
+        enabled: Refs.mapRo(this.furnitureTypeRef, f => FurnitureTypes[f].flippable),
+        onClick: () => this.flip('vertical'),
       });
       form.addButton({
         name: 'Align to Wall',
@@ -123,23 +172,26 @@ class Furniture extends Component implements Solo {
 
     const edgeListeners = new Map<Wall, (edge: MemoEdge) => void>();
 
-    this.materialRef.onChange(m => {
+    this.furnitureTypeRef.onChange(m => {
       const hadImage = entity.has(Imaged);
-      if (m === 'image') {
-        const img = entity.getOrCreate(Imaged, 'furniture');
-        img.showUploadForm();
-      } else {
+      if (m !== 'image') {
         entity.removeAll(Imaged);
       }
+
+      FurnitureTypes[m].onInit(this);
+
       if (hadImage !== entity.has(Imaged)) {
         App.ui.updateForms();
       }
-      Furniture.defaultMaterial = m === 'image' ? 'wood' : m;
-      this.applyMaterialConstraints();
-      App.project.requestSave('changed furniture material');
+
+      Furniture.defaultFurnitureType.set(m);
+
+      this.applyFurnitureTypeConstraints();
+      App.project.requestSave('changed furniture type');
     });
 
-    this.flippedRef.onChange(_ => App.project.requestSave('flipped furniture'));
+    this.flippedHorizontalRef.onChange(_ => App.project.requestSave('flipped furniture'));
+    this.flippedVerticalRef.onChange(_ => App.project.requestSave('flipped furniture'));
 
     this.attachRef.onChange(a => {
       if (a === null) return;
@@ -159,13 +211,14 @@ class Furniture extends Component implements Solo {
       },
       onUpdate: (_e, _c) => {
         this.attach = this.findAttach();
-        if (this.material === 'door' || this.material === 'window') {
+        const atts = FurnitureTypes[this.furnitureType];
+        if (atts.keepOnWall) {
           this.centerOnWall(true);
         }
       },
       onEnd: (_e, _c) => {
         this.attach = this.findAttach();
-        this.applyMaterialConstraints();
+        this.applyFurnitureTypeConstraints();
       },
     });
 
@@ -177,12 +230,17 @@ class Furniture extends Component implements Solo {
     this.rect.widthRef.onChange(() => this.updateAttachPosition());
     this.rect.heightRef.onChange(() => this.updateAttachPosition());
 
-    this.applyMaterialConstraints();
+    this.applyFurnitureTypeConstraints();
+
+    if (this.furnitureType === 'image' && !entity.has(Imaged)) {
+      entity.add(Imaged, 'furniture', this.rect).showUploadForm();
+    }
   }
 
-  private applyMaterialConstraints() {
-    const material = this.material;
-    if (material === 'door' || material === 'window') {
+  public applyFurnitureTypeConstraints() {
+    const furnitureType = this.furnitureType;
+    const atts = FurnitureTypes[furnitureType];
+    if (atts.keepOnWall) {
       this.rect.allowResizeV.set(false);
       this.rect.allowRotate.set(false);
       this.rect.height = Distance(
@@ -275,8 +333,16 @@ class Furniture extends Component implements Solo {
     this.rect.rotation = attach.wall.edge.tangent.neg().angle();
   }
 
-  public flip() {
-    this.flippedRef.set(!this.flippedRef.get());
+  public flip(axis: 'vertical' | 'horizontal') {
+    if (axis === 'horizontal') {
+      this.flippedHorizontalRef.set(!this.flippedHorizontalRef.get());
+      return;
+    }
+    if (axis === 'vertical') {
+      this.flippedVerticalRef.set(!this.flippedVerticalRef.get());
+      return;
+    }
+    return impossible(axis);
   }
 
   public updateOrientation() {
@@ -290,16 +356,20 @@ class Furniture extends Component implements Solo {
   }
 
   private getDragPoints(): DragPoint[] {
-    return this.entity.only(Handle).getDragClosure('complete').points;
+    return this.entity.only(Handle)
+      .getDragClosure('complete').points
+      .filter(p => this.attachAllowed(p.name));
   }
 
   private findAttach(): FurnitureAttach | null {
     const epsDistance = Distance(0.1, 'model');
-    const closure = this.entity.only(Handle).getDragClosure('complete');
-    const positions = closure.points.map(p => p.get());
-    const pointOrdering = closure.points.map((_, i) => i);
+    const points = this.getDragPoints();
+    const positions = points.map(p => p.get());
+    const pointOrdering = points.map((_, i) => i);
     const furnitureAngle = this.rect.rotation;
     reverseInPlace(pointOrdering); // ensure midpoints come first
+
+    const keepOnWall = FurnitureTypes[this.furnitureType].keepOnWall;
 
     const best = argmin(App.ecs.getComponents(Wall), wall => {
       const edge = wall.entity.only(PhysEdge).edge;
@@ -310,7 +380,7 @@ class Furniture extends Component implements Solo {
         const s = edge.unlerp(p);
         if (s < 0 || s > 1) return 'invalid';
         const d = Vectors.between(edge.src, p).dot(edge.normal);
-        if (d.gt(epsDistance)) {
+        if (!keepOnWall && d.gt(epsDistance)) {
           return 'invalid'; // on the wrong side of the wall
         }
         return { at: s, distance: d };
@@ -329,7 +399,7 @@ class Furniture extends Component implements Solo {
 
       return {
         wall,
-        point: closure.points[index],
+        point: points[index],
         normal: result.distance,
         at: result.at,
         rotation: furnitureAngle.minus(edge.tangent.angle()),
@@ -356,12 +426,17 @@ class Furniture extends Component implements Solo {
     attach.normal = edge.normal.dot(Vectors.between(edge.src, position));
   }
 
-  public get material(): FurnitureMaterial {
-    return this.materialRef.get();
+  private attachAllowed(name: string): boolean {
+    const filter = this.attachAllowedRef.get();
+    return filter(name);
   }
 
-  public set material(m: FurnitureMaterial) {
-    this.materialRef.set(m);
+  public get furnitureType(): FurnitureType {
+    return this.furnitureTypeRef.get();
+  }
+
+  public set furnitureType(m: FurnitureType) {
+    this.furnitureTypeRef.set(m);
   }
 
   public get attach(): FurnitureAttach | null {
@@ -388,7 +463,9 @@ class Furniture extends Component implements Solo {
         point: attach.point.name,
         rotation: MoreJson.angle.to(attach.rotation),
       },
-      material: this.material,
+      furnitureType: this.furnitureType,
+      flippedHorizontal: this.flippedHorizontalRef.get(),
+      flippedVertical: this.flippedVerticalRef.get(),
     };
     return {
       factory: this.constructor.name,
@@ -407,11 +484,19 @@ ComponentFactories.register(Furniture, (
     return 'not ready';
   }
 
+  if (props.furnitureType === 'image' && !entity.has(Imaged)) {
+    return 'not ready';
+  }
+
   if (props.attach && !App.ecs.getEntity(props.attach.wall)?.has(Wall)) {
     return 'not ready';
   }
 
   const furniture = entity.getOrCreate(Furniture);
+
+  furniture.flippedHorizontalRef.set(!!propsJson.flippedHorizontal);
+  furniture.flippedVerticalRef.set(!!propsJson.flippedVertical);
+
   if (props.attach) {
     const attach = props.attach;
     furniture.attach = !attach ? null : {
@@ -423,25 +508,29 @@ ComponentFactories.register(Furniture, (
       rotation: MoreJson.angle.from(attach.rotation),
     };
   }
-  if (props.material) {
-    furniture.material = props.material;
+
+  if (props.furnitureType) {
+    furniture.furnitureType = props.furnitureType;
   }
+
   return furniture;
 });
 
 const FurnitureRenderer = (ecs: EntityComponentSystem) => {
-  const renderMaterial = (furniture: Furniture) => {
+  const renderFurnitureType = (furniture: Furniture) => {
     const rect = furniture.rect;
-    const material = furniture.material;
+    const furnitureType = furniture.furnitureType;
 
     const drawNarrow = (pixels: number) => {
-      const thickness = Distance(pixels, 'screen');
       const rect = furniture.rect;
+      const origin = Positions.zero('screen');
+      const vertical = rect.verticalAxis.to('screen').unit().scale(pixels);
+      const horizontal = rect.rightRad.to('screen');
       App.canvas.beginPath();
-      App.canvas.moveTo(rect.left.splus(thickness, rect.verticalAxis));
-      App.canvas.lineTo(rect.left.splus(thickness, rect.verticalAxis.neg()));
-      App.canvas.lineTo(rect.right.splus(thickness, rect.verticalAxis.neg()));
-      App.canvas.lineTo(rect.right.splus(thickness, rect.verticalAxis));
+      App.canvas.moveTo(origin.plus(horizontal).plus(vertical));
+      App.canvas.lineTo(origin.plus(horizontal).plus(vertical.neg()));
+      App.canvas.lineTo(origin.minus(horizontal).plus(vertical.neg()));
+      App.canvas.lineTo(origin.minus(horizontal).plus(vertical));
       App.canvas.closePath();
       App.canvas.fill();
       App.canvas.stroke();
@@ -449,14 +538,14 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
 
     App.canvas.lineWidth = 1;
     App.canvas.setLineDash([]);
-    if (material === 'plain') {
+    if (furnitureType === 'plain') {
       App.canvas.lineWidth = 2;
       App.canvas.fillStyle = 'lightgray';
       App.canvas.strokeStyle = 'darkgray';
       App.canvas.polygon(rect.polygon);
       App.canvas.fill();
       App.canvas.stroke();
-    } else if (material === 'wood') {
+    } else if (furnitureType === 'wood') {
       App.canvas.lineWidth = 2;
       App.canvas.fillStyle = 'hsl(30, 60%, 60%)';
       App.canvas.strokeStyle = 'hsl(30, 60%, 30%)';
@@ -477,7 +566,14 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
         rect.left.splus(inset2, rect.horizontalAxis).plus(mg(rect.downRad)),
         rect.right.splus(inset1.neg(), rect.horizontalAxis).plus(mg(rect.downRad)),
       );
-    } else if (material === 'door') {
+    } else if (furnitureType === 'door') {
+      App.canvas.pushTransform();
+      App.canvas.translateTo(rect.center);
+      App.canvas.rotate(Angle(
+        furniture.flippedVerticalRef.get() ? Radians(Math.PI) : Radians(0),
+        'screen',
+      ));
+
       App.canvas.lineWidth = 1;
       App.canvas.strokeStyle = 'black';
       App.canvas.fillStyle = 'white';
@@ -487,11 +583,14 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.lineWidth = 2;
       App.canvas.setLineDash([4, 4]);
       App.canvas.strokeStyle = 'gray';
+
       App.canvas.beginPath();
-      if (furniture.flippedRef.get()) {
+      const origin = Positions.zero('screen');
+      if (furniture.flippedHorizontalRef.get() !== furniture.flippedVerticalRef.get()) {
         const startAngle = rect.horizontalAxis.to('screen').neg().angle().normalize();
+        const startPos = origin.plus(rect.rightRad);
         App.canvas.arc(
-          rect.right,
+          startPos,
           rect.width,
           startAngle,
           startAngle.plus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
@@ -500,11 +599,12 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
         App.canvas.stroke();
         App.canvas.setLineDash([]);
         App.canvas.lineWidth = 1;
-        App.canvas.strokeLine(rect.right, rect.right.splus(rect.width, rect.upRad.unit()));
+        App.canvas.strokeLine(startPos, startPos.splus(rect.width, rect.upRad.to('screen').unit()));
       } else {
         const startAngle = rect.horizontalAxis.to('screen').angle();
+        const startPos = origin.plus(rect.leftRad);
         App.canvas.arc(
-          rect.left,
+          startPos,
           rect.width,
           startAngle,
           startAngle.minus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
@@ -513,11 +613,13 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
         App.canvas.stroke();
         App.canvas.setLineDash([]);
         App.canvas.lineWidth = 1;
-        App.canvas.strokeLine(rect.left, rect.left.splus(rect.width, rect.upRad.unit()));
+        App.canvas.strokeLine(startPos, startPos.splus(rect.width, rect.upRad.to('screen').unit()));
       }
-    } else if (material === 'window') {
+      App.canvas.popTransform();
+    } else if (furnitureType === 'window') {
       App.canvas.lineWidth = 1;
       App.canvas.strokeStyle = 'black';
+
       // sill
       const sill = Distance(4, 'screen');
       const sillh = rect.horizontalAxis.scale(sill);
@@ -533,7 +635,10 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.stroke();
       // frame
       App.canvas.fillStyle = 'lightgray';
+      App.canvas.pushTransform();
+      App.canvas.translateTo(rect.center);
       drawNarrow(3);
+      App.canvas.popTransform();
     }
     App.canvas.lineWidth = 1; App.canvas.setLineDash([]);
   };
@@ -577,7 +682,7 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       keepUpright: true,
     });
 
-    if (furniture.material !== 'window' && furniture.material !== 'door') {
+    if (furniture.furnitureType !== 'window' && furniture.furnitureType !== 'door') {
       App.canvas.text({
         text: App.project.formatDistance(rect.height),
         fill: BLUE,
@@ -630,7 +735,7 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
     const handle = furniture.entity.only(Handle);
 
     if (!furniture.entity.has(Imaged)) {
-      renderMaterial(furniture);
+      renderFurnitureType(furniture);
     }
 
     renderLabel(furniture);

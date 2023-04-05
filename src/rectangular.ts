@@ -165,6 +165,9 @@ class Rectangular extends Component implements Surface, Solo {
 
   public set width(d: Distance) {
     const w = d.to('model');
+    if (Number.isNaN(w.get('model'))) {
+      return;
+    }
     if (w.get('model') < 0.1) {
       this.widthRef.set(Distance(0.1, 'model'));
       return;
@@ -178,6 +181,9 @@ class Rectangular extends Component implements Surface, Solo {
 
   public set height(d: Distance) {
     const h = d.to('model');
+    if (Number.isNaN(h.get('model'))) {
+      return;
+    }
     if (h.get('model') < 0.1) {
       this.heightRef.set(Distance(0.1, 'model'));
       return;

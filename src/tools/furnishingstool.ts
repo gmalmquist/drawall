@@ -19,7 +19,18 @@ class FurnitureTool extends Tool {
     return 'add furniture, doors, and windows';
   }
 
-  override createUi(ui: AutoForm) {
+  override createUi(form: AutoForm) {
+    form.addSelect({
+      name: 'Furniture Type',
+      value: Furniture.defaultFurnitureType,
+      items: [
+        { value: 'plain', icon: Icons.plain, },
+        { value: 'wood', icon: Icons.wood, },
+        { value: 'image', icon: Icons.image, },
+        { value: 'door', icon: Icons.door, },
+        { value: 'window', icon: Icons.window, },
+      ],
+    });
   }
 
   override setup() {
@@ -44,8 +55,9 @@ class FurnitureTool extends Tool {
       furniture.rect.center = App.ui.mousePos;
       furniture.rect.width = Distance(34, 'model');
       furniture.rect.height = Distance(34, 'model');
+      furniture.applyFurnitureTypeConstraints();
+      App.tools.set('pointer tool');
       App.ui.setSelection(furniture.entity.only(Handle));
-      App.pane.style.cursor = this.cursor;
     });
     this.events.addDragListener({
       onStart: e => {
@@ -63,7 +75,9 @@ class FurnitureTool extends Tool {
       },
       onEnd: (e, events) => {
         events?.handleDrag(e);
-        App.pane.style.cursor = this.cursor;
+        const selection = App.ui.selection;
+        App.tools.set('pointer tool');
+        App.ui.setSelection(...selection);
       }
     });
   }
@@ -101,6 +115,7 @@ class FurnitureTool extends Tool {
         furniture.rect.setTop(tl);
       },
       onEnd: (e, furniture) => {
+        furniture.applyFurnitureTypeConstraints();
       },
     });
     events.handleDrag(start);

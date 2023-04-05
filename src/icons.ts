@@ -25,6 +25,7 @@ const Icons = {
   exportImage: iconUrl('export-png.svg'),
   furniture: iconUrl('furniture.svg'),
   flipH: iconUrl('fliph.svg'),
+  flipV: iconUrl('flipv.svg'),
   heartInfo: iconUrl('heart-info.svg'),
   hideAngles: iconUrl('hide-angles.svg'),
   hideGrid: iconUrl('hide-grid.svg'),

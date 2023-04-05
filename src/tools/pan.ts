@@ -12,7 +12,7 @@ class PanTool extends Tool {
   }
 
   override get description(): string {
-    return 'you can also right or middle click-and-drag with any tool selected.';
+    return 'middle-click + drag, right-click + drag, or hold Alt';
   }
 
   override setup() {

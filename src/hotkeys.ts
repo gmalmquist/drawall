@@ -35,7 +35,8 @@ class Keybindings {
     kb.bind('j').to('joint tool');
     kb.bind('n').to('joint tool'); // matches inkscape hotkey
     kb.bind('d').to('furniture tool');
-    kb.bind('f').to('flip');
+    kb.bind('f').to('flip-h');
+    kb.bind('Shift', 'F').to('flip-v');
     kb.bind('Shift', '%').to('toggle-snap');
     kb.bind('k').to('toggle-kinematics');
     kb.bind('Control', 'l').to('loop-select'); // matches blender
@@ -44,6 +45,10 @@ class Keybindings {
     kb.bind('Control', 'z').to('undo'); // universal 
     kb.bind('Control', 'Shift', 'Z').to('redo'); // common convention
     kb.bind('Shift', 'D').to('export-png'); // google drive?
+    kb.bind('Control', '+').to('zoom-in');
+    kb.bind('Control', '=').to('zoom-in');
+    kb.bind('Control', '-').to('zoom-out');
+    kb.bind('Control', '_').to('zoom-out');
     return kb;
   }
 

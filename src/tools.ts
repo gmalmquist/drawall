@@ -124,11 +124,13 @@ class Tools {
     this.stack.push(this.current.name);
   }
 
-  public popTool() {
+  public popTool(): ToolName | null {
     const tool = this.stack.pop();
     if (typeof tool !== 'undefined') {
       this.set(tool);
+      return tool;
     }
+    return null;
   }
 
   public register<T extends Tool>(kind: ToolKind<T>) {
@@ -163,6 +165,8 @@ class Tools {
     this._current.set(tool);
     App.pane.style.cursor = tool.cursor;
     App.gui.tool.clear();
+    App.ui.clearSelection();
+    App.ui.cancelDrag();
     const ui = new AutoForm();
     tool.createUi(ui)
     ui.inflate(App.gui.tool);

@@ -245,9 +245,9 @@ class UiState {
     App.ecs.getComponents(Hovered).forEach(h => h.unhover());
   }
 
-  flip() {
+  flip(axis: 'horizontal' | 'vertical') {
     for (const handle of this.selection) {
-      handle.entity.maybe(Furniture)?.flip();
+      handle.entity.maybe(Furniture)?.flip(axis);
     }
   }
 
@@ -314,6 +314,20 @@ class UiState {
       return this.snapping.snapToGlobalRef.get();
     }
     return impossible(snap.category);
+  }
+
+  initiateDrag() {
+    const event: UiDragEvent = {
+      kind: 'start',
+      primary: true,
+      start: this.mousePos,
+      position: this.mousePos,
+      delta: Vectors.zero('screen'),
+    };
+    this.mouse.pressed = true;
+    this.mouse.dragging = true;
+    this.mouse.distanceDragged = Distance(0, 'screen');
+    App.tools.current.events.handleDrag(event);
   }
 
   getDefaultDragHandler(filter: (handle: Handle) => boolean): UiEventDispatcher {
@@ -596,13 +610,7 @@ class UiState {
         if (App.tools.current.name !== 'pan tool') {
           App.tools.pushTool();
           App.tools.set('pan tool');
-          App.tools.current.events.handleDrag({
-            kind: 'start',
-            primary: true,
-            start: this.mousePos,
-            position: this.mousePos,
-            delta: Vectors.zero('screen'),
-          });
+          this.initiateDrag();
         }
         e.preventDefault();
         return;
@@ -616,7 +624,9 @@ class UiState {
     this.events.onKey('keyup', e => {
       this.keysPressed.delete(e.key);
       if (e.key === 'Alt') {
-        App.tools.popTool();
+        if (App.tools.popTool()) {
+          e.preventDefault();
+        }
       }
     });
 

@@ -64,6 +64,16 @@ body {
   flex-direction: column;
 }
 
+#ui-jail {
+  position: absolute;
+  overflow: hidden;
+  display: none;
+  left: -100px;
+  top: -100px;
+  width: 0;
+  height: 0;
+}
+
 a {
   color: hsl(196.6, 94.1%, 30%);
   text-shadow: 0 0 3px #5BCEFA;

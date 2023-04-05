@@ -184,7 +184,7 @@ class Imaged extends Component {
     element.setAttribute('accept', extensions.join(', '));
     element.style.position = 'absolute';
     element.style.opacity = '0';
-    document.body.appendChild(element);
+    App.uiJail.appendChild(element);
     element.addEventListener('change', () => {
       const files = Array.from(element.files || []);
       for (const file of files) {

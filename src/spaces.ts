@@ -559,6 +559,10 @@ class SpacePos extends BaseSpaceValue<Point> {
     return this.map(p => new Point(p.x * factor, p.y * factor));
   }
 
+  neg(): SpacePos {
+    return this.map(p => new Point(-p.x, -p.y));
+  }
+
   public static zero(space: SpaceName): SpacePos {
     return SpacePos.of(Point.ZERO, space);
   }
