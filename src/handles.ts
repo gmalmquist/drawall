@@ -50,6 +50,7 @@ class Lever extends Component {
     public readonly origin: RoRef<Position>,
     public readonly position: Ref<Position>,
     cursor?: Cursor,
+    private readonly enabled: RefView<boolean, RefK> = Refs.ofRo(true),
   ) {
     super(entity);
     this.handle = entity.ecs.createEntity().add(Handle, {
@@ -83,7 +84,7 @@ class Lever extends Component {
   }
 
   get visible(): boolean {
-    return this.parent.isSelected;
+    return this.parent.isSelected && this.enabled.get();
   }
 
   override tearDown() {

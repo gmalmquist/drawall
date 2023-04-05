@@ -29,7 +29,11 @@ class Rectangular extends Component implements Surface, Solo {
   public readonly heightRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
   public readonly rotationRef = Refs.of(Angle(Radians(0), 'model'), Rectangular.angleEq);
   public readonly keepAspectRef: Ref<boolean> = Refs.of(false);
-  
+
+  public readonly allowResizeH = Refs.of<boolean>(true);
+  public readonly allowResizeV = Refs.of<boolean>(true);
+  public readonly allowRotate = Refs.of<boolean>(true);
+
   // unit axes
   public readonly horizontalAxisRef: RoRef<Vector>;
   public readonly verticalAxisRef: RoRef<Vector>;
@@ -308,6 +312,7 @@ class Rectangular extends Component implements Surface, Solo {
         label: 'width',
         kind: 'distance',
         value: this.widthRef,
+        enabled: this.allowResizeH,
         min: Distance(0.1, 'model'),
       });
       form.add({
@@ -315,6 +320,7 @@ class Rectangular extends Component implements Surface, Solo {
         label: 'height',
         kind: 'distance',
         value: this.heightRef,
+        enabled: this.allowResizeV,
         min: Distance(0.1, 'model'),
       });
       form.add({
@@ -322,6 +328,7 @@ class Rectangular extends Component implements Surface, Solo {
         label: 'rotation',
         kind: 'angle',
         value: this.rotationRef,
+        enabled: this.allowRotate,
       });
       return form;
     });
@@ -391,6 +398,7 @@ class Rectangular extends Component implements Surface, Solo {
       Refs.ro(this.centerRef),
       position,
       `url('${Icons.rotate}') 8 8, pointer`,
+      this.allowRotate,
     );
   }
 
@@ -441,6 +449,11 @@ class Rectangular extends Component implements Surface, Solo {
         hoverable: false,
         draggable: true,
         control: true,
+        visible: () => {
+          if (!this.allowResizeH.get() && frame.get().horizontal.mag2().sign > 0) return false;
+          if (!this.allowResizeV.get() && frame.get().vertical.mag2().sign > 0) return false;
+          return true;
+        },
         drag: () => {
           return {
             kind: 'point',

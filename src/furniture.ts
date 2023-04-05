@@ -17,6 +17,8 @@ interface FurnitureAttach {
   rotation: Angle;
 }
 
+// tbh i knew immediately when making this union type that i was gonna end up with shit
+// like 'door' in it. whatevs. it's fine. it's valid to be made of door.
 type FurnitureMaterial = 'image' | 'plain' | 'wood' | 'door' | 'window';
 
 class Furniture extends Component implements Solo {
@@ -37,6 +39,7 @@ class Furniture extends Component implements Solo {
   public readonly rect: Rectangular;
   public readonly labelHandle: Handle;
   public readonly materialRef = Refs.of<FurnitureMaterial>(Furniture.defaultMaterial);
+  public readonly flippedRef = Refs.of<boolean>(false);
 
   private updatingOrientation: boolean = false;
 
@@ -63,6 +66,7 @@ class Furniture extends Component implements Solo {
       getPos: () => this.rect.center,
       distance: p => labelLine.get().distanceFrom(p),
       priority: 4,
+      visible: () => this.material !== 'door' && this.material !== 'window',
     });
     this.labelHandle.events.onMouse('click', () => {
       Popup.input({
@@ -70,23 +74,6 @@ class Furniture extends Component implements Solo {
         text: this.nameRef,
         position: App.ui.mousePos,
       });
-    });
-
-    const getDragPoints = () => this.entity.only(Handle).getDragClosure('complete').points;
-
-    this.materialRef.onChange(m => {
-      const hadImage = entity.has(Imaged);
-      if (m === 'image') {
-        const img = entity.getOrCreate(Imaged, 'furniture');
-        img.showUploadForm();
-      } else {
-        entity.removeAll(Imaged);
-      }
-      if (hadImage !== entity.has(Imaged)) {
-        App.ui.updateForms();
-      }
-      Furniture.defaultMaterial = m === 'image' ? 'wood' : m;
-      App.project.requestSave('changed furniture material');
     });
 
     entity.add(Form, () => {
@@ -102,107 +89,57 @@ class Furniture extends Component implements Solo {
           { value: 'window', icon: Icons.window, },
         ],
       });
+      form.add({
+        kind: 'toggle',
+        name: 'Flip',
+        value: this.flippedRef,
+      });
       form.addButton({
         name: 'Align to Wall',
         icon: Icons.alignToWall,
         enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
-        onClick: () => {
-          const attach = this.attach;
-          if (!attach) return;
-          attach.rotation = Angle(Radians(0), 'model');
-          this.updateOrientation();
-        },
+        onClick: () => this.alignToWall(),
       });
       form.addButton({
-        name: 'Move to Wall',
+        name: 'Place on Wall',
         icon: Icons.moveToWall,
         enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
-        onClick: () => {
-          const attach = this.attach;
-          if (!attach) return;
-          const edge = attach.wall.edge;
-          if (attach.normal.sign === 0) {
-            this.rect.rotation = edge.tangent.angle();
-          }
-          const highest = argmin(
-            getDragPoints(),
-            point => point,
-            point => -Math.round(Vectors.between(edge.src, point.get())
-              .dot(edge.normal).get('screen'))
-          );
-          if (highest !== null) {
-            attach.point = highest.arg;
-            attach.normal = Distance(0, 'model');
-            attach.at = edge.unlerp(attach.point.get());
-            this.updateOrientation();
-          }
-        },
+        onClick: () => this.placeOnWall(),
       });
       form.addButton({
         name: 'Center on Wall',
         icon: Icons.centerOnWall,
         enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
-        onClick: () => {
-          const attach = this.attach;
-          if (!attach) return;
-          const edge = attach.wall.edge;
-          if (attach.point.name === 'center' && attach.normal.sign === 0) {
-            attach.rotation = Angle(Radians(0), 'model');
-          }
-          attach.point = this.entity.only(Handle).getDragClosure('complete').points
-            .filter(p => p.name === 'center')[0]!;
-          attach.normal = Distance(0, 'model');
-          attach.at = edge.unlerp(attach.point.get());
-          this.updateOrientation();
-        },
+        onClick: () => this.centerOnWall(),
       });
       form.addButton({
         name: 'Move to Corner',
         icon: Icons.moveToCorner,
         enabled: Refs.mapRo(this.attachRef, a => !!a?.wall?.entity?.isAlive),
-        onClick: () => {
-          const attach = this.attach;
-          if (!attach) return;
-          const points = getDragPoints();
-          if (points.length === 0) return;
-
-          const normalDistance = (edge: MemoEdge, point: DragPoint) =>
-            Vectors.between(edge.src, point.get()).dot(edge.normal).neg();
-
-          const getClosestPoint = (edge: MemoEdge, normal: boolean) => argmin(
-            points,
-            point => ({
-              point,
-              distance: normal ? normalDistance(edge, point) : edge.distanceFrom(point.get()),
-            }),
-            ({ distance }) => Math.round(distance.get('screen')),
-          )!.result;
-
-          const edge = attach.wall.edge;
-          const adj1 = attach.wall.src.incoming?.edge;
-          const adj2 = attach.wall.dst.outgoing?.edge;
-          const adj = argmin([adj1, adj2], edge => {
-            if (!edge) return 'invalid';
-            const { point, distance } = getClosestPoint(edge, false);
-            return { edge, point, distance };
-          }, ({ distance }) => Math.round(distance.get('screen')))?.result;
-
-          if (!adj) return;
-
-          const edgiest = getClosestPoint(edge, true).point;
-          const adjiest = getClosestPoint(adj.edge, true).point;
-          
-          adjiest.set(adj.edge.closestPoint(adjiest.get()));
-          attach.point = edgiest;
-          attach.normal = Distance(0, 'model');
-          attach.at = edge.unlerp(edgiest.get());
-          this.updateOrientation();
-        },
+        onClick: () => this.moveToCorner(),
       });
       return form;
     });
 
     const edgeListeners = new Map<Wall, (edge: MemoEdge) => void>();
+
+    this.materialRef.onChange(m => {
+      const hadImage = entity.has(Imaged);
+      if (m === 'image') {
+        const img = entity.getOrCreate(Imaged, 'furniture');
+        img.showUploadForm();
+      } else {
+        entity.removeAll(Imaged);
+      }
+      if (hadImage !== entity.has(Imaged)) {
+        App.ui.updateForms();
+      }
+      Furniture.defaultMaterial = m === 'image' ? 'wood' : m;
+      this.applyMaterialConstraints();
+      App.project.requestSave('changed furniture material');
+    });
+
+    this.flippedRef.onChange(_ => App.project.requestSave('flipped furniture'));
 
     this.attachRef.onChange(a => {
       if (a === null) return;
@@ -222,9 +159,13 @@ class Furniture extends Component implements Solo {
       },
       onUpdate: (_e, _c) => {
         this.attach = this.findAttach();
+        if (this.material === 'door' || this.material === 'window') {
+          this.centerOnWall(true);
+        }
       },
       onEnd: (_e, _c) => {
         this.attach = this.findAttach();
+        this.applyMaterialConstraints();
       },
     });
 
@@ -235,6 +176,103 @@ class Furniture extends Component implements Solo {
     this.rect.centerRef.onChange(() => this.updateAttachPosition());
     this.rect.widthRef.onChange(() => this.updateAttachPosition());
     this.rect.heightRef.onChange(() => this.updateAttachPosition());
+
+    this.applyMaterialConstraints();
+  }
+
+  private applyMaterialConstraints() {
+    const material = this.material;
+    if (material === 'door' || material === 'window') {
+      this.rect.allowResizeV.set(false);
+      this.rect.allowRotate.set(false);
+      this.rect.height = Distance(
+        App.project.modelUnit.from({ value: 2, unit: 'in' }).value,
+        'model',
+      );
+    } else {
+      this.rect.allowResizeV.set(true);
+      this.rect.allowRotate.set(true);
+    }
+  }
+
+  public placeOnWall(alwaysAlign?: boolean) {
+    const attach = this.attach;
+    if (!attach) return;
+    const edge = attach.wall.edge;
+    if (alwaysAlign || attach.normal.sign === 0) {
+      this.rect.rotation = edge.tangent.neg().angle();
+    }
+    const highest = argmin(
+      this.getDragPoints(),
+      point => point,
+      point => -Math.round(Vectors.between(edge.src, point.get())
+        .dot(edge.normal).get('screen'))
+    );
+    if (highest !== null) {
+      attach.point = highest.arg;
+      attach.normal = Distance(0, 'model');
+      attach.at = edge.unlerp(attach.point.get());
+      this.updateOrientation();
+    }
+  }
+
+  public centerOnWall(alwaysAlign?: boolean) {
+    const attach = this.attach;
+    if (!attach) return;
+    const edge = attach.wall.edge;
+    if (alwaysAlign || attach.point.name === 'center' && attach.normal.sign === 0) {
+      attach.rotation = Angle(Radians(Math.PI), 'model');
+    }
+    attach.point = this.entity.only(Handle).getDragClosure('complete').points
+      .filter(p => p.name === 'center')[0]!;
+    attach.normal = Distance(0, 'model');
+    attach.at = edge.unlerp(attach.point.get());
+    this.updateOrientation();
+  }
+
+  public moveToCorner() {
+    const attach = this.attach;
+    if (!attach) return;
+    const points = this.getDragPoints();
+    if (points.length === 0) return;
+
+    const normalDistance = (edge: MemoEdge, point: DragPoint) =>
+      Vectors.between(edge.src, point.get()).dot(edge.normal).neg();
+
+    const getClosestPoint = (edge: MemoEdge, normal: boolean) => argmin(
+      points,
+      point => ({
+        point,
+        distance: normal ? normalDistance(edge, point) : edge.distanceFrom(point.get()),
+      }),
+      ({ distance }) => Math.round(distance.get('screen')),
+    )!.result;
+
+    const edge = attach.wall.edge;
+    const adj1 = attach.wall.src.incoming?.edge;
+    const adj2 = attach.wall.dst.outgoing?.edge;
+    const adj = argmin([adj1, adj2], edge => {
+      if (!edge) return 'invalid';
+      const { point, distance } = getClosestPoint(edge, false);
+      return { edge, point, distance };
+    }, ({ distance }) => Math.round(distance.get('screen')))?.result;
+
+    if (!adj) return;
+
+    const edgiest = getClosestPoint(edge, true).point;
+    const adjiest = getClosestPoint(adj.edge, true).point;
+    
+    adjiest.set(adj.edge.closestPoint(adjiest.get()));
+    attach.point = edgiest;
+    attach.normal = Distance(0, 'model');
+    attach.at = edge.unlerp(edgiest.get());
+    this.updateOrientation();
+  }
+
+  public alignToWall() {
+    const attach = this.attach;
+    if (!attach) return;
+    this.rect.rotation = attach.wall.edge.tangent.neg().angle();
   }
 
   public updateOrientation() {
@@ -245,6 +283,10 @@ class Furniture extends Component implements Solo {
     this.rect.rotation = edge.tangent.angle().plus(attach.rotation);
     attach.point.set(edge.lerp(attach.at).splus(attach.normal, edge.normal));
     this.updatingOrientation = false;
+  }
+
+  private getDragPoints(): DragPoint[] {
+    return this.entity.only(Handle).getDragClosure('complete').points;
   }
 
   private findAttach(): FurnitureAttach | null {
@@ -383,14 +425,24 @@ ComponentFactories.register(Furniture, (
   return furniture;
 });
 
-
 const FurnitureRenderer = (ecs: EntityComponentSystem) => {
-  // most of the heavy-lifting is actually done by the rectangle and image
-  // renderers! this is 90% to handle the UI while dragging and stuff.
-
   const renderMaterial = (furniture: Furniture) => {
     const rect = furniture.rect;
     const material = furniture.material;
+
+    const drawNarrow = (pixels: number) => {
+      const thickness = Distance(pixels, 'screen');
+      const rect = furniture.rect;
+      App.canvas.beginPath();
+      App.canvas.moveTo(rect.left.splus(thickness, rect.verticalAxis));
+      App.canvas.lineTo(rect.left.splus(thickness, rect.verticalAxis.neg()));
+      App.canvas.lineTo(rect.right.splus(thickness, rect.verticalAxis.neg()));
+      App.canvas.lineTo(rect.right.splus(thickness, rect.verticalAxis));
+      App.canvas.closePath();
+      App.canvas.fill();
+      App.canvas.stroke();
+    };
+
     App.canvas.lineWidth = 1;
     App.canvas.setLineDash([]);
     if (material === 'plain') {
@@ -421,9 +473,59 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
         rect.left.splus(inset2, rect.horizontalAxis).plus(mg(rect.downRad)),
         rect.right.splus(inset1.neg(), rect.horizontalAxis).plus(mg(rect.downRad)),
       );
+    } else if (material === 'door') {
+      App.canvas.lineWidth = 1;
+      App.canvas.strokeStyle = 'black';
+      App.canvas.fillStyle = 'white';
+      drawNarrow(5);
+
+      // doors... open o:
+      App.canvas.lineWidth = 2;
+      App.canvas.setLineDash([4, 4]);
+      App.canvas.strokeStyle = 'gray';
+      App.canvas.beginPath();
+      if (furniture.flippedRef.get()) {
+        const startAngle = rect.horizontalAxis.to('screen').neg().angle().normalize();
+        App.canvas.arc(
+          rect.right,
+          rect.width,
+          startAngle,
+          startAngle.plus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
+          false,
+        );
+      } else {
+        const startAngle = rect.horizontalAxis.to('screen').angle();
+        App.canvas.arc(
+          rect.left,
+          rect.width,
+          startAngle,
+          startAngle.minus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
+          true,
+        );
+      }
+      App.canvas.stroke();
+      App.canvas.setLineDash([]);
+    } else if (material === 'window') {
+      App.canvas.lineWidth = 1;
+      App.canvas.strokeStyle = 'black';
+      // sill
+      const sill = Distance(4, 'screen');
+      const sillh = rect.horizontalAxis.scale(sill);
+      const sillv = rect.verticalAxis.neg().scale(sill).scale(2);
+      App.canvas.fillStyle = 'white';
+      App.canvas.beginPath();
+      App.canvas.moveTo(rect.left.minus(sillh));
+      App.canvas.lineTo(rect.left.minus(sillh).plus(sillv));
+      App.canvas.lineTo(rect.right.plus(sillh).plus(sillv));
+      App.canvas.lineTo(rect.right.plus(sillh));
+      App.canvas.closePath();
+      App.canvas.fill();
+      App.canvas.stroke();
+      // frame
+      App.canvas.fillStyle = 'lightgray';
+      drawNarrow(3);
     }
-    App.canvas.lineWidth = 1;
-    App.canvas.setLineDash([]);
+    App.canvas.lineWidth = 1; App.canvas.setLineDash([]);
   };
 
   const renderAttachment = (furniture: Furniture) => {
@@ -465,21 +567,24 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       keepUpright: true,
     });
 
-    App.canvas.text({
-      text: App.project.formatDistance(rect.height),
-      fill: BLUE,
-      align: 'center',
-      baseline: 'middle',
-      point: rect.left.splus(Distance(App.settings.fontSize, 'screen'), rect.leftRad.unit()),
-      axis: rect.upRad,
-      keepUpright: true,
-    });
+    if (furniture.material !== 'window' && furniture.material !== 'door') {
+      App.canvas.text({
+        text: App.project.formatDistance(rect.height),
+        fill: BLUE,
+        align: 'center',
+        baseline: 'middle',
+        point: rect.left.splus(Distance(App.settings.fontSize, 'screen'), rect.leftRad.unit()),
+        axis: rect.upRad,
+        keepUpright: true,
+      });
+    }
 
     App.canvas.lineWidth = 1;
     App.canvas.setLineDash([]);
   };
 
   const renderLabel = (furniture: Furniture) => {
+    if (!furniture.labelHandle.visible) return;
     const rect = furniture.rect;
     const draw = (fill: string, offset: Vector = Vectors.zero('screen')) => App.canvas.text({
       text: furniture.name,

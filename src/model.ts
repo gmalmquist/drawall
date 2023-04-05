@@ -900,7 +900,7 @@ const WallRenderer = (ecs: EntityComponentSystem) => {
             .splus(dstpad, tangent.neg());
           return { src, dst };
         },
-        () => [ wall.src.pos.toString(), wall.dst.pos.toString() ]),
+        () => [ wall.src.pos.to('screen').toString(), wall.dst.pos.to('screen').toString() ]),
         'strokeWall', width, offset
       );
       canvas.strokeStyle = color;
