@@ -331,8 +331,18 @@ class AutoForm {
       const input = new IconButton(field.name, defaultIcon);
       input.addClass('selected');
 
+      const popstate: {
+        popup?: Entity,
+        reentered?: boolean,
+      } = {};
+
       input.onClick(() => {
+        if (popstate.popup?.isAlive) {
+          popstate.popup?.destroy();
+          return;
+        }
         const popup = App.ecs.createEntity().add(Popup);
+        popstate.popup = popup.entity;
 
         const subform = new AutoForm();
         field.items.forEach(item => {
@@ -360,17 +370,16 @@ class AutoForm {
         popup.element.appendChild(mini.element);
         popup.show();
 
-        const state = { reentered: false };
         mini.element.addEventListener('mouseleave', () => {
-          state.reentered = false;
+          popstate.reentered = false;
           setTimeout(() => {
-            if (!state.reentered) {
+            if (!popstate.reentered) {
               popup.entity.destroy();
             }
-          }, 500);
+          }, 1000);
         });
         mini.element.addEventListener('mouseenter', () => {
-          state.reentered = true;
+          popstate.reentered = true;
         });
       });
 
