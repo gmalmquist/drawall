@@ -379,6 +379,10 @@ class UiState {
       },
       onEnd: (e, { selection }) => {
         selection.forEach(h => h.events.handleDrag(e));
+        const selectable = selection.filter(s => s.selectable && !s.control);
+        if (selectable.length > 0) {
+          this.setSelection(...selectable);
+        }
         this.clearDragging();
         this.currentSnapResult = null;
         this.preferredSnap = null;

@@ -186,7 +186,7 @@ class Furniture extends Component implements Solo {
       this.rect.allowResizeV.set(false);
       this.rect.allowRotate.set(false);
       this.rect.height = Distance(
-        App.project.modelUnit.from({ value: 2, unit: 'in' }).value,
+        App.project.modelUnit.from({ value: 2, unit: 'inch' }).value,
         'model',
       );
     } else {

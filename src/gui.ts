@@ -314,17 +314,6 @@ class GUI {
       const unit = Units.distance.get(spacing.unit)!;
       App.project.gridSpacing = spacing;
       App.project.displayUnit = unit.name === 'inch' ? Units.distance.get('ft')! : unit;
-
-      if (unit.family !== App.project.modelUnit.family) {
-        if (unit.family === 'metric') {
-          App.project.modelUnit = Units.distance.get('cm')!;
-        } else if (unit.family === 'imperial') {
-          App.project.modelUnit = Units.distance.get('in')!;
-        } else if (unit.family === 'esoteric') {
-          App.project.modelUnit = Units.distance.get('light-nanosecond')!;
-        }
-        App.viewport.recenter();
-      }
     });
 
     this.project.clear();

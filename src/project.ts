@@ -87,6 +87,16 @@ class Project {
       constraint.length *= scaleFactor;
     }
 
+    // rectangles
+    for (const rect of App.ecs.getComponents(Rectangular)) {
+      rect.width = rect.width.scale(scaleFactor);
+      rect.height = rect.height.scale(scaleFactor);
+      rect.center = Position(centroid, 'model').splus(
+        scaleFactor,
+        Vectors.between(Position(centroid, 'model'), rect.center)
+      );
+    }
+
     this.modelUnitRef.set(unit);
 
     App.viewport.recenter();
