@@ -19,6 +19,7 @@ interface HandleProps {
   visible?: () => boolean;
   knob?: KnobProps;
   tools?: Array<ToolName>,
+  control?: boolean;
 }
 
 class Surfaced extends Component implements Surface, Solo {
@@ -56,6 +57,7 @@ class Lever extends Component {
       clickable: false,
       selectable: false,
       hoverable: false,
+      control: true,
       visible: () => this.visible,
       getPos: () => position.get(),
       distance: p => new Circle(position.get(), Distance(5, 'screen')).sdist(p),
@@ -144,6 +146,7 @@ class Handle extends Component implements Solo {
   public selectable: boolean = true;
   public ignoreNonPrimary: boolean = true;
   public priority: number = 0;
+  public control: boolean = false;
 
   constructor(entity: Entity, private readonly props: HandleProps) {
     super(entity);
@@ -158,6 +161,7 @@ class Handle extends Component implements Solo {
     this._drag = typeof props.drag === 'undefined' ? Drags.empty : props.drag;
 
     this._tools = new Set(props.tools || []);
+    this.control = !!props.control;
 
     this.getPos = props.getPos;
     this._onDelete = props.onDelete;

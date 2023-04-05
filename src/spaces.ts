@@ -424,6 +424,13 @@ class SpaceVec extends BaseSpaceValue<Vec> {
     return this.map((v: Vec, factor: number) => v.scale(factor), factor);
   }
 
+  div(factor: number | Spaced<number>): SpaceVec {
+    if (typeof factor === 'number') {
+      return this.map(v => v.scale(1.0 / factor));
+    }
+    return this.map((v: Vec, factor: number) => v.scale(1.0 / factor), factor);
+  }
+
   neg(): SpaceVec {
     return this.scale(-1);
   }
@@ -1060,6 +1067,19 @@ class Polygon extends SDF {
       .map(v => Vectors.between(centroid, v))
       .map(v => v.scale(factor))
       .map(v => centroid.plus(v)));
+  }
+
+  public pad(amount: Distance, ...axes: Vector[]): Polygon {
+    const centroid = this.centroid;
+    return new Polygon(this.vertices.map(v => {
+      const offset = Vectors.between(centroid, v);
+      let result: Vector = offset;
+      for (const axis of axes) {
+        const current = offset.dot(axis);
+        result = result.splus(amount.scale(current.sign), axis.div(axis.mag()));
+      }
+      return centroid.plus(result);
+    }));
   }
 
   private raycastCheck(

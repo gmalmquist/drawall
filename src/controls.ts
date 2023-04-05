@@ -636,6 +636,9 @@ abstract class MiniFormInput<V, E extends HTMLElement> extends ElementWrap<E> im
   }
 
   public setValue(value: V): void {
+    if (this.element === document.activeElement) {
+      return; // don't clobber input while ppl r trying to type
+    }
     this.setRawValue(this.format(value));
   }
 
@@ -758,6 +761,7 @@ class AngleInput extends MiniFormInput<Angle, HTMLInputElement> {
     super(document.createElement('input') as HTMLInputElement);
     this.element.setAttribute('type', 'text');
     this.element.setAttribute('size', '6');
+    this.addClass('angle');
   }
 
   protected override getRawValue(): string {

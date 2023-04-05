@@ -23,9 +23,10 @@ class FurnitureTool extends Tool {
   }
 
   override setup() {
+    const filter = (h: Handle) => h.entity.has(Furniture) || h.control;
     this.events.onMouse('move', e => {
       if (App.ui.dragging) return;
-      const handle = App.ui.getHandleAt(e.position, h => h.entity.has(Furniture));
+      const handle = App.ui.getHandleAt(e.position, filter);
       if (handle !== null) {
         App.pane.style.cursor = handle.getContextualCursor();
         return;
@@ -42,10 +43,10 @@ class FurnitureTool extends Tool {
     });
     this.events.addDragListener({
       onStart: e => {
-        const handle = App.ui.getHandleAt(e.start, h => h.entity.has(Furniture));
+        const handle = App.ui.getHandleAt(e.start, filter);
         if (handle) {
           App.ui.select(handle);
-          const events = App.ui.getDefaultDragHandler(h => h.entity.has(Furniture));
+          const events = App.ui.getDefaultDragHandler(filter);
           events.handleDrag(e);
           return events;
         }
@@ -69,25 +70,27 @@ class FurnitureTool extends Tool {
     events.addDragListener({
       onStart: e => {
         const furniture = App.ecs.createEntity().add(Furniture);
-        furniture.rect.center = e.start;
+        furniture.rect.center = App.ui.snapPoint(e.start);
         App.ui.setSelection(furniture.entity.only(Handle));
         return furniture;
       },
       onUpdate: (e, furniture) => {
-        let tl = e.start;
+        let tl = App.ui.snapPoint(e.start);
+        const end = App.ui.snapPoint(e.position);
+        const delta = Vectors.between(tl, end);
 
         const right = Vector(Axis.X, 'screen');
         const down = Vector(Axis.Y, 'screen');
 
-        if (e.delta.dot(right).sign < 0) {
-          tl = tl.plus(e.delta.onAxis(right));
+        if (delta.dot(right).sign < 0) {
+          tl = tl.plus(delta.onAxis(right));
         }
-        if (e.delta.dot(down).sign < 0) {
-          tl = tl.plus(e.delta.onAxis(down));
+        if (delta.dot(down).sign < 0) {
+          tl = tl.plus(delta.onAxis(down));
         }
 
-        furniture.rect.width = e.delta.dot(right).abs();
-        furniture.rect.height = e.delta.dot(down).abs();
+        furniture.rect.width = delta.dot(right).abs();
+        furniture.rect.height = delta.dot(down).abs();
         furniture.rect.setLeft(tl);
         furniture.rect.setTop(tl);
       },
@@ -119,6 +122,8 @@ interface FurnitureAttach {
   rotation: Angle;
 }
 
+type FurnitureMaterial = 'default' | 'wood';
+
 class Furniture extends Component implements Solo {
   public readonly [SOLO] = true;
 
@@ -133,6 +138,7 @@ class Furniture extends Component implements Solo {
     },
   );
   public readonly rect: Rectangular;
+  public readonly materialRef = Refs.of<FurnitureMaterial>('wood');
   private updatingOrientation: boolean = false;
 
   constructor(entity: Entity) {
@@ -221,9 +227,12 @@ class Furniture extends Component implements Solo {
           const normalDistance = (edge: MemoEdge, point: DragPoint) =>
             Vectors.between(edge.src, point.get()).dot(edge.normal).neg();
 
-          const getClosestPoint = (edge: MemoEdge) => argmin(
+          const getClosestPoint = (edge: MemoEdge, normal: boolean) => argmin(
             points,
-            point => ({ point, distance: normalDistance(edge, point), }),
+            point => ({
+              point,
+              distance: normal ? normalDistance(edge, point) : edge.distanceFrom(point.get()),
+            }),
             ({ distance }) => Math.round(distance.get('screen')),
           )!.result;
 
@@ -232,14 +241,14 @@ class Furniture extends Component implements Solo {
           const adj2 = attach.wall.dst.outgoing?.edge;
           const adj = argmin([adj1, adj2], edge => {
             if (!edge) return 'invalid';
-            const { point, distance } = getClosestPoint(edge);
+            const { point, distance } = getClosestPoint(edge, false);
             return { edge, point, distance };
           }, ({ distance }) => Math.round(distance.get('screen')))?.result;
 
           if (!adj) return;
 
-          const edgiest = getClosestPoint(edge).point;
-          const adjiest = getClosestPoint(adj.edge).point;
+          const edgiest = getClosestPoint(edge, true).point;
+          const adjiest = getClosestPoint(adj.edge, true).point;
           
           adjiest.set(adj.edge.closestPoint(adjiest.get()));
           attach.point = edgiest;
@@ -359,6 +368,14 @@ class Furniture extends Component implements Solo {
     attach.normal = edge.normal.dot(Vectors.between(edge.src, position));
   }
 
+  public get material(): FurnitureMaterial {
+    return this.materialRef.get();
+  }
+
+  public set material(m: FurnitureMaterial) {
+    this.materialRef.set(m);
+  }
+
   public get attach(): FurnitureAttach | null {
     const attach = this.attachRef.get();
     if (!attach?.wall?.entity?.isAlive) return null;
@@ -420,10 +437,44 @@ ComponentFactories.register(Furniture, (
 const FurnitureRenderer = (ecs: EntityComponentSystem) => {
   // most of the heavy-lifting is actually done by the rectangle and image
   // renderers! this is 90% to handle the UI while dragging and stuff.
-  for (const furniture of ecs.getComponents(Furniture)) {
-    const handle = furniture.entity.only(Handle);
-    if (!handle.isActive) continue;
 
+  const renderMaterial = (furniture: Furniture) => {
+    const rect = furniture.rect;
+    const material = furniture.material;
+    App.canvas.lineWidth = 1;
+    App.canvas.setLineDash([]);
+    if (material === 'default') {
+      App.canvas.lineWidth = 2;
+      App.canvas.fillStyle = 'lightgray';
+      App.canvas.strokeStyle = 'darkgray';
+      App.canvas.polygon(rect.polygon);
+      App.canvas.fill();
+      App.canvas.stroke();
+    } else if (material === 'wood') {
+      App.canvas.lineWidth = 2;
+      App.canvas.fillStyle = 'hsl(30, 60%, 60%)';
+      App.canvas.strokeStyle = 'hsl(30, 60%, 30%)';
+      App.canvas.polygon(rect.polygon);
+      App.canvas.fill();
+      App.canvas.stroke();
+
+      App.canvas.lineWidth = 1;
+      const margin = Distance(10, 'screen');
+      const mg = (v: Vector) => v.minus(v.unit().scale(margin));
+      App.canvas.strokeLine(
+        rect.left.splus(0.25, rect.rightRad).plus(mg(rect.upRad)),
+        rect.right.splus(0.5, rect.leftRad).plus(mg(rect.upRad)),
+      );
+      App.canvas.strokeLine(
+        rect.left.splus(0.5, rect.rightRad).plus(mg(rect.downRad)),
+        rect.right.splus(0.25, rect.leftRad).plus(mg(rect.downRad)),
+      );
+    }
+    App.canvas.lineWidth = 1;
+    App.canvas.setLineDash([]);
+  };
+
+  const renderAttachment = (furniture: Furniture) => {
     const attach = furniture.attach;
     if (attach !== null) {
       const edge = attach.wall.edge;
@@ -437,6 +488,55 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.lineWidth = 1;
       App.canvas.setLineDash([]);
     }
+  };
+
+  const renderActive = (furniture: Furniture) => {
+    const rect = furniture.rect;
+    App.canvas.polygon(rect.polygon.pad(
+      Distance(3, 'screen'),
+      rect.rightRad,
+      rect.upRad,
+    ));
+
+    App.canvas.setLineDash([8, 4]);
+    App.canvas.lineWidth = 1;
+    App.canvas.strokeStyle = BLUE;
+    App.canvas.stroke();
+
+    App.canvas.text({
+      text: App.project.formatDistance(rect.width),
+      fill: BLUE,
+      align: 'center',
+      baseline: 'middle',
+      point: rect.top.splus(Distance(App.settings.fontSize, 'screen'), rect.upRad.unit()),
+      axis: rect.rightRad,
+      keepUpright: true,
+    });
+
+    App.canvas.text({
+      text: App.project.formatDistance(rect.height),
+      fill: BLUE,
+      align: 'center',
+      baseline: 'middle',
+      point: rect.left.splus(Distance(App.settings.fontSize, 'screen'), rect.leftRad.unit()),
+      axis: rect.upRad,
+      keepUpright: true,
+    });
+
+    App.canvas.lineWidth = 1;
+    App.canvas.setLineDash([]);
+  };
+
+  for (const furniture of ecs.getComponents(Furniture)) {
+    const handle = furniture.entity.only(Handle);
+
+    if (!furniture.entity.has(Imaged)) {
+      renderMaterial(furniture);
+    }
+
+    if (!handle.isActive) continue;
+    renderAttachment(furniture);
+    renderActive(furniture);
   }
 };
 

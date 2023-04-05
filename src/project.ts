@@ -100,6 +100,15 @@ class Project {
     return this.modelUnit.from(amount).value;
   }
 
+  public formatDistance(distance: Distance): string {
+    const amount = this.displayUnit.from(
+      this.modelUnit.newAmount(distance.get('model'))
+    );
+    return this.displayUnit.format(this.displayUnit.newAmount(
+      roundBy(amount.value, this.displayDecimals)
+    ));
+  }
+
   public newProject() {
     App.ecs.deleteEverything();
     App.viewport.recenter();

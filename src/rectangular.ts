@@ -50,6 +50,9 @@ class Rectangular extends Component implements Surface, Solo {
   private readonly topRightRef: RoRef<Position>;
   private readonly bottomLeftRef: RoRef<Position>;
   private readonly bottomRightRef: RoRef<Position>;
+  // unit axes
+  private readonly horizontalAxisRef: RoRef<Vector>;
+  private readonly verticalAxisRef: RoRef<Vector>;
 
   private readonly edgesRef: RoRef<MemoEdge[]>;
   private readonly polyRef: RoRef<Polygon>;
@@ -70,6 +73,9 @@ class Rectangular extends Component implements Surface, Solo {
         Vector(Axis.Y, 'screen').to('model').rotate(angle).unit().scale(height),
       this.heightRef, this.rotationRef, App.viewport.changedRef,
     );
+
+    this.horizontalAxisRef = Refs.memo(this.horizontal, v => v.unit());
+    this.verticalAxisRef = Refs.memo(this.vertical, v => v.unit());
 
     const spanCalc = (scale: number) => (extent: Vector): Vector => extent.scale(scale);
 
@@ -172,6 +178,46 @@ class Rectangular extends Component implements Surface, Solo {
       return;
     }
     this.heightRef.set(d.to('model'));
+  }
+
+  get top(): Position {
+    return this.topRef.get();
+  }
+
+  get left(): Position {
+    return this.leftRef.get();
+  }
+
+  get bottom(): Position {
+    return this.bottomRef.get();
+  }
+
+  get right(): Position {
+    return this.rightRef.get();
+  }
+
+  get upRad(): Vector {
+    return this.upSpan.get();
+  }
+
+  get downRad(): Vector {
+    return this.downSpan.get();
+  }
+
+  get leftRad(): Vector {
+    return this.leftSpan.get();
+  }
+
+  get rightRad(): Vector {
+    return this.rightSpan.get();
+  }
+
+  get horizontalAxis(): Vector {
+    return this.horizontalAxisRef.get();
+  }
+
+  get verticalAxis(): Vector {
+    return this.verticalAxisRef.get();
   }
 
   public setTop(position: Position) {
@@ -393,6 +439,7 @@ class Rectangular extends Component implements Surface, Solo {
         selectable: false,
         hoverable: false,
         draggable: true,
+        control: true,
         drag: () => {
           return {
             kind: 'point',
