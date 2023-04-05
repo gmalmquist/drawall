@@ -33,6 +33,7 @@ class Imaged extends Component {
 
     this.rect = typeof rect !== 'undefined'
       ? rect : entity.getOrCreate(Rectangular);
+    this.rect.keepAspect = true;
 
     this.opacity = Refs.of(layer === 'reference' ? Imaged.DEFAULT_OPACITY : 1);
 

@@ -6,6 +6,7 @@ class Popup extends Component {
   readonly element: HTMLElement;
   private visible: boolean = false;
   private anchor: Anchor = { position: Position(Point.ZERO, 'screen') };
+  private readonly _uiBuilder;
   public closeOnUnfocus: boolean = true;
 
   constructor(entity: Entity) {
@@ -14,7 +15,13 @@ class Popup extends Component {
     this.element = document.createElement('div');
     this.element.setAttribute('class', 'popup');
 
+    this._uiBuilder = new UiBuilder(this.element);
+
     this.addKind(Popup);
+  }
+
+  getUiBuilder(): UiBuilder {
+    return this._uiBuilder;
   }
 
   get isVisible(): boolean {
@@ -47,15 +54,43 @@ class Popup extends Component {
 
   private moveToAnchor() {
     const pos = this.anchor.position.get('screen');
+    const canvas = App.pane.getBoundingClientRect();
     const bounds = this.element.getBoundingClientRect();
     const width = bounds.width;
     const height = bounds.height;
 
-    const tx = pos.x - width / 2;
-    const ty = pos.y - height / 2;
+    const tx = pos.x - width / 2 + canvas.left;
+    const ty = pos.y - height / 2 + canvas.top;
 
     this.element.style.left = `${tx}px`;
     this.element.style.top = `${ty}px`;
+  }
+
+  public static input(props: PopInputProps) {
+    const modal = App.ecs.createEntity().add(
+      props.decorations === 'window' ? PopupWindow : Popup
+    );
+    if (props.decorations === 'window') {
+      (modal as PopupWindow).title = props.title;
+    }
+    const ui = modal.getUiBuilder();
+    if (props.body) {
+      ui.addText(props.body).newRow();
+    }
+    ui.addInput('text', 'text', {});
+    ui.setValue('text', props.text.get());
+    ui.onChange((name, value) => {
+      if (name === 'text') {
+        props.text.set(value);
+        modal.entity.destroy();
+      }
+    });
+    modal.setPosition(props.position || Position(
+      new Point(App.viewport.screen_width/2, App.viewport.screen_height/2),
+      'screen',
+    ));
+    modal.show();
+    setTimeout(() => ui.focus(), 100);
   }
 
   public static confirm(props: PopConfirmProps) {
@@ -75,6 +110,14 @@ class Popup extends Component {
     ));
     confirm.show();
   }
+}
+
+interface PopInputProps {
+  title: string;
+  body?: string;
+  text: Ref<string>,
+  position?: Position;
+  decorations?: 'window' | 'none';
 }
 
 interface PopConfirmProps {
@@ -129,7 +172,7 @@ class PopupWindow extends Popup {
     this.titleEl.innerHTML = s;
   }
 
-  getUiBuilder(): UiBuilder {
+  override getUiBuilder(): UiBuilder {
     return this.uiBuilder;
   }
 

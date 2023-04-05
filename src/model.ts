@@ -35,25 +35,12 @@ class Room extends Component implements Solo {
       }),
     });
 
-    const popup = entity.ecs.createEntity().add(PopupWindow);
-    const mini = new MiniForm();
-    mini.layout = 'column';
-    popup.appendHTML(mini.element);
-    const labelInput = new TextInput();
-    labelInput.setValue(this.name);
-    labelInput.onChange((name: string) => {
-      if (this.name !== name) {
-        this.name = name;
-      }
-      popup.hide();
-    });
-    mini.append(labelInput);
-
     handle.events.onMouse('click', e => {
-      popup.title = `Room '${this.name}'`;
-      popup.setPosition(e.position);
-      labelInput.setValue(this.name);
-      popup.show();
+      Popup.input({
+        title: 'Room Name',
+        text: this.nameRef,
+        position: App.ui.mousePos,
+      });
     });
 
     this._polygon = Memo(() => {

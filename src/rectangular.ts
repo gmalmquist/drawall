@@ -29,6 +29,10 @@ class Rectangular extends Component implements Surface, Solo {
   public readonly heightRef = Refs.of(Distances.zero('model'), Rectangular.distEq);
   public readonly rotationRef = Refs.of(Angle(Radians(0), 'model'), Rectangular.angleEq);
   public readonly keepAspectRef: Ref<boolean> = Refs.of(false);
+  
+  // unit axes
+  public readonly horizontalAxisRef: RoRef<Vector>;
+  public readonly verticalAxisRef: RoRef<Vector>;
 
   public readonly dragItem: RoRef<DragItem>;
 
@@ -50,9 +54,6 @@ class Rectangular extends Component implements Surface, Solo {
   private readonly topRightRef: RoRef<Position>;
   private readonly bottomLeftRef: RoRef<Position>;
   private readonly bottomRightRef: RoRef<Position>;
-  // unit axes
-  private readonly horizontalAxisRef: RoRef<Vector>;
-  private readonly verticalAxisRef: RoRef<Vector>;
 
   private readonly edgesRef: RoRef<MemoEdge[]>;
   private readonly polyRef: RoRef<Polygon>;

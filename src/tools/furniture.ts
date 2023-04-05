@@ -138,7 +138,9 @@ class Furniture extends Component implements Solo {
     },
   );
   public readonly rect: Rectangular;
+  public readonly labelHandle: Handle;
   public readonly materialRef = Refs.of<FurnitureMaterial>('wood');
+
   private updatingOrientation: boolean = false;
 
   constructor(entity: Entity) {
@@ -146,6 +148,30 @@ class Furniture extends Component implements Solo {
     this.rect = entity.getOrCreate(Rectangular);
     this.rect.createHandle({
       priority: 2,
+    });
+
+    const labelLine = Refs.memoReduce(
+      (center, axis, width) => new MemoEdge(
+        center.splus(width.scale(0.25), axis.neg()),
+        center.splus(width.scale(0.25), axis),
+      ),
+      this.rect.centerRef, this.rect.horizontalAxisRef, this.rect.widthRef,
+    );
+    this.labelHandle = entity.ecs.createEntity().add(Handle, {
+      clickable: true,
+      hoverable: true,
+      selectable: false,
+      draggable: false,
+      getPos: () => this.rect.center,
+      distance: p => labelLine.get().distanceFrom(p),
+      priority: 4,
+    });
+    this.labelHandle.events.onMouse('click', () => {
+      Popup.input({
+        title: 'Furniture Name',
+        text: this.nameRef,
+        position: App.ui.mousePos,
+      });
     });
 
     const getDragPoints = () => this.entity.only(Handle).getDragClosure('complete').points;
@@ -386,6 +412,10 @@ class Furniture extends Component implements Solo {
     this.attachRef.set(a);
   }
 
+  override tearDown() {
+    this.labelHandle.entity.destroy();
+  }
+
   override toJson(): SavedComponent {
     const attach = this.attach;
     const json: FurnitureJson = {
@@ -459,15 +489,17 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.stroke();
 
       App.canvas.lineWidth = 1;
-      const margin = Distance(10, 'screen');
+      const margin = Distance(10, 'screen').min(rect.height.scale(0.5));
+      const inset1 = Distance(20, 'screen').min(rect.width);
+      const inset2 = Distance(60, 'screen').min(rect.width);
       const mg = (v: Vector) => v.minus(v.unit().scale(margin));
       App.canvas.strokeLine(
-        rect.left.splus(0.25, rect.rightRad).plus(mg(rect.upRad)),
-        rect.right.splus(0.5, rect.leftRad).plus(mg(rect.upRad)),
+        rect.left.splus(inset1, rect.horizontalAxis).plus(mg(rect.upRad)),
+        rect.right.splus(inset2.neg(), rect.horizontalAxis).plus(mg(rect.upRad)),
       );
       App.canvas.strokeLine(
-        rect.left.splus(0.5, rect.rightRad).plus(mg(rect.downRad)),
-        rect.right.splus(0.25, rect.leftRad).plus(mg(rect.downRad)),
+        rect.left.splus(inset2, rect.horizontalAxis).plus(mg(rect.downRad)),
+        rect.right.splus(inset1.neg(), rect.horizontalAxis).plus(mg(rect.downRad)),
       );
     }
     App.canvas.lineWidth = 1;
@@ -527,12 +559,46 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
     App.canvas.setLineDash([]);
   };
 
+  const renderLabel = (furniture: Furniture) => {
+    const rect = furniture.rect;
+    const draw = (fill: string, offset: Vector = Vectors.zero('screen')) => App.canvas.text({
+      text: furniture.name,
+      point: rect.center.to('screen').plus(offset),
+      axis: rect.horizontalAxis,
+      keepUpright: true,
+      align: 'center',
+      baseline: 'middle',
+      fill,
+    });
+    const active = furniture.labelHandle.isHovered;
+    if (active) {
+      const baseline = rect.center.splus(
+        Distance(App.settings.fontSize/2, 'screen'),
+        rect.verticalAxis.scale(rect.verticalAxis.dot(Vector(Axis.Y, 'screen')).sign),
+      );
+      App.canvas.lineWidth = 1;
+      App.canvas.strokeStyle = BLUE;
+      App.canvas.strokeLine(
+        baseline.splus(0.75, rect.leftRad),
+        baseline.splus(0.75, rect.rightRad),
+      );
+
+      draw(PINK, Vector(new Vec(-1, -1), 'screen'));
+      draw(PINK, Vector(new Vec(1, -1), 'screen'));
+      draw(BLUE, Vector(new Vec(-1, 1), 'screen'));
+      draw(BLUE, Vector(new Vec(1, 1), 'screen'));
+    }
+    draw(active ? 'white' : 'black');
+  };
+
   for (const furniture of ecs.getComponents(Furniture)) {
     const handle = furniture.entity.only(Handle);
 
     if (!furniture.entity.has(Imaged)) {
       renderMaterial(furniture);
     }
+
+    renderLabel(furniture);
 
     if (!handle.isActive) continue;
     renderAttachment(furniture);

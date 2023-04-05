@@ -17,20 +17,23 @@ abstract class Component {
   private static idCount: number = 0;
   private static readonly counter = new Counter<string>();
   private readonly kinds = new Set<ComponentType<Component>>();
-  private _name: string = `${this.constructor.name} ${Component.counter.inc(this.constructor.name)}`;
+
+  public readonly nameRef = Refs.of<string>(`${this.constructor.name} ${Component.counter.inc(this.constructor.name)}`);
 
   public readonly id = Cid(Component.idCount++);
 
   constructor(public readonly entity: Entity) {
+    this.nameRef.onChange(n => {
+      App.project.requestSave(`component renamed to '${n}'`);
+    });
   }
 
   get name(): string {
-    return this._name;
+    return this.nameRef.get();
   }
 
   set name(n: string) {
-    this._name = n;
-    App.project.requestSave(`component renamed to '${n}'`);
+    this.nameRef.set(n);
   }
 
   addKind<C extends Component>(c: ComponentType<C>) {
