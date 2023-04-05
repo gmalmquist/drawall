@@ -81,8 +81,8 @@ class App {
     App.ecs.registerSystem(AngleRenderer);
     App.ecs.registerSystem(WallRenderer);
     App.ecs.registerSystem(WallJointRenderer);
-    App.ecs.registerSystem(RulerRenderer);
     App.ecs.registerSystem(FurnitureRenderer);
+    App.ecs.registerSystem(RulerRenderer);
     App.ecs.registerSystem(MarkupRenderer);
 
     App.ecs.registerSystem(DebugRenderer);

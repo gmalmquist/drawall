@@ -532,8 +532,6 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.lineTo(origin.minus(horizontal).plus(vertical.neg()));
       App.canvas.lineTo(origin.minus(horizontal).plus(vertical));
       App.canvas.closePath();
-      App.canvas.fill();
-      App.canvas.stroke();
     };
 
     App.canvas.lineWidth = 1;
@@ -576,8 +574,25 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
 
       App.canvas.lineWidth = 1;
       App.canvas.strokeStyle = 'black';
-      App.canvas.fillStyle = 'white';
       drawNarrow(5);
+      App.canvas.stroke();
+
+      // draw white rect to 'break' the attached wall
+      App.canvas.pushTransform();
+      App.canvas.translate(rect.verticalAxis.to('screen').unit().scale(8));
+      drawNarrow(16);
+      App.canvas.fillStyle = 'white';
+      App.canvas.fill();
+      App.canvas.popTransform();
+
+      App.canvas.fillStyle = '#dedede';
+      drawNarrow(5);
+      App.canvas.fill();
+
+      if (furniture.entity.only(Handle).isActive) {
+        drawNarrow(5);
+        App.canvas.stroke();
+      }
 
       // doors... open o:
       App.canvas.lineWidth = 2;
@@ -638,6 +653,8 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.pushTransform();
       App.canvas.translateTo(rect.center);
       drawNarrow(3);
+      App.canvas.fill();
+      App.canvas.stroke();
       App.canvas.popTransform();
     }
     App.canvas.lineWidth = 1; App.canvas.setLineDash([]);
