@@ -52,8 +52,8 @@ class Furniture extends Component implements Solo {
 
     const labelLine = Refs.memoReduce(
       (center, axis, width) => new MemoEdge(
-        center.splus(width.scale(0.25), axis.neg()),
-        center.splus(width.scale(0.25), axis),
+        center.splus(width.scale(0.1), axis.neg()),
+        center.splus(width.scale(0.1), axis),
       ),
       this.rect.centerRef, this.rect.horizontalAxisRef, this.rect.widthRef,
     );
