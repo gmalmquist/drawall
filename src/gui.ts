@@ -118,15 +118,37 @@ class GUI {
 
     form.addButton({
       name: 'New',
-      icon: Icons.newPage,
+      icon: Icons.newFile,
       onClick: () => {
-        if (App.ecs.entityCount > 0) {
+        if (App.ecs.getComponents(Wall).length > 0) {
           Popup.confirm({
             title: 'Create New Project',
             body: 'This will clear any unsaved work and open a new project.',
             action: () => App.project.newProject(),
           });
         }
+      },
+    });
+
+    form.addButton({
+      name: 'Open',
+      icon: Icons.openFile,
+      onClick: () => {
+        if (App.ecs.getComponents(Wall).length > 0) {
+          Popup.confirm({
+            title: 'Open Project',
+            body: 'This will clear any unsaved work in the current project.',
+            action: () => {},
+          });
+        }
+      },
+    });
+
+    form.addButton({
+      name: 'Save',
+      icon: Icons.saveFile,
+      onClick: () => {
+       // todo
       },
     });
 
