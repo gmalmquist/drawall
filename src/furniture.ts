@@ -90,7 +90,7 @@ class Furniture extends Component implements Solo {
         ],
       });
       form.addButton({
-        name: 'Flip',
+        name: 'Flip (f)',
         icon: Icons.flipH,
         onClick: () => this.flip(),
       });
