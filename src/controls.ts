@@ -360,7 +360,18 @@ class AutoForm {
         popup.element.appendChild(mini.element);
         popup.show();
 
-        mini.element.addEventListener('mouseleave', () => popup.entity.destroy());
+        const state = { reentered: false };
+        mini.element.addEventListener('mouseleave', () => {
+          state.reentered = false;
+          setTimeout(() => {
+            if (!state.reentered) {
+              popup.entity.destroy();
+            }
+          }, 500);
+        });
+        mini.element.addEventListener('mouseenter', () => {
+          state.reentered = true;
+        });
       });
 
       return {

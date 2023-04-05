@@ -19,6 +19,7 @@ const Icons = {
   axisX: iconUrl('axis-x.svg'),
   axisY: iconUrl('axis-y.svg'),
   centerOnWall: iconUrl('center-on-wall.svg'),
+  door: iconUrl('door.svg'),
   editRedo: iconUrl('redo.svg'),
   editUndo: iconUrl('undo.svg'),
   exportImage: iconUrl('export-png.svg'),
@@ -71,6 +72,7 @@ const Icons = {
   toBack: iconUrl('to-back.svg'),
   toFront: iconUrl('to-front.svg'),
   visible: iconUrl('eye-open.svg'),
+  window: iconUrl('window.svg'),
   wood: iconUrl('wood.svg'),
 };
 
