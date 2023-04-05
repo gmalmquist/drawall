@@ -218,9 +218,12 @@ class Furniture extends Component implements Solo {
           const points = getDragPoints();
           if (points.length === 0) return;
 
-          const getClosestPoint = (e: MemoEdge) => argmin(
+          const normalDistance = (edge: MemoEdge, point: DragPoint) =>
+            Vectors.between(edge.src, point.get()).dot(edge.normal).neg();
+
+          const getClosestPoint = (edge: MemoEdge) => argmin(
             points,
-            point => ({ point, distance: e.distanceFrom(point.get()), }),
+            point => ({ point, distance: normalDistance(edge, point), }),
             ({ distance }) => Math.round(distance.get('screen')),
           )!.result;
 
