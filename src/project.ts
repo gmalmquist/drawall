@@ -1,5 +1,6 @@
 class Project {
   private static readonly DEFAULT_GRID_SPACING: Amount = { value: 2, unit: 'feet' };
+  private static readonly DEFAULT_NAME = 'untitled floorplan';
   private static readonly STORAGE_VERSION = '0.0.1';
   private static readonly PROJECT_KEY = 'project-data';
   private static readonly SAVE_FREQUENCY_SECONDS = 0.5;
@@ -22,6 +23,18 @@ class Project {
   public readonly gridSpacingRef = Refs.of<Amount>(Project.DEFAULT_GRID_SPACING, (a, b) => (
     a.unit === b.unit && a.value === b.value
   ));
+
+  public readonly projectNameRef = Refs.of<string>(Project.DEFAULT_NAME);
+
+  public get projectName(): string {
+    const name = this.projectNameRef.get().trim()
+      .replace(/[#%&{}\\<>*?/$!'":@+`|=]+/g, '');
+    return name.toString();
+  }
+
+  public set projectName(name: string) {
+    this.projectNameRef.set(name);
+  }
 
   public get displayUnit() {
     return this.displayUnitRef.get();
@@ -141,10 +154,9 @@ class Project {
   public saveProject() {
     const data = JSON.stringify(this.serialize());
     const dataUrl = `data:application/json;base64,${btoa(data)}`;
-    App.io.download(
-      'drawall-project.json',
-      dataUrl,
-    );
+    const basename = this.projectName;
+    const filename = basename.toLocaleLowerCase().endsWith('.json') ? basename : `${basename}.json`;
+    App.io.download(filename, dataUrl);
   }
 
   public openProject() {
@@ -180,6 +192,7 @@ class Project {
   public serialize(): ProjectJson {
     return {
       application: 'drawall',
+      projectName: this.projectName,
       version: Project.STORAGE_VERSION,
       ecs: App.ecs.toJson(),
       gridSpacing: Units.distance.format(this.gridSpacing),
@@ -217,6 +230,8 @@ class Project {
       }
 
       App.ecs.loadJson(p.ecs);
+
+      this.projectName = p.projectName || Project.DEFAULT_NAME;
     });
     this.loadedAt = Time.now;
     setTimeout(() => { App.pane.style.opacity = '1'; }, 100);
@@ -226,6 +241,7 @@ class Project {
     this.modelUnitRef.onChange(_ => this.requestSave('model unit'));
     this.displayUnitRef.onChange(_ => this.requestSave('display unit'));
     this.gridSpacingRef.onChange(_ => this.requestSave('grid spacing'));
+    this.projectNameRef.onChange(_ => this.requestSave('project name'));
   }
 
   public update() {
@@ -241,6 +257,7 @@ class Project {
 
 interface ProjectJson {
   application: string;
+  projectName: string;
   version: string;
   ecs: SavedEcs;
   gridSpacing: string;

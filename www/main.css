@@ -26,8 +26,6 @@ body {
 .topbar {
   grid-area: top;
   border-bottom: thin solid lightgray;
-  padding-left: 1em;
-  padding-right: 1em;
   padding-top: 2px;
   padding-bottom: 2px;
   background-color: #f6f5f4;
