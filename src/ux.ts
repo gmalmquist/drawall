@@ -245,6 +245,12 @@ class UiState {
     App.ecs.getComponents(Hovered).forEach(h => h.unhover());
   }
 
+  flip() {
+    for (const handle of this.selection) {
+      handle.entity.maybe(Furniture)?.flip();
+    }
+  }
+
   getDragClosure(
     type: 'minimal' | 'complete' = 'minimal',
     selection: Handle[],

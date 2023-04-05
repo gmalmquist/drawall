@@ -89,10 +89,10 @@ class Furniture extends Component implements Solo {
           { value: 'window', icon: Icons.window, },
         ],
       });
-      form.add({
-        kind: 'toggle',
+      form.addButton({
         name: 'Flip',
-        value: this.flippedRef,
+        icon: Icons.flipH,
+        onClick: () => this.flip(),
       });
       form.addButton({
         name: 'Align to Wall',
@@ -273,6 +273,10 @@ class Furniture extends Component implements Solo {
     const attach = this.attach;
     if (!attach) return;
     this.rect.rotation = attach.wall.edge.tangent.neg().angle();
+  }
+
+  public flip() {
+    this.flippedRef.set(!this.flippedRef.get());
   }
 
   public updateOrientation() {
@@ -493,6 +497,10 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
           startAngle.plus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
           false,
         );
+        App.canvas.stroke();
+        App.canvas.setLineDash([]);
+        App.canvas.lineWidth = 1;
+        App.canvas.strokeLine(rect.right, rect.right.splus(rect.width, rect.upRad.unit()));
       } else {
         const startAngle = rect.horizontalAxis.to('screen').angle();
         App.canvas.arc(
@@ -502,9 +510,11 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
           startAngle.minus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
           true,
         );
+        App.canvas.stroke();
+        App.canvas.setLineDash([]);
+        App.canvas.lineWidth = 1;
+        App.canvas.strokeLine(rect.left, rect.left.splus(rect.width, rect.upRad.unit()));
       }
-      App.canvas.stroke();
-      App.canvas.setLineDash([]);
     } else if (material === 'window') {
       App.canvas.lineWidth = 1;
       App.canvas.strokeStyle = 'black';

@@ -24,6 +24,7 @@ const Icons = {
   editUndo: iconUrl('undo.svg'),
   exportImage: iconUrl('export-png.svg'),
   furniture: iconUrl('furniture.svg'),
+  flipH: iconUrl('fliph.svg'),
   heartInfo: iconUrl('heart-info.svg'),
   hideAngles: iconUrl('hide-angles.svg'),
   hideGrid: iconUrl('hide-grid.svg'),
