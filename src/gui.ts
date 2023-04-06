@@ -275,6 +275,14 @@ class GUI {
     });
 
     form.add({
+      name: 'Show/Hide Reference Images',
+      kind: 'toggle',
+      value: App.settings.showReferenceImages,
+      icons: { on: Icons.showImages, off: Icons.hideImages },
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
       name: 'Show/Hide Furniture',
       kind: 'toggle',
       value: App.settings.showFurniture,

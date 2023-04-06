@@ -11,6 +11,7 @@ class Settings {
   public readonly showGuides = Refs.of(true);
   public readonly showJoints = Refs.of(false);
   public readonly showLengths = Refs.of(true);
+  public readonly showReferenceImages = Refs.of(true);
   public readonly showRoomLabels = Refs.of(true);
   public readonly showVisibilityOptions = Refs.of(true);
 
@@ -29,6 +30,14 @@ class Settings {
       Refs.mapRo(App.tools.currentRef, r => r.name === 'furniture tool'),
     ).onChange(show=> {
       App.furnitureImages.style.opacity = show ? '1' : '0';
+    });
+
+    Refs.reduceRo(
+      ([a, b]) => a || b,
+      this.showReferenceImages,
+      Refs.mapRo(App.tools.currentRef, r => r.name === 'images tool'),
+    ).onChange(show=> {
+      App.referenceImages.style.opacity = show ? '1' : '0';
     });
   }
 }

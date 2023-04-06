@@ -73,13 +73,15 @@ class ImageExporter {
           });
         };
 
-        renderImages('reference');
+        if (App.settings.showReferenceImages.get()) {
+          renderImages('reference');
+        }
 
         for (let i = 0; i < images.length; i++) {
           const canvasImage = images[i];
           g.drawImage(canvasImage, 0, 0, canvasImage.width, canvasImage.height);
 
-          if (i === 0) {
+          if (i === 0 && App.settings.showFurniture.get()) {
             renderImages('furniture');
           }
         }
