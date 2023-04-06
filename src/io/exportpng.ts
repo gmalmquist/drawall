@@ -87,7 +87,7 @@ class ImageExporter {
         }
        
         App.io.download(
-         'drawall-floor-plan.png',
+         `${App.project.projectName}.png`,
           compositing.toDataURL('image/png'),
         );
         document.body.removeChild(compositing);
