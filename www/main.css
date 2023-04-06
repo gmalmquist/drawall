@@ -7,9 +7,10 @@ body {
   display: grid;
 
   grid-template-columns: min-content 1fr;
-  grid-template-rows: min-content 1fr;
+  grid-template-rows: min-content min-content 1fr;
 
   grid-template-areas:
+    "title title"
     "top top"
     "tool main"
   ;
@@ -21,6 +22,14 @@ body {
 
   width: 100vw;
   height: 100vh; 
+}
+
+.titlebar {
+  grid-area: title;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  background-color: #f6f5f4;
+  border-bottom: thin solid lightgray;
 }
 
 .topbar {

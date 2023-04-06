@@ -32,6 +32,33 @@
   text-align: center;
 }
 
+.mini-form-input.textbox-wrap {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+
+  width: initial;
+  height: initial;
+  padding-left: 0.5em;
+}
+
+.textbox-wrap > input {
+}
+
+.textbox-wrap > label {
+  display: inline-block;
+  cursor: text;
+  font-size: 1.0em;
+  font-family: sans-serif;
+  padding: 0.25ex 0.25em;
+  border: thin solid rgba(0, 0, 0, 0);
+}
+
+.textbox-wrap > label:hover {
+  border: thin solid gray;
+}
+
 .over-label {
   margin-bottom: 2px;
   font-size: 0.5em;

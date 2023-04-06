@@ -138,6 +138,7 @@ class Project {
       App.ecs.deleteEverything();
       this.gridSpacing = Project.DEFAULT_GRID_SPACING;
       App.viewport.recenter();
+      this.projectName = Project.DEFAULT_NAME;
       window.localStorage.removeItem(Project.PROJECT_KEY);
     };
     if (App.ecs.getComponents(Wall).length > 0) {

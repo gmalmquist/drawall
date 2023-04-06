@@ -8,7 +8,7 @@ class Settings {
   public readonly showLengths = Refs.of(true);
   public readonly showJoints = Refs.of(false);
   public readonly showGrid = Refs.of(true);
-  public readonly showVisibilityOptions = Refs.of(false);
+  public readonly showVisibilityOptions = Refs.of(true);
 
   // TODO: why is this field here??? should be w the other
   // snap fields in ux.ts

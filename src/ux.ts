@@ -697,6 +697,11 @@ class UiState {
       e.preventDefault();
       this.mouse.buttons = e.buttons;
 
+      const activeElement = document.activeElement;
+      if (activeElement?.tagName?.toLocaleLowerCase() === 'input') {
+        (activeElement as HTMLInputElement).blur();
+      }
+
       const event = makeMouseEvent('down', e);
       if (!event.primary) {
         const tool = App.tools.current;

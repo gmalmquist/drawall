@@ -78,6 +78,8 @@ const Icons = {
   visible: iconUrl('eye-open.svg'),
   window: iconUrl('window.svg'),
   wood: iconUrl('wood.svg'),
+  zoomIn: iconUrl('zoom-in.svg'),
+  zoomOut: iconUrl('zoom-out.svg'),
 };
 
 type KeysOfToType<M extends { [key: string]: unknown }, T> = {

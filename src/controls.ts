@@ -300,6 +300,17 @@ class AutoForm {
         setHidden: h => input.setHidden(h),
       };
     }
+    if (field.kind === 'text') {
+      const input = new TextInput();
+      input.onChange(value => this.updateHandle(field, value));
+      return {
+        element: input,
+        setValue: v => input.setValue(v),
+        clear: () => input.clear(),
+        setEnabled: e => input.setEnabled(e),
+        setHidden: h => input.setHidden(h),
+      };
+    }
     if (field.kind === 'number') {
       const input = new NumberInput(
         typeof field.min !== 'undefined' ? field.min : null,
@@ -493,6 +504,7 @@ type AutoField = AutoFieldNumber
   | AutoFieldToggle
   | AutoFieldSlider
   | AutoFieldAngle
+  | AutoFieldText 
   | AutoFieldSelect<string>
   | AutoFieldSeparator
   | AutoFieldButton
@@ -521,6 +533,10 @@ interface AutoFieldSlider extends AutoFieldBase<number> {
 
 interface AutoFieldAngle extends AutoFieldBase<Angle> {
   kind: 'angle';
+}
+
+interface AutoFieldText extends AutoFieldBase<string> {
+  kind: 'text';
 }
 
 interface AutoFieldAmount extends AutoFieldBase<Amount> {
@@ -922,19 +938,40 @@ class NumberInput extends MiniFormInput<number, HTMLInputElement> {
   }
 }
 
-class TextInput extends MiniFormInput<string, HTMLInputElement> {
+class TextInput extends MiniFormInput<string, HTMLElement> {
+  private readonly input: HTMLInputElement;
+  private readonly label: HTMLElement;
+
   constructor() {
-    super(document.createElement('input') as HTMLInputElement);
-    this.element.setAttribute('type', 'text');
-    this.element.style.width = '20em';
+    super(document.createElement('div') as HTMLElement);
+    this.addClass('textbox-wrap');
+
+    this.input = document.createElement('input') as HTMLInputElement;
+    this.input.setAttribute('type', 'text');
+
+    this.label = document.createElement('label');
+
+    this.element.appendChild(this.label);
+
+    this.input.addEventListener('blur', () => {
+      this.element.removeChild(this.input);
+      this.element.appendChild(this.label);
+    });
+
+    this.label.addEventListener('click', () => {
+      this.element.removeChild(this.label);
+      this.element.appendChild(this.input);
+      this.input.focus();
+    });
   }
 
   protected override getRawValue(): string {
-    return this.element.value;
+    return this.input.value;
   }
 
   protected override setRawValue(value: string): void {
-    this.element.value = value;
+    this.input.value = value;
+    this.label.innerHTML = value;
   }
 
   protected override format(value: string): string {
@@ -944,6 +981,12 @@ class TextInput extends MiniFormInput<string, HTMLInputElement> {
   protected override parse(input: string): InputParse<string> {
     const value = input.trim();
     return { value };
+  }
+
+  protected bindChangeListener(handle: () => void) {
+    setTimeout(() => {
+      this.input.addEventListener('change', () => handle());
+    }, 1);
   }
 }
 

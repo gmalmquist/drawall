@@ -45,10 +45,20 @@ class Keybindings {
     kb.bind('Control', 'z').to('undo'); // universal 
     kb.bind('Control', 'Shift', 'Z').to('redo'); // common convention
     kb.bind('Shift', 'D').to('export-png'); // google drive?
+
+    // lots of permutations for zooming so that it works
+    // regardless (and so that we prevent the browser's
+    // native zoom from making everything wonky).
+    kb.bind('+').to('zoom-in');
+    kb.bind('=').to('zoom-in');
     kb.bind('Control', '+').to('zoom-in');
+    kb.bind('Control', 'Shift', '+').to('zoom-in');
     kb.bind('Control', '=').to('zoom-in');
+    kb.bind('Shift', '+').to('zoom-in');
+    kb.bind('-').to('zoom-out');
     kb.bind('Control', '-').to('zoom-out');
     kb.bind('Control', '_').to('zoom-out');
+
     kb.bind('Control', 's').to('save'); // universal
     kb.bind('Control', 'n').to('new'); // universal
     kb.bind('Control', 'o').to('open'); // universal

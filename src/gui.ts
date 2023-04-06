@@ -1,17 +1,25 @@
 class GUI {
+  private readonly titlebar: MiniForm;
+  private readonly title: MiniForm;
+  public readonly meta: MiniForm;
+
   private readonly topbar: MiniForm;
   public readonly file: MiniForm;
   public readonly selection: MiniForm;
   public readonly tool: MiniForm;
   public readonly ux: MiniForm;
   public readonly project: MiniForm;
-  public readonly meta: MiniForm;
 
   constructor() {
     this.topbar = new MiniForm(
       Array.from(document.getElementsByClassName('topbar'))
       .map(t => t as HTMLElement)[0]);
     this.topbar.verticalAlign = 'stretch';
+
+    this.titlebar = new MiniForm(
+      Array.from(document.getElementsByClassName('titlebar'))
+      .map(t => t as HTMLElement)[0]);
+    this.titlebar.verticalAlign = 'stretch';
  
     this.file = new MiniForm();
     this.selection = new MiniForm();
@@ -19,6 +27,13 @@ class GUI {
     this.ux = new MiniForm();
     this.project = new MiniForm();
     this.meta = new MiniForm();
+    this.title = new MiniForm();
+
+    this.titlebar.append(this.title);
+    this.titlebar.appendSpacer();
+    this.titlebar.append(this.project);
+    this.topbar.appendRuler();
+    this.titlebar.append(this.meta);
 
     this.topbar.append(this.file);
     this.topbar.appendRuler();
@@ -26,18 +41,25 @@ class GUI {
     this.topbar.append(this.selection);
     this.topbar.appendSpacer();
     this.topbar.append(this.ux);
-    this.topbar.appendRuler();
-    this.topbar.append(this.project);
-    this.topbar.appendRuler();
-    this.topbar.append(this.meta);
   }
 
   setup() {
+    this.setupTitle();
     this.setupFile();
     this.setupUx();
     this.setupProject();
     this.setupMeta();
     this.preloadIcons();
+  }
+
+  private setupTitle() {
+    const form = new AutoForm();
+    form.add({
+      kind: 'text',
+      name: 'projectname',
+      value: App.project.projectNameRef,
+    });
+    form.inflate(this.title);
   }
 
   private setupMeta() {
@@ -219,6 +241,29 @@ class GUI {
 
     form.addSeparator();
 
+    form.addButton({
+      name: 'Zoom In',
+      onClick: () => App.actions.fire('zoom-in'),
+      icon: Icons.zoomIn,
+    });
+
+    form.addButton({
+      name: 'Zoom Out',
+      onClick: () => App.actions.fire('zoom-out'),
+      icon: Icons.zoomOut,
+    });
+
+    form.addButton({
+      name: 'Recenter View (0)',
+      onClick: () => App.viewport.recenter(),
+      icon: Icons.recenter,
+    });
+
+    this.ux.clear();
+    form.inflate(this.ux);
+  }
+
+  private addVisibilityOptions(form: AutoForm) {
     const hideVisibilityOptions = Refs.negate(App.settings.showVisibilityOptions);
 
     form.add({
@@ -267,16 +312,15 @@ class GUI {
       value: App.settings.showVisibilityOptions,
       icons: { on: Icons.visible, off: Icons.invisible },
     });
+  }
+
+  private setupProject() {
+    const form = new AutoForm();
+
+    this.addVisibilityOptions(form);
 
     form.addSeparator();
 
-    form.addButton({
-      name: 'Recenter View (0)',
-      onClick: () => App.viewport.recenter(),
-      icon: Icons.recenter,
-    });
-
-    form.addSeparator();
     form.add({
       name: 'Kinematics',
       kind: 'toggle',
@@ -285,12 +329,7 @@ class GUI {
       icons: { on: Icons.kinematicsOn, off: Icons.kinematicsOff },
     });
 
-    this.ux.clear();
-    form.inflate(this.ux);
-  }
-
-  private setupProject() {
-    const form = new AutoForm();
+    form.addSeparator();
 
     const fontSize = form.add({
       name: 'font size',
