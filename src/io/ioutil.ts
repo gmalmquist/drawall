@@ -6,7 +6,6 @@ class IoUtil {
     App.uiJail.appendChild(download);
     download.click();
     download.parentNode?.removeChild(download);
-    document.body.removeChild(download);
   }
 
   public open(extensions: string[], callback: (url: URL | string) => void) {
