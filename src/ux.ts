@@ -326,6 +326,7 @@ class UiState {
     };
     this.mouse.pressed = true;
     this.mouse.dragging = true;
+    this.mouse.start = this.mousePos;
     this.mouse.distanceDragged = Distance(0, 'screen');
     App.tools.current.events.handleDrag(event);
   }
