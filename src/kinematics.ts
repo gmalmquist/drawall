@@ -182,12 +182,8 @@ class PhysEdge extends Component implements Solo, Surface {
   intersects(sdf: SDF): boolean {
     if (this.containedBy(sdf)) return true;
     const edge = this.edge;
-    // lazy sampling is good enough for now
-    const samples = 100;
-    for (let i = 0; i < samples; i++) {
-      if (sdf.contains(edge.lerp(1.0*i/samples))) return true;
-    }
-    return false;
+    const hit = sdf.raycast(new SpaceRay(edge.src, edge.vector));
+    return hit !== null && hit.time >= 0 && hit.time <= 1;
   }
 
   containedBy(sdf: SDF): boolean {
