@@ -5,7 +5,7 @@ It's designed to support fuzzy constraints given imprecise measurements—becaus
 
 ![screenshot of the drawall ui](docs/ui.png)
 
-This is a hobby project; I make no guarantees of future maintenance, functionality, or quality.
+This is a hobby project; I make no guarantees of future maintenance, functionality, or quality. You can use it [here](https://gwenscode.com/drawall) or run it yourself!
 
 ## constraints
 To support imprecise and possibly conflicting measurements, constraints are "soft," and are applied with kinematic spring forces. Currently supported are constraints on the angle of a corner, the length of a wall or ruler, and alignment to the X/Y axes. The strength of constraints can be controlled with tension sliders.
