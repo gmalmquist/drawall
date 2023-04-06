@@ -275,6 +275,39 @@ class GUI {
     });
 
     form.add({
+      name: 'Show/Hide Furniture',
+      kind: 'toggle',
+      value: App.settings.showFurniture,
+      icons: { on: Icons.showFurniture, off: Icons.hideFurniture },
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
+      name: 'Show/Hide Doors',
+      kind: 'toggle',
+      value: App.settings.showDoors,
+      icons: { on: Icons.showDoors, off: Icons.hideDoors },
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
+      name: 'Show/Hide Door Arcs',
+      kind: 'toggle',
+      value: App.settings.showDoorArcs,
+      icons: { on: Icons.showDoorArcs, off: Icons.hideDoorArcs },
+      enabled: App.settings.showDoors,
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
+      name: 'Show/Hide Room Labels',
+      kind: 'toggle',
+      value: App.settings.showRoomLabels,
+      icons: { on: Icons.showRoomLabels, off: Icons.hideRoomLabels },
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
       name: 'Show/Hide Guides',
       kind: 'toggle',
       value: App.settings.showGuides,

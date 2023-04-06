@@ -83,6 +83,15 @@ class Furniture extends Component implements Solo {
     this.rect = entity.getOrCreate(Rectangular);
     this.rect.createHandle({
       priority: 2,
+      visible: () => {
+        if (App.tools.current.name === 'furniture tool') {
+          return true;
+        }
+        if (this.furnitureType === 'door' || this.furnitureType === 'window') {
+          return App.settings.showDoors.get();
+        }
+        return App.settings.showFurniture.get();
+      },
     });
 
     this.furnitureTypeRef = Refs.of(furnitureType);
@@ -110,7 +119,15 @@ class Furniture extends Component implements Solo {
       getPos: () => this.rect.center,
       distance: p => labelLine.get().distanceFrom(p),
       priority: 4,
-      visible: () => this.furnitureType !== 'door' && this.furnitureType !== 'window',
+      visible: () => {
+        if (this.furnitureType === 'door' || this.furnitureType === 'window') {
+          return false;
+        }
+        if (App.tools.current.name === 'furniture tool') {
+          return true;
+        }
+        return App.settings.showFurniture.get();
+      },
     });
     this.labelHandle.events.onMouse('click', () => {
       Popup.input({
@@ -524,6 +541,13 @@ ComponentFactories.register(Furniture, (
 });
 
 const FurnitureRenderer = (ecs: EntityComponentSystem) => {
+  const showFurniture = App.tools.current.name === 'furniture tool'
+    || App.settings.showFurniture.get();
+  const showDoors = App.tools.current.name === 'furniture tool'
+    || App.settings.showDoors.get();
+  const showDoorArcs = App.tools.current.name === 'furniture tool'
+    || App.settings.showDoorArcs.get();
+
   const renderFurnitureType = (furniture: Furniture) => {
     const rect = furniture.rect;
     const furnitureType = furniture.furnitureType;
@@ -543,14 +567,14 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
 
     App.canvas.lineWidth = 1;
     App.canvas.setLineDash([]);
-    if (furnitureType === 'plain') {
+    if (furnitureType === 'plain' && showFurniture) {
       App.canvas.lineWidth = 2;
       App.canvas.fillStyle = 'lightgray';
       App.canvas.strokeStyle = 'darkgray';
       App.canvas.polygon(rect.polygon);
       App.canvas.fill();
       App.canvas.stroke();
-    } else if (furnitureType === 'wood') {
+    } else if (furnitureType === 'wood' && showFurniture) {
       App.canvas.lineWidth = 2;
       App.canvas.fillStyle = 'hsl(30, 60%, 60%)';
       App.canvas.strokeStyle = 'hsl(30, 60%, 30%)';
@@ -571,7 +595,7 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
         rect.left.splus(inset2, rect.horizontalAxis).plus(mg(rect.downRad)),
         rect.right.splus(inset1.neg(), rect.horizontalAxis).plus(mg(rect.downRad)),
       );
-    } else if (furnitureType === 'door') {
+    } else if (furnitureType === 'door' && showDoors) {
       App.canvas.pushTransform();
       App.canvas.translateTo(rect.center);
       App.canvas.rotate(Angle(
@@ -600,45 +624,47 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
         drawNarrow(5);
         App.canvas.stroke();
       }
+      
+      if (showDoorArcs) {
+        // doors... open o:
+        App.canvas.lineWidth = 2;
+        App.canvas.setLineDash([4, 4]);
+        App.canvas.strokeStyle = 'gray';
 
-      // doors... open o:
-      App.canvas.lineWidth = 2;
-      App.canvas.setLineDash([4, 4]);
-      App.canvas.strokeStyle = 'gray';
-
-      App.canvas.beginPath();
-      const origin = Positions.zero('screen');
-      if (furniture.flippedHorizontalRef.get() !== furniture.flippedVerticalRef.get()) {
-        const startAngle = rect.horizontalAxis.to('screen').neg().angle().normalize();
-        const startPos = origin.plus(rect.rightRad);
-        App.canvas.arc(
-          startPos,
-          rect.width,
-          startAngle,
-          startAngle.plus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
-          false,
-        );
-        App.canvas.stroke();
-        App.canvas.setLineDash([]);
-        App.canvas.lineWidth = 1;
-        App.canvas.strokeLine(startPos, startPos.splus(rect.width, rect.upRad.to('screen').unit()));
-      } else {
-        const startAngle = rect.horizontalAxis.to('screen').angle();
-        const startPos = origin.plus(rect.leftRad);
-        App.canvas.arc(
-          startPos,
-          rect.width,
-          startAngle,
-          startAngle.minus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
-          true,
-        );
-        App.canvas.stroke();
-        App.canvas.setLineDash([]);
-        App.canvas.lineWidth = 1;
-        App.canvas.strokeLine(startPos, startPos.splus(rect.width, rect.upRad.to('screen').unit()));
+        App.canvas.beginPath();
+        const origin = Positions.zero('screen');
+        if (furniture.flippedHorizontalRef.get() !== furniture.flippedVerticalRef.get()) {
+          const startAngle = rect.horizontalAxis.to('screen').neg().angle().normalize();
+          const startPos = origin.plus(rect.rightRad);
+          App.canvas.arc(
+            startPos,
+            rect.width,
+            startAngle,
+            startAngle.plus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
+            false,
+          );
+          App.canvas.stroke();
+          App.canvas.setLineDash([]);
+          App.canvas.lineWidth = 1;
+          App.canvas.strokeLine(startPos, startPos.splus(rect.width, rect.upRad.to('screen').unit()));
+        } else {
+          const startAngle = rect.horizontalAxis.to('screen').angle();
+          const startPos = origin.plus(rect.leftRad);
+          App.canvas.arc(
+            startPos,
+            rect.width,
+            startAngle,
+            startAngle.minus(Angle(Radians(Math.PI/2), 'screen')).normalize(),
+            true,
+          );
+          App.canvas.stroke();
+          App.canvas.setLineDash([]);
+          App.canvas.lineWidth = 1;
+          App.canvas.strokeLine(startPos, startPos.splus(rect.width, rect.upRad.to('screen').unit()));
+        }
       }
       App.canvas.popTransform();
-    } else if (furnitureType === 'window') {
+    } else if (furnitureType === 'window' && showDoors) {
       App.canvas.lineWidth = 1;
       App.canvas.strokeStyle = 'black';
 

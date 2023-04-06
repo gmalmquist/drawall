@@ -1011,7 +1011,7 @@ const WallJointRenderer = (ecs: EntityComponentSystem) => {
 
 const RoomRenderer = (ecs: EntityComponentSystem) => {
   ecs.getComponents(Room).forEach(room => {
-    if (!room.isInverted) {
+    if (!room.isInverted && App.settings.showRoomLabels.get()) {
       const labelPos = room.labelPos;
       App.canvas.text({
         text: room.isInverted ? 'interior wall' : room.name,

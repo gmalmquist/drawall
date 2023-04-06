@@ -36,6 +36,12 @@ class Imaged extends Component {
       ? rect : entity.getOrCreate(Rectangular);
     this.rect.keepAspect = true;
 
+    if (layer === 'reference') {
+      this.rect.createHandle({
+        tools: ['images tool'],
+      });
+    }
+
     this.opacity = Refs.of(layer === 'reference' ? Imaged.DEFAULT_OPACITY : 1);
 
     this.element = new Image();

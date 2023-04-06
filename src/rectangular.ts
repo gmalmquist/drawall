@@ -610,9 +610,10 @@ ComponentFactories.register(Rectangular, (
   rect.height = MoreJson.distance.from(props.height);
   rect.rotation = MoreJson.angle.from(props.rotation);
   rect.keepAspect = props.keepAspect;
-  if (props.createdHandle) {
-    rect.createHandle(props.handleProps || {});
-  }
+  // let other components set this up
+  //if (props.createdHandle) {
+  //  rect.createHandle(props.handleProps || {});
+  //}
   return rect;
 });
 

@@ -59,6 +59,7 @@ class App {
 
   static init() {
     App.project.setup();
+    App.settings.setup();
     App.viewport.setup();
     App.background.setup();
     App.canvas.setup();

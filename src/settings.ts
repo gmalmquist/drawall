@@ -3,11 +3,15 @@
 class Settings {
   public readonly fontSizeRef: Ref<number> = Refs.of(16);
   public readonly kinematics = Refs.of(true);
-  public readonly showGuides = Refs.of(true);
   public readonly showAngles = Refs.of(true);
-  public readonly showLengths = Refs.of(true);
-  public readonly showJoints = Refs.of(false);
+  public readonly showDoorArcs = Refs.of(true);
+  public readonly showDoors = Refs.of(true);
+  public readonly showFurniture = Refs.of(true);
   public readonly showGrid = Refs.of(true);
+  public readonly showGuides = Refs.of(true);
+  public readonly showJoints = Refs.of(false);
+  public readonly showLengths = Refs.of(true);
+  public readonly showRoomLabels = Refs.of(true);
   public readonly showVisibilityOptions = Refs.of(true);
 
   // TODO: why is this field here??? should be w the other
@@ -16,6 +20,16 @@ class Settings {
 
   public get fontSize(): number {
     return this.fontSizeRef.get();
+  }
+
+  public setup() {
+    Refs.reduceRo(
+      ([a, b]) => a || b,
+      this.showFurniture,
+      Refs.mapRo(App.tools.currentRef, r => r.name === 'furniture tool'),
+    ).onChange(show=> {
+      App.furnitureImages.style.opacity = show ? '1' : '0';
+    });
   }
 }
 

@@ -82,9 +82,6 @@ class ImagesTool extends Tool {
     const entity = App.ecs.createEntity();
     const rect = entity.add(Rectangular);
     rect.center = position;
-    rect.createHandle({
-      tools: ['images tool'],
-    });
     const img = entity.add(Imaged, 'reference');
     img.showUploadForm();
   }
