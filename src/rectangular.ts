@@ -315,7 +315,7 @@ class Rectangular extends Component implements Surface, Solo {
       });
       form.add({
         name: 'rect.width',
-        label: 'width',
+        label: 'length',
         kind: 'distance',
         value: this.widthRef,
         enabled: this.allowResizeH,
@@ -323,7 +323,7 @@ class Rectangular extends Component implements Surface, Solo {
       });
       form.add({
         name: 'rect.height',
-        label: 'height',
+        label: 'width',
         kind: 'distance',
         value: this.heightRef,
         enabled: this.allowResizeV,
