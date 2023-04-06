@@ -630,7 +630,10 @@ class UiState {
       }
     });
 
-    window.addEventListener('focus', () => this.keysPressed.clear());
+    window.addEventListener('focus', () => {
+      this.keysPressed.clear();
+      this.cancelDrag();
+    });
 
     const makeKeyEvent = (kind: Kinds<UiKeyEvent>, e: KeyboardEvent): UiKeyEvent => ({
         kind,

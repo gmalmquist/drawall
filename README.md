@@ -14,16 +14,17 @@ Individual wall corners can also be locked in place (this is a hard constraint).
 
 ## feature todo list
 - [x] save/load json to localstorage
-- [ ] save/load json to disk
+- [x] save/load json to disk
 - [x] various spring constraints
 - [x] export to PNG
 - [x] simple furniture drawing and arranging
 - [x] doors & windows
-- [ ] export to 3D obj
-- [ ] 3D view (?)
 - [x] background reference images
+- [ ] export to 3D `.obj`
+- [ ] 3D view (?)
 
-## development setup
+## development
+### setup
 Simple and absurd, because I've thus far avoided doing things properly (eg using webpack) for _reasons_ (I spent too long professionally maintaining build systems, and now it doesn't give me any dopamine). Requires python3 and tsc on the path.
 
 I like to run `test-server.py` to spin up a basic a web server served at http://localhost:8234, which calls `build.sh` automatically whenever the page is refreshed, and returns a plaintext page of compiler errors (if there are any). Yeah. It's silly.
@@ -31,4 +32,10 @@ I like to run `test-server.py` to spin up a basic a web server served at http://
 Or you can just run `build.sh` yourself, serve the static files with your favorite teeny webserver (`python3 -m http.server` is my go-to, but ofc you could also use `caddy` or smth). It's just a static site, so there's no actual backend to spin up.
 
 Note that for the files for which order matters, the order is determined by the list hardcoded in `build.sh`.
+
+### tech debt
+Much of the initial development was written feverishly on little sleep, resulting in some less than ideal code quality. I'd like to (1) add a proper build system / webpack / etc, (2) add literally any unit tests, and (3) do lots of cleanup (in that order).
+
+### dependencies
+the only actual library dependency currently is [minewt](https://github.com/kanwren/minewt), a very minimal newtype library with no runtime overhead.
 
