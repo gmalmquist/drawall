@@ -15,6 +15,7 @@ type UserActionId = ToolName
   | 'save'
   | 'open'
   | 'new'
+  | 'toggle-debug'
 ;
 
 interface UserAction {
@@ -36,6 +37,10 @@ class UserActions {
 
     toggle('toggle-snap', App.ui.snapping.enableByDefaultRef);
     toggle('toggle-kinematics', App.settings.kinematics);
+
+    add('toggle-debug', () => {
+      App.debug = !App.debug;
+    });
 
     add('loop-select', () => App.ui.loopSelect());
     add('select-all', () => App.ui.selectAll());

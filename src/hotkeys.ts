@@ -45,6 +45,7 @@ class Keybindings {
     kb.bind('Control', 'z').to('undo'); // universal 
     kb.bind('Control', 'Shift', 'Z').to('redo'); // common convention
     kb.bind('Shift', 'D').to('export-png'); // google drive?
+    kb.bind('Shift', '?').to('toggle-debug');
 
     // lots of permutations for zooming so that it works
     // regardless (and so that we prevent the browser's

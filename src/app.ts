@@ -141,6 +141,8 @@ class App {
 setTimeout(() => App.start(), 10);
 
 const DebugRenderer = (ecs: EntityComponentSystem) => {
+  if (!App.debug) return;
+
   App.canvas.text({
     text: `fps: ${Time.fps}`,
     point: Position(
