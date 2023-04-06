@@ -71,19 +71,21 @@ class Furniture extends Component implements Solo {
   );
   public readonly rect: Rectangular;
   public readonly labelHandle: Handle;
-  public readonly furnitureTypeRef = Refs.of<FurnitureType>(Furniture.defaultFurnitureType.get());
+  public readonly furnitureTypeRef: Ref<FurnitureType>;
   public readonly flippedHorizontalRef = Refs.of<boolean>(false);
   public readonly flippedVerticalRef = Refs.of<boolean>(false);
 
   private readonly attachAllowedRef: RoRef<(name: string) => boolean>;
   private updatingOrientation: boolean = false;
 
-  constructor(entity: Entity) {
+  constructor(entity: Entity, furnitureType: FurnitureType) {
     super(entity);
     this.rect = entity.getOrCreate(Rectangular);
     this.rect.createHandle({
       priority: 2,
     });
+
+    this.furnitureTypeRef = Refs.of(furnitureType);
 
     this.attachAllowedRef = Refs.mapRo(this.furnitureTypeRef, m => {
       if (FurnitureTypes[m].keepOnWall) {
@@ -492,7 +494,16 @@ ComponentFactories.register(Furniture, (
     return 'not ready';
   }
 
-  const furniture = entity.getOrCreate(Furniture);
+  const furniture = entity.getOrCreate(
+    Furniture,
+    props.furnitureType || 'plain',
+  );
+
+  if (props.furnitureType) {
+    // possibly not redundant with above, if we're in the "get"
+    // part of "getOrCreate".
+    furniture.furnitureType = props.furnitureType;
+  }
 
   furniture.flippedHorizontalRef.set(!!propsJson.flippedHorizontal);
   furniture.flippedVerticalRef.set(!!propsJson.flippedVertical);
@@ -507,10 +518,6 @@ ComponentFactories.register(Furniture, (
         .filter(p => p.name === attach.point)[0]!,
       rotation: MoreJson.angle.from(attach.rotation),
     };
-  }
-
-  if (props.furnitureType) {
-    furniture.furnitureType = props.furnitureType;
   }
 
   return furniture;

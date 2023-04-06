@@ -51,7 +51,10 @@ class FurnitureTool extends Tool {
         return;
       }
       // create a lil' piece of furniture
-      const furniture = App.ecs.createEntity().add(Furniture);
+      const furniture = App.ecs.createEntity().add(
+        Furniture,
+        Furniture.defaultFurnitureType.get(),
+      );
       furniture.rect.center = App.ui.mousePos;
       furniture.rect.width = Distance(34, 'model');
       furniture.rect.height = Distance(34, 'model');
@@ -89,7 +92,10 @@ class FurnitureTool extends Tool {
     const events = new UiEventDispatcher(FurnitureTool, 'draw furnishing');
     events.addDragListener({
       onStart: e => {
-        const furniture = App.ecs.createEntity().add(Furniture);
+        const furniture = App.ecs.createEntity().add(
+          Furniture,
+          Furniture.defaultFurnitureType.get(),
+        );
         furniture.rect.center = App.ui.snapPoint(e.start);
         App.ui.setSelection(furniture.entity.only(Handle));
         return furniture;

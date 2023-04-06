@@ -161,11 +161,18 @@ class Project {
   }
 
   public openProject() {
+    const load = (json: JsonObject) => {
+      App.pane.style.opacity = '0';
+      this.loadJson(json);
+      setTimeout(() => {
+        App.pane.style.opacity = '1';
+        App.actions.fire('recenter');
+        this.saveLocal();
+      }, 100);
+    };
     App.io.open(
       ['.json'],
-      url => fetch(url)
-        .then(response => response.json())
-        .then(json => this.loadJson(json))
+      url => fetch(url).then(response => response.json()).then(load)
     );
   }
 
@@ -209,7 +216,6 @@ class Project {
       return;
     }
     this.loadedAt = Time.now;
-    App.pane.style.opacity = '0';
     App.history.suspendWhile(() => {
       const p = json as unknown as ProjectJson;
 
@@ -235,7 +241,6 @@ class Project {
       this.projectName = p.projectName || Project.DEFAULT_NAME;
     });
     this.loadedAt = Time.now;
-    setTimeout(() => { App.pane.style.opacity = '1'; }, 100);
   }
 
   public setup() {
