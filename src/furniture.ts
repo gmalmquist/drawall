@@ -126,7 +126,8 @@ class Furniture extends Component implements Solo {
         if (App.tools.current.name === 'furniture tool') {
           return true;
         }
-        return App.settings.showFurniture.get();
+        return App.settings.showFurniture.get()
+          && App.settings.showFurnitureLabels.get();
       },
     });
     this.labelHandle.events.onMouse('click', () => {

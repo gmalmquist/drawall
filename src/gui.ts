@@ -291,6 +291,15 @@ class GUI {
     });
 
     form.add({
+      name: 'Show/Hide Furniture Labels',
+      kind: 'toggle',
+      value: App.settings.showFurnitureLabels,
+      icons: { on: Icons.showFurnitureLabels, off: Icons.hideFurnitureLabels },
+      enabled: App.settings.showFurniture,
+      hidden: hideVisibilityOptions,
+    });
+
+    form.add({
       name: 'Show/Hide Doors',
       kind: 'toggle',
       value: App.settings.showDoors,
