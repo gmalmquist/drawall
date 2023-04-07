@@ -36,6 +36,10 @@ const createFurnitureType = (atts: Partial<FurnitureTypeProps>): FurnitureTypePr
 const FurnitureTypes = {
   plain: createFurnitureType({}),
   wood: createFurnitureType({}),
+  blue: createFurnitureType({}),
+  pink: createFurnitureType({}),
+  purple: createFurnitureType({}),
+  green: createFurnitureType({}),
   door: createFurnitureType({
     keepOnWall: true,
     flippable: true,
@@ -146,6 +150,10 @@ class Furniture extends Component implements Solo {
         items: [
           { value: 'plain', icon: Icons.plain, },
           { value: 'wood', icon: Icons.wood, },
+          { value: 'blue', icon: Icons.blue, },
+          { value: 'pink', icon: Icons.pink, },
+          { value: 'purple', icon: Icons.purple, },
+          { value: 'green', icon: Icons.green, },
           { value: 'image', icon: Icons.image, },
           { value: 'door', icon: Icons.door, },
           { value: 'window', icon: Icons.window, },
@@ -566,12 +574,20 @@ const FurnitureRenderer = (ecs: EntityComponentSystem) => {
       App.canvas.closePath();
     };
 
+    const flatColors = new Map<FurnitureType, readonly [string, string]>();
+    flatColors.set('plain', ['lightgray', 'darkgray']);
+    flatColors.set('blue', [BLUE, '#046d95']);
+    flatColors.set('pink', [PINK, '#891028']);
+    flatColors.set('purple', ['#cca9f5', '#481089']);
+    flatColors.set('green', ['#a9f5b1', '#10891c']);
+
     App.canvas.lineWidth = 1;
     App.canvas.setLineDash([]);
-    if (furnitureType === 'plain' && showFurniture) {
+    if (flatColors.has(furnitureType) && showFurniture) {
       App.canvas.lineWidth = 2;
-      App.canvas.fillStyle = 'lightgray';
-      App.canvas.strokeStyle = 'darkgray';
+      const [ fill, stroke ] = flatColors.get(furnitureType)!;
+      App.canvas.fillStyle = fill;
+      App.canvas.strokeStyle = stroke;
       App.canvas.polygon(rect.polygon);
       App.canvas.fill();
       App.canvas.stroke();
