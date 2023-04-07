@@ -22,6 +22,11 @@ Individual wall corners can also be locked in place (this is a hard constraint).
 - [x] background reference images
 - [ ] export to 3D `.obj`
 - [ ] 3D view (?)
+- [ ] copy+paste / duplicate furniture
+- [ ] select from already-upload images
+- [ ] preset images for lamps and stuff
+- [ ] lock furniture dims to prevent accidental resizing
+- [ ] angle snapping
 
 ## development
 ### setup
