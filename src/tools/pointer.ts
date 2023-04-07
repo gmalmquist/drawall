@@ -158,12 +158,17 @@ class PointerTool extends Tool {
 
   private renderKnobs() {
     const selectionSize = App.ui.selection.size;
+    const hovered = App.ecs.getComponents(Hovered);
+    if (hovered.length > 2) return;
     const handleDrawRadius = Distance(100, 'screen');
     const shouldRender = (h: Handle): boolean => {
       if (h.knob === null) return false;
       if (h.dragging) return true;
       const parent = h.knob.parent.only(Handle);
-      return selectionSize <= 1 && parent.isActive;
+      return selectionSize <= 1 && parent.isActive && hovered.every(hovered => {
+        const handle = hovered.entity.only(Handle);
+        return handle === parent || handle === h;
+      });
     };
     const handles = App.ecs.getComponents(Handle).filter(shouldRender);
     for (const h of handles) {
@@ -190,18 +195,15 @@ class PointerTool extends Tool {
         const strict = this.useStrictSelectFor(e);
         this.strictSelect.set(strict);
         const selectables = App.ecs.getComponents(Handle)
-          .filter(h => h.selectable && h.isForTool(this.name));
+          .filter(h => h.selectable && h.visible && !h.control && h.isForTool(this.name));
         for (const s of selectables) {
           s.hovered = strict ? s.containedBy(rect) : s.intersects(rect);
         }
       },
       onEnd: (e, _) => {
         App.pane.style.cursor = 'default';
-        const rect = rectFor(e);
-        const strict = this.useStrictSelectFor(e);
-        const selected = App.ecs.getComponents(Handle)
-          .filter(h => h.selectable && h.isForTool(this.name))
-          .filter(h => strict ? h.containedBy(rect) : h.intersects(rect));
+        const selected = App.ecs.getComponents(Hovered)
+          .map(h => h.entity.only(Handle));
         App.ui.clearHovered(); 
         App.ui.addSelection(...selected);
         this.selectionRect.set(null);

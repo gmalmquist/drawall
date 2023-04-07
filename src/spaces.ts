@@ -762,6 +762,7 @@ abstract class SDF {
     let traveled = Distance(0, distance.space);
     while (distance.get(distance.space) > eps) {
       point = point.splus(distance, direction);
+      traveled = traveled.plus(distance);
       const newDistance = this.sdist(point);
       if (newDistance.gt(distance)) {
         // we're getting farther away, treat this as a miss

@@ -102,10 +102,12 @@ class UiState {
       this.renderSnap();
     }
 
-    for (const s of this.selection) {
-      for (const lever of s.entity.get(Lever)) {
-        if (lever.visible) {
-          this.renderLever(lever);
+    if (this.selection.size === 1) {
+      for (const s of this.selection) {
+        for (const lever of s.entity.get(Lever)) {
+          if (lever.visible) {
+            this.renderLever(lever);
+          }
         }
       }
     }
@@ -227,7 +229,7 @@ class UiState {
 
   selectAll() {
     this.setSelection(...App.ecs.getComponents(Handle)
-      .filter(h => h.selectable && h.isForTool(App.tools.current.name)));
+      .filter(h => h.selectable && h.visible && !h.control && h.isForTool(App.tools.current.name)));
   }
 
   deleteSelected() {
